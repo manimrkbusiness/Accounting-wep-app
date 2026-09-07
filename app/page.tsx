@@ -5,6 +5,30 @@ import { supabase } from "./supabaseClient";
 
 type Mode = "signup" | "signin";
 
+function getAuthErrorMessage(caughtError: unknown) {
+  const fallbackMessage = "Something went wrong.";
+
+  if (!(caughtError instanceof Error)) {
+    return fallbackMessage;
+  }
+
+  const message = caughtError.message.toLowerCase();
+
+  if (message.includes("email rate limit")) {
+    return "Too many signup emails were sent. Please wait a few minutes, then try again.";
+  }
+
+  if (message.includes("email not confirmed")) {
+    return "Please confirm your email before signing in.";
+  }
+
+  if (message.includes("invalid login credentials")) {
+    return "The email or password is incorrect.";
+  }
+
+  return caughtError.message || fallbackMessage;
+}
+
 export default function Home() {
   const [mode, setMode] = useState<Mode>("signup");
   const [email, setEmail] = useState("");
@@ -54,7 +78,7 @@ export default function Home() {
       setPassword("");
       setMessage("Signed in successfully.");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Something went wrong.");
+      setError(getAuthErrorMessage(caughtError));
     } finally {
       setLoading(false);
     }
