@@ -56,12 +56,11 @@ export default function Home() {
         }
 
         setPassword("");
+        if (data.session) {
+          await supabase.auth.signOut();
+        }
         setMode("signin");
-        setMessage(
-          data.session
-            ? "Account created. Sign in with the same email and password."
-            : "Account created. Confirm your email, then sign in."
-        );
+        setMessage("Account created. Sign in with the same email and password.");
         return;
       }
 

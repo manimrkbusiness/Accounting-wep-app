@@ -1,0 +1,16 @@
+project_id = "accounting-wep-app"
+
+[auth]
+enabled = true
+site_url = "https://accounting-wep-app.vercel.app"
+additional_redirect_urls = []
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+max_frequency = "1m"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
