@@ -22,7 +22,7 @@ export default function Home() {
 
     try {
       if (mode === "signup") {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password
         });
@@ -33,7 +33,11 @@ export default function Home() {
 
         setPassword("");
         setMode("signin");
-        setMessage("Account created. Sign in with the same email and password.");
+        setMessage(
+          data.session
+            ? "Account created. Sign in with the same email and password."
+            : "Account created. Confirm your email, then sign in."
+        );
         return;
       }
 
