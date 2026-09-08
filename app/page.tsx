@@ -11,6 +11,7 @@ type ContactType = "customer" | "vendor" | "farmer" | "merchant" | "business" | 
 
 type Profile = {
   id: string;
+  email: string | null;
   full_name: string;
   phone: string | null;
   account_type: AccountType;
@@ -100,6 +101,19 @@ function formatCurrency(value: number) {
 
 function formatTransactionId(id: number) {
   return `TXN-${String(id).padStart(6, "0")}`;
+}
+
+function getIndianPhoneValue(value: string) {
+  return value.replace(/\D/g, "").replace(/^91/, "").slice(0, 10);
+}
+
+function getStoredIndianPhone(value: string) {
+  const digits = getIndianPhoneValue(value);
+  return digits ? `+91${digits}` : null;
+}
+
+function isValidIndianPhone(value: string) {
+  return /^[6-9]\d{9}$/.test(getIndianPhoneValue(value));
 }
 
 function getAuthErrorMessage(caughtError: unknown) {
@@ -312,10 +326,15 @@ export default function Home() {
           throw new Error("Account created, but no session was returned. Check Supabase email confirmation settings.");
         }
 
+        if (!isValidIndianPhone(phone)) {
+          throw new Error("Enter a valid 10-digit Indian mobile number.");
+        }
+
         const { error: profileError } = await supabase.from("profiles").upsert({
           id: data.user.id,
+          email: data.user.email ?? email,
           full_name: fullName,
-          phone: phone || null,
+          phone: getStoredIndianPhone(phone),
           account_type: accountType,
           business_name: businessName || null
         });
@@ -356,10 +375,17 @@ export default function Home() {
     setSaving(true);
     setError("");
 
+    if (!isValidIndianPhone(phone)) {
+      setError("Enter a valid 10-digit Indian mobile number.");
+      setSaving(false);
+      return;
+    }
+
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: session.user.id,
+      email: session.user.email ?? email,
       full_name: fullName,
-      phone: phone || null,
+      phone: getStoredIndianPhone(phone),
       account_type: accountType,
       business_name: businessName || null
     });
@@ -571,8 +597,19 @@ export default function Home() {
                   <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
                 </label>
                 <label>
-                  Phone
-                  <input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" />
+                  Phone number
+                  <div className="phone-input">
+                    <span aria-hidden="true">🇮🇳 +91</span>
+                    <input
+                      inputMode="numeric"
+                      maxLength={10}
+                      onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))}
+                      pattern="[6-9][0-9]{9}"
+                      placeholder="9876543210"
+                      required
+                      value={getIndianPhoneValue(phone)}
+                    />
+                  </div>
                 </label>
                 <label>
                   Account type
@@ -585,8 +622,8 @@ export default function Home() {
                   </select>
                 </label>
                 <label>
-                  Business or farm name
-                  <input value={businessName} onChange={(event) => setBusinessName(event.target.value)} />
+                  Name of your business
+                  <input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business, shop, or farm name" />
                 </label>
               </>
             ) : null}
@@ -640,6 +677,21 @@ export default function Home() {
             <label>
               Full name
               <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+            </label>
+            <label>
+              Phone number
+              <div className="phone-input">
+                <span aria-hidden="true">🇮🇳 +91</span>
+                <input
+                  inputMode="numeric"
+                  maxLength={10}
+                  onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))}
+                  pattern="[6-9][0-9]{9}"
+                  placeholder="9876543210"
+                  required
+                  value={getIndianPhoneValue(phone)}
+                />
+              </div>
             </label>
             <label>
               Account type
