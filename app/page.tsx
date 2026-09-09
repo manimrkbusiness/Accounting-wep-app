@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
 type Mode = "signup" | "signin";
+type AppSection = "dashboard" | "account" | "add" | "transactions" | "inventory";
 type AccountType =
   | "farmer"
   | "trader"
@@ -209,6 +210,14 @@ const stockStatuses: Array<{ value: StockStatus; label: string }> = [
   { value: "direct_sale", label: "Direct sale" }
 ];
 
+const appSections: Array<{ value: AppSection; label: string; shortLabel: string }> = [
+  { value: "dashboard", label: "Dashboard", shortLabel: "Home" },
+  { value: "account", label: "Account", shortLabel: "Account" },
+  { value: "add", label: "Add transaction", shortLabel: "Add" },
+  { value: "transactions", label: "View transactions", shortLabel: "Ledger" },
+  { value: "inventory", label: "Inventory", shortLabel: "Stock" }
+];
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -292,6 +301,7 @@ export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
   const [stockLots, setStockLots] = useState<StockLot[]>([]);
+  const [activeSection, setActiveSection] = useState<AppSection>("dashboard");
   const [transactionForm, setTransactionForm] = useState<TransactionForm>(emptyTransactionForm);
   const [contactForm, setContactForm] = useState({ name: "", phone: "", contact_type: "customer" as ContactType, notes: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", transaction_type: "debit" as TransactionType, industry: "custom" });
@@ -331,7 +341,15 @@ export default function Home() {
     if (profileResult.error) {
       setError(profileResult.error.message);
     } else {
-      setProfile(profileResult.data as Profile | null);
+      const loadedProfile = profileResult.data as Profile | null;
+      setProfile(loadedProfile);
+
+      if (loadedProfile) {
+        setFullName(loadedProfile.full_name);
+        setPhone(loadedProfile.phone ?? "");
+        setAccountType(loadedProfile.account_type);
+        setBusinessName(loadedProfile.business_name ?? "");
+      }
     }
 
     if (contactsResult.error) {
@@ -728,6 +746,7 @@ export default function Home() {
   }
 
   function editTransaction(transaction: LedgerTransaction) {
+    setActiveSection("add");
     setTransactionForm({
       id: transaction.id,
       workflow_type: transaction.workflow_type,
@@ -970,21 +989,110 @@ export default function Home() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="authenticated-shell">
+      <aside className="desktop-sidebar" aria-label="Primary navigation">
+        <div className="sidebar-brand">
+          <span className="eyebrow">Accounting Web App</span>
+          <strong>{profile.business_name || profile.full_name}</strong>
+          <span>{accountTypes.find((type) => type.value === profile.account_type)?.label} ledger</span>
+        </div>
+        <nav className="sidebar-nav">
+          {appSections.map((section) => (
+            <button
+              className={activeSection === section.value ? "active" : ""}
+              key={section.value}
+              onClick={() => setActiveSection(section.value)}
+              type="button"
+            >
+              {section.label}
+            </button>
+          ))}
+        </nav>
+        <button className="secondary-button" type="button" onClick={signOut}>
+          Sign out
+        </button>
+      </aside>
+
+      <div className="app-main">
       <header className="topbar">
         <div>
-          <span className="eyebrow">Accounting Web App</span>
-          <h1>{profile.business_name || profile.full_name}</h1>
-          <p>{accountTypes.find((type) => type.value === profile.account_type)?.label} ledger</p>
+          <span className="eyebrow">{appSections.find((section) => section.value === activeSection)?.label}</span>
+          <h1>{activeSection === "dashboard" ? profile.business_name || profile.full_name : appSections.find((section) => section.value === activeSection)?.label}</h1>
+          <p>{activeSection === "dashboard" ? `${accountTypes.find((type) => type.value === profile.account_type)?.label} ledger` : profile.business_name || profile.full_name}</p>
         </div>
-        <button type="button" onClick={signOut}>
+        <button className="topbar-signout" type="button" onClick={signOut}>
           Sign out
         </button>
       </header>
 
+      <nav className="mobile-section-nav" aria-label="Sections">
+        {appSections.map((section) => (
+          <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => setActiveSection(section.value)} type="button">
+            {section.shortLabel}
+          </button>
+        ))}
+      </nav>
+
       {message ? <p className="status-message">{message}</p> : null}
       {error ? <p className="error-message">{error}</p> : null}
 
+      {activeSection === "account" ? (
+        <section className="ledger-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Account</span>
+              <h2>Account details</h2>
+            </div>
+          </div>
+          <form className="account-form" onSubmit={saveProfile}>
+            <div className="form-grid">
+              <label>
+                Email
+                <input readOnly value={profile.email ?? email} />
+              </label>
+              <label>
+                Full name
+                <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+              </label>
+              <label>
+                Phone number
+                <div className="phone-input">
+                  <span aria-hidden="true">{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span>
+                  <input
+                    inputMode="numeric"
+                    maxLength={10}
+                    onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))}
+                    pattern="[6-9][0-9]{9}"
+                    placeholder="9876543210"
+                    required
+                    value={getIndianPhoneValue(phone)}
+                  />
+                </div>
+              </label>
+              <label>
+                Account type
+                <select value={accountType} onChange={(event) => setAccountType(event.target.value as AccountType)}>
+                  {accountTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Name of your business
+                <input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business, shop, or farm name" />
+              </label>
+            </div>
+            <button disabled={saving} type="submit">
+              {saving ? "Saving..." : "Save account"}
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      {activeSection === "dashboard" ? (
+        <>
       <section className="metrics-grid" aria-label="Ledger summary">
         <article>
           <span>Today purchases</span>
@@ -1028,6 +1136,66 @@ export default function Home() {
         </article>
       </section>
 
+      <section className="dashboard-grid">
+        <article className="ledger-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Recent</span>
+              <h2>Latest transactions</h2>
+            </div>
+            <button className="secondary-button" type="button" onClick={() => setActiveSection("transactions")}>
+              View all
+            </button>
+          </div>
+          <div className="summary-list">
+            {transactions.slice(0, 5).map((transaction) => (
+              <div key={transaction.id}>
+                <span>{formatTransactionId(transaction.id)}</span>
+                <strong>{transaction.description}</strong>
+                <span className={transaction.transaction_type === "credit" ? "positive" : "negative"}>{formatCurrency(Number(transaction.amount))}</span>
+              </div>
+            ))}
+            {transactions.length === 0 ? <p className="empty-state">No transactions yet.</p> : null}
+          </div>
+        </article>
+
+        <article className="ledger-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">Stock</span>
+              <h2>Inventory alerts</h2>
+            </div>
+            <button className="secondary-button" type="button" onClick={() => setActiveSection("inventory")}>
+              View stock
+            </button>
+          </div>
+          <div className="summary-list">
+            {stockLots
+              .filter((lot) => {
+                const daysInStock = Math.floor((Date.now() - new Date(lot.received_date).getTime()) / 86_400_000);
+                return lot.status === "in_stock" && Number(lot.remaining_quantity) > 0 && daysInStock >= 30;
+              })
+              .slice(0, 5)
+              .map((lot) => {
+                const daysInStock = Math.floor((Date.now() - new Date(lot.received_date).getTime()) / 86_400_000);
+                const productLabel = productTypes.find((product) => product.value === lot.product_type)?.label ?? lot.product_type;
+
+                return (
+                  <div key={lot.id}>
+                    <span>LOT-{String(lot.id).padStart(5, "0")}</span>
+                    <strong>{productLabel}</strong>
+                    <span className="negative">{daysInStock} days</span>
+                  </div>
+                );
+              })}
+            {totals.agedStock === 0 ? <p className="empty-state">No aged stock alerts.</p> : null}
+          </div>
+        </article>
+      </section>
+        </>
+      ) : null}
+
+      {activeSection === "add" ? (
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveTransaction}>
           <div className="panel-heading">
@@ -1340,7 +1508,9 @@ export default function Home() {
           </form>
         </aside>
       </section>
+      ) : null}
 
+      {activeSection === "transactions" ? (
       <section className="ledger-panel">
         <div className="panel-heading">
           <div>
@@ -1462,7 +1632,9 @@ export default function Home() {
           {filteredTransactions.length === 0 ? <p className="empty-state">No transactions match the current filters.</p> : null}
         </div>
       </section>
+      ) : null}
 
+      {activeSection === "inventory" ? (
       <section className="ledger-panel">
         <div className="panel-heading">
           <div>
@@ -1522,6 +1694,8 @@ export default function Home() {
           {stockLots.length === 0 ? <p className="empty-state">No warehouse stock lots yet.</p> : null}
         </div>
       </section>
+      ) : null}
+      </div>
     </main>
   );
 }
