@@ -353,7 +353,7 @@ button:disabled {
 
 table {
   border-collapse: collapse;
-  min-width: 980px;
+  min-width: 1320px;
   width: 100%;
 }
 
@@ -401,6 +401,11 @@ td {
 
 .negative {
   color: var(--debit);
+}
+
+.muted-text {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .row-actions {

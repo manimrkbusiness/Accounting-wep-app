@@ -22,6 +22,19 @@ type LedgerTransaction = {
   id: number;
   contact_id: number | null;
   category_id: number | null;
+  workflow_type: string;
+  product_type: string | null;
+  quantity: number | null;
+  unit: string;
+  rate: number | null;
+  logistics_cost: number;
+  advance_amount: number;
+  payment_status: string;
+  payment_method: string;
+  stock_status: string | null;
+  stock_lot_id: number | null;
+  warehouse_name: string | null;
+  quality_status: string | null;
   transaction_type: "credit" | "debit";
   amount: number;
   transaction_date: string;
@@ -36,6 +49,43 @@ type AuditLog = {
   id: number;
   action: string;
   created_at: string;
+};
+
+const workflowLabels: Record<string, string> = {
+  purchase: "Farmer purchase",
+  sale: "Sale",
+  expense: "Expense",
+  income: "Income",
+  advance: "Advance"
+};
+
+const productLabels: Record<string, string> = {
+  green_coconut: "Green coconut",
+  brown_coconut: "Brown coconut",
+  black_coconut: "Black coconut",
+  copra: "Copra",
+  other: "Other product"
+};
+
+const paymentLabels: Record<string, string> = {
+  paid: "Paid",
+  partial: "Partial",
+  unpaid: "Unpaid"
+};
+
+const paymentMethodLabels: Record<string, string> = {
+  cash: "Cash",
+  bank: "Bank",
+  upi: "UPI",
+  credit_account: "Credit account",
+  other: "Other"
+};
+
+const qualityLabels: Record<string, string> = {
+  fresh: "Fresh",
+  good: "Good",
+  aging: "Aging",
+  damaged: "Damaged"
 };
 
 function formatCurrency(value: number) {
@@ -170,6 +220,10 @@ export default function TransactionDetail() {
           <h2>{transaction.description}</h2>
           <dl>
             <div>
+              <dt>Workflow</dt>
+              <dd>{workflowLabels[transaction.workflow_type] ?? transaction.workflow_type}</dd>
+            </div>
+            <div>
               <dt>Amount</dt>
               <dd>{formatCurrency(Number(transaction.amount))}</dd>
             </div>
@@ -184,6 +238,48 @@ export default function TransactionDetail() {
             <div>
               <dt>Category</dt>
               <dd>{category?.name ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>Product</dt>
+              <dd>{transaction.product_type ? productLabels[transaction.product_type] ?? transaction.product_type : "-"}</dd>
+            </div>
+            <div>
+              <dt>Quantity</dt>
+              <dd>{transaction.quantity ? `${transaction.quantity} ${transaction.unit}` : "-"}</dd>
+            </div>
+            <div>
+              <dt>Rate</dt>
+              <dd>{transaction.rate ? formatCurrency(Number(transaction.rate)) : "-"}</dd>
+            </div>
+            <div>
+              <dt>Logistics cost</dt>
+              <dd>{formatCurrency(Number(transaction.logistics_cost ?? 0))}</dd>
+            </div>
+            <div>
+              <dt>Advance</dt>
+              <dd>{formatCurrency(Number(transaction.advance_amount ?? 0))}</dd>
+            </div>
+            <div>
+              <dt>Payment</dt>
+              <dd>
+                {paymentLabels[transaction.payment_status] ?? transaction.payment_status} / {paymentMethodLabels[transaction.payment_method] ?? transaction.payment_method}
+              </dd>
+            </div>
+            <div>
+              <dt>Stock</dt>
+              <dd>{transaction.stock_status ? transaction.stock_status.replace("_", " ") : "-"}</dd>
+            </div>
+            <div>
+              <dt>Stock lot</dt>
+              <dd>{transaction.stock_lot_id ? `LOT-${String(transaction.stock_lot_id).padStart(5, "0")}` : "-"}</dd>
+            </div>
+            <div>
+              <dt>Warehouse</dt>
+              <dd>{transaction.warehouse_name || "-"}</dd>
+            </div>
+            <div>
+              <dt>Quality</dt>
+              <dd>{transaction.quality_status ? qualityLabels[transaction.quality_status] ?? transaction.quality_status : "-"}</dd>
             </div>
             <div>
               <dt>Reference</dt>

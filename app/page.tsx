@@ -5,9 +5,26 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
 type Mode = "signup" | "signin";
-type AccountType = "farmer" | "merchant" | "business_owner" | "trader" | "service_provider" | "other";
+type AccountType =
+  | "farmer"
+  | "trader"
+  | "wholesaler"
+  | "retailer"
+  | "agent_broker"
+  | "exporter"
+  | "importer"
+  | "merchant"
+  | "business_owner"
+  | "service_provider"
+  | "other";
 type TransactionType = "credit" | "debit";
 type ContactType = "customer" | "vendor" | "farmer" | "merchant" | "business" | "other";
+type WorkflowType = "purchase" | "sale" | "expense" | "income" | "advance";
+type ProductType = "green_coconut" | "brown_coconut" | "black_coconut" | "copra" | "other";
+type PaymentStatus = "paid" | "partial" | "unpaid";
+type PaymentMethod = "cash" | "bank" | "upi" | "credit_account" | "other";
+type StockStatus = "warehouse" | "direct_sale" | "sold";
+type QualityStatus = "fresh" | "good" | "aging" | "damaged";
 
 type Profile = {
   id: string;
@@ -38,6 +55,19 @@ type LedgerTransaction = {
   id: number;
   contact_id: number | null;
   category_id: number | null;
+  workflow_type: WorkflowType;
+  product_type: ProductType | null;
+  quantity: number | null;
+  unit: string;
+  rate: number | null;
+  logistics_cost: number;
+  advance_amount: number;
+  payment_status: PaymentStatus;
+  payment_method: PaymentMethod;
+  stock_status: StockStatus | null;
+  warehouse_name: string | null;
+  quality_status: QualityStatus | null;
+  stock_lot_id: number | null;
   transaction_type: TransactionType;
   amount: number;
   transaction_date: string;
@@ -50,7 +80,20 @@ type LedgerTransaction = {
 
 type TransactionForm = {
   id?: number;
+  workflow_type: WorkflowType;
   transaction_type: TransactionType;
+  product_type: ProductType | "";
+  quantity: string;
+  unit: string;
+  rate: string;
+  logistics_cost: string;
+  advance_amount: string;
+  payment_status: PaymentStatus;
+  payment_method: PaymentMethod;
+  stock_status: StockStatus | "";
+  warehouse_name: string;
+  quality_status: QualityStatus;
+  stock_lot_id: string;
   amount: string;
   transaction_date: string;
   contact_id: string;
@@ -60,13 +103,33 @@ type TransactionForm = {
   notes: string;
 };
 
+type StockLot = {
+  id: number;
+  source_transaction_id: number | null;
+  product_type: ProductType;
+  quantity: number;
+  remaining_quantity: number;
+  unit: string;
+  purchase_rate: number | null;
+  warehouse_name: string | null;
+  quality_status: QualityStatus;
+  status: "in_stock" | "sold_out" | "direct_sale";
+  received_date: string;
+  notes: string | null;
+};
+
 const today = new Date().toISOString().slice(0, 10);
 
 const accountTypes: Array<{ value: AccountType; label: string }> = [
   { value: "farmer", label: "Farmer" },
+  { value: "trader", label: "Trader" },
+  { value: "wholesaler", label: "Wholesaler" },
+  { value: "retailer", label: "Retailer" },
+  { value: "agent_broker", label: "Agent or broker" },
+  { value: "exporter", label: "Exporter" },
+  { value: "importer", label: "Importer" },
   { value: "merchant", label: "Merchant" },
   { value: "business_owner", label: "Business owner" },
-  { value: "trader", label: "Trader" },
   { value: "service_provider", label: "Service provider" },
   { value: "other", label: "Other" }
 ];
@@ -81,7 +144,20 @@ const contactTypes: Array<{ value: ContactType; label: string }> = [
 ];
 
 const emptyTransactionForm: TransactionForm = {
-  transaction_type: "credit",
+  workflow_type: "purchase",
+  transaction_type: "debit",
+  product_type: "green_coconut",
+  quantity: "",
+  unit: "pieces",
+  rate: "",
+  logistics_cost: "",
+  advance_amount: "",
+  payment_status: "unpaid",
+  payment_method: "credit_account",
+  stock_status: "warehouse",
+  warehouse_name: "",
+  quality_status: "fresh",
+  stock_lot_id: "",
   amount: "",
   transaction_date: today,
   contact_id: "",
@@ -90,6 +166,48 @@ const emptyTransactionForm: TransactionForm = {
   reference_number: "",
   notes: ""
 };
+
+const workflowTypes: Array<{ value: WorkflowType; label: string; transactionType: TransactionType }> = [
+  { value: "purchase", label: "Farmer purchase", transactionType: "debit" },
+  { value: "sale", label: "Sale", transactionType: "credit" },
+  { value: "expense", label: "Expense", transactionType: "debit" },
+  { value: "income", label: "Income", transactionType: "credit" },
+  { value: "advance", label: "Advance", transactionType: "debit" }
+];
+
+const productTypes: Array<{ value: ProductType; label: string }> = [
+  { value: "green_coconut", label: "Green coconut" },
+  { value: "brown_coconut", label: "Brown coconut" },
+  { value: "black_coconut", label: "Black coconut" },
+  { value: "copra", label: "Copra" },
+  { value: "other", label: "Other" }
+];
+
+const paymentStatuses: Array<{ value: PaymentStatus; label: string }> = [
+  { value: "unpaid", label: "Unpaid" },
+  { value: "partial", label: "Partial" },
+  { value: "paid", label: "Paid" }
+];
+
+const paymentMethods: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "credit_account", label: "Credit account" },
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+  { value: "upi", label: "UPI" },
+  { value: "other", label: "Other" }
+];
+
+const qualityStatuses: Array<{ value: QualityStatus; label: string }> = [
+  { value: "fresh", label: "Fresh" },
+  { value: "good", label: "Good" },
+  { value: "aging", label: "Aging" },
+  { value: "damaged", label: "Damaged" }
+];
+
+const stockStatuses: Array<{ value: StockStatus; label: string }> = [
+  { value: "warehouse", label: "Send to warehouse" },
+  { value: "direct_sale", label: "Direct sale" }
+];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -167,12 +285,13 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [accountType, setAccountType] = useState<AccountType>("merchant");
+  const [accountType, setAccountType] = useState<AccountType>("trader");
   const [businessName, setBusinessName] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
+  const [stockLots, setStockLots] = useState<StockLot[]>([]);
   const [transactionForm, setTransactionForm] = useState<TransactionForm>(emptyTransactionForm);
   const [contactForm, setContactForm] = useState({ name: "", phone: "", contact_type: "customer" as ContactType, notes: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", transaction_type: "debit" as TransactionType, industry: "custom" });
@@ -188,6 +307,7 @@ export default function Home() {
       setContacts([]);
       setCategories([]);
       setTransactions([]);
+      setStockLots([]);
       setLoading(false);
       return;
     }
@@ -195,7 +315,7 @@ export default function Home() {
     setLoading(true);
     setError("");
 
-    const [profileResult, contactsResult, categoriesResult, transactionsResult] = await Promise.all([
+    const [profileResult, contactsResult, categoriesResult, transactionsResult, stockLotsResult] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", activeSession.user.id).maybeSingle(),
       supabase.from("contacts").select("*").order("name", { ascending: true }),
       supabase.from("categories").select("*").order("transaction_type", { ascending: true }).order("name", { ascending: true }),
@@ -204,7 +324,8 @@ export default function Home() {
         .select("*")
         .is("deleted_at", null)
         .order("transaction_date", { ascending: false })
-        .order("id", { ascending: false })
+        .order("id", { ascending: false }),
+      supabase.from("stock_lots").select("*").order("received_date", { ascending: false }).order("id", { ascending: false })
     ]);
 
     if (profileResult.error) {
@@ -229,6 +350,12 @@ export default function Home() {
       setError(transactionsResult.error.message);
     } else {
       setTransactions((transactionsResult.data ?? []) as LedgerTransaction[]);
+    }
+
+    if (stockLotsResult.error) {
+      setError(stockLotsResult.error.message);
+    } else {
+      setStockLots((stockLotsResult.data ?? []) as StockLot[]);
     }
 
     setLoading(false);
@@ -260,6 +387,8 @@ export default function Home() {
 
   const contactById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts]);
   const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
+  const stockLotById = useMemo(() => new Map(stockLots.map((lot) => [lot.id, lot])), [stockLots]);
+  const availableStockLots = stockLots.filter((lot) => lot.status === "in_stock" && Number(lot.remaining_quantity) > 0);
 
   const filteredTransactions = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -267,14 +396,22 @@ export default function Home() {
     return transactions.filter((transaction) => {
       const contact = transaction.contact_id ? contactById.get(transaction.contact_id) : null;
       const category = transaction.category_id ? categoryById.get(transaction.category_id) : null;
+      const stockLot = transaction.stock_lot_id ? stockLotById.get(transaction.stock_lot_id) : null;
       const searchable = [
         formatTransactionId(transaction.id),
         transaction.description,
+        transaction.workflow_type,
+        transaction.product_type ?? "",
+        transaction.payment_method,
+        transaction.payment_status,
+        transaction.warehouse_name ?? "",
+        transaction.quality_status ?? "",
         transaction.reference_number ?? "",
         transaction.notes ?? "",
         contact?.name ?? "",
         contact?.phone ?? "",
-        category?.name ?? ""
+        category?.name ?? "",
+        stockLot ? `LOT-${String(stockLot.id).padStart(5, "0")}` : ""
       ]
         .join(" ")
         .toLowerCase();
@@ -288,7 +425,7 @@ export default function Home() {
         (!search || searchable.includes(search))
       );
     });
-  }, [categoryById, contactById, filters, transactions]);
+  }, [categoryById, contactById, filters, stockLotById, transactions]);
 
   const totals = useMemo(() => {
     const credit = filteredTransactions
@@ -297,16 +434,62 @@ export default function Home() {
     const debit = filteredTransactions
       .filter((transaction) => transaction.transaction_type === "debit")
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+    const todayPurchases = transactions
+      .filter((transaction) => transaction.workflow_type === "purchase" && transaction.transaction_date === today)
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+    const todaySales = transactions
+      .filter((transaction) => transaction.workflow_type === "sale" && transaction.transaction_date === today)
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+    const cashInHand = transactions.reduce((sum, transaction) => {
+      if (transaction.payment_method !== "cash" || transaction.payment_status === "unpaid") {
+        return sum;
+      }
+
+      return transaction.transaction_type === "credit" ? sum + Number(transaction.amount) : sum - Number(transaction.amount);
+    }, 0);
+    const bankBalance = transactions.reduce((sum, transaction) => {
+      if ((transaction.payment_method !== "bank" && transaction.payment_method !== "upi") || transaction.payment_status === "unpaid") {
+        return sum;
+      }
+
+      return transaction.transaction_type === "credit" ? sum + Number(transaction.amount) : sum - Number(transaction.amount);
+    }, 0);
+    const stockQuantity = stockLots.reduce((sum, lot) => sum + Number(lot.remaining_quantity), 0);
+    const agedStock = stockLots.filter((lot) => {
+      const ageInDays = Math.floor((Date.now() - new Date(lot.received_date).getTime()) / 86_400_000);
+      return lot.status === "in_stock" && Number(lot.remaining_quantity) > 0 && ageInDays >= 30;
+    }).length;
 
     return {
       credit,
       debit,
       balance: credit - debit,
-      count: filteredTransactions.length
+      count: filteredTransactions.length,
+      todayPurchases,
+      todaySales,
+      cashInHand,
+      bankBalance,
+      stockQuantity,
+      agedStock
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, stockLots, transactions]);
 
   const currentCategories = categories.filter((category) => category.transaction_type === transactionForm.transaction_type);
+
+  function updateWorkflowType(workflowType: WorkflowType) {
+    const selectedWorkflow = workflowTypes.find((workflow) => workflow.value === workflowType);
+    const transactionType = selectedWorkflow?.transactionType ?? "debit";
+
+    setTransactionForm((form) => ({
+      ...form,
+      workflow_type: workflowType,
+      transaction_type: transactionType,
+      category_id: "",
+      product_type: workflowType === "purchase" || workflowType === "sale" ? form.product_type || "green_coconut" : "",
+      stock_status: workflowType === "purchase" ? "warehouse" : "",
+      stock_lot_id: workflowType === "sale" ? form.stock_lot_id : ""
+    }));
+  }
 
   async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -470,9 +653,34 @@ export default function Home() {
     setSaving(true);
     setError("");
 
+    if ((transactionForm.workflow_type === "purchase" || transactionForm.workflow_type === "sale") && (!transactionForm.product_type || !transactionForm.quantity)) {
+      setError("Product type and quantity are required for purchase and sale transactions.");
+      setSaving(false);
+      return;
+    }
+
+    if (transactionForm.workflow_type === "sale" && !transactionForm.stock_lot_id) {
+      setError("Select the stock lot being sold.");
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       user_id: session.user.id,
+      workflow_type: transactionForm.workflow_type,
       transaction_type: transactionForm.transaction_type,
+      product_type: transactionForm.product_type || null,
+      quantity: transactionForm.quantity ? Number(transactionForm.quantity) : null,
+      unit: transactionForm.unit || "pieces",
+      rate: transactionForm.rate ? Number(transactionForm.rate) : null,
+      logistics_cost: transactionForm.logistics_cost ? Number(transactionForm.logistics_cost) : 0,
+      advance_amount: transactionForm.advance_amount ? Number(transactionForm.advance_amount) : 0,
+      payment_status: transactionForm.payment_status,
+      payment_method: transactionForm.payment_method,
+      stock_status: transactionForm.stock_status || null,
+      warehouse_name: transactionForm.warehouse_name || null,
+      quality_status: transactionForm.quality_status || null,
+      stock_lot_id: transactionForm.stock_lot_id ? Number(transactionForm.stock_lot_id) : null,
       amount: Number(transactionForm.amount),
       transaction_date: transactionForm.transaction_date,
       contact_id: transactionForm.contact_id ? Number(transactionForm.contact_id) : null,
@@ -522,7 +730,20 @@ export default function Home() {
   function editTransaction(transaction: LedgerTransaction) {
     setTransactionForm({
       id: transaction.id,
+      workflow_type: transaction.workflow_type,
       transaction_type: transaction.transaction_type,
+      product_type: transaction.product_type ?? "",
+      quantity: transaction.quantity ? String(transaction.quantity) : "",
+      unit: transaction.unit,
+      rate: transaction.rate ? String(transaction.rate) : "",
+      logistics_cost: transaction.logistics_cost ? String(transaction.logistics_cost) : "",
+      advance_amount: transaction.advance_amount ? String(transaction.advance_amount) : "",
+      payment_status: transaction.payment_status,
+      payment_method: transaction.payment_method,
+      stock_status: transaction.stock_status ?? "",
+      warehouse_name: transaction.warehouse_name ?? "",
+      quality_status: transaction.quality_status ?? "fresh",
+      stock_lot_id: transaction.stock_lot_id ? String(transaction.stock_lot_id) : "",
       amount: String(transaction.amount),
       transaction_date: transaction.transaction_date,
       contact_id: transaction.contact_id ? String(transaction.contact_id) : "",
@@ -536,7 +757,28 @@ export default function Home() {
 
   function exportTransactions() {
     const rows = [
-      ["ID", "Date", "Type", "Contact", "Phone", "Category", "Description", "Reference", "Amount", "Notes"],
+      [
+        "ID",
+        "Date",
+        "Workflow",
+        "Type",
+        "Contact",
+        "Phone",
+        "Category",
+        "Product",
+        "Quantity",
+        "Unit",
+        "Rate",
+        "Logistics Cost",
+        "Advance",
+        "Payment Status",
+        "Payment Method",
+        "Stock Lot",
+        "Description",
+        "Reference",
+        "Amount",
+        "Notes"
+      ],
       ...filteredTransactions.map((transaction) => {
         const contact = transaction.contact_id ? contactById.get(transaction.contact_id) : null;
         const category = transaction.category_id ? categoryById.get(transaction.category_id) : null;
@@ -544,10 +786,20 @@ export default function Home() {
         return [
           formatTransactionId(transaction.id),
           transaction.transaction_date,
+          transaction.workflow_type,
           transaction.transaction_type,
           contact?.name ?? "",
           contact?.phone ?? "",
           category?.name ?? "",
+          transaction.product_type ?? "",
+          transaction.quantity ? String(transaction.quantity) : "",
+          transaction.unit,
+          transaction.rate ? String(transaction.rate) : "",
+          String(transaction.logistics_cost),
+          String(transaction.advance_amount),
+          transaction.payment_status,
+          transaction.payment_method,
+          transaction.stock_lot_id ? `LOT-${String(transaction.stock_lot_id).padStart(5, "0")}` : "",
           transaction.description,
           transaction.reference_number ?? "",
           String(transaction.amount),
@@ -599,7 +851,7 @@ export default function Home() {
                 <label>
                   Phone number
                   <div className="phone-input">
-                    <span aria-hidden="true">🇮🇳 +91</span>
+                    <span aria-hidden="true">{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span>
                     <input
                       inputMode="numeric"
                       maxLength={10}
@@ -681,7 +933,7 @@ export default function Home() {
             <label>
               Phone number
               <div className="phone-input">
-                <span aria-hidden="true">🇮🇳 +91</span>
+                <span aria-hidden="true">{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span>
                 <input
                   inputMode="numeric"
                   maxLength={10}
@@ -702,6 +954,10 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label>
+              Name of your business
+              <input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Business, shop, or farm name" />
             </label>
             <button disabled={saving} type="submit">
               Save profile
@@ -731,6 +987,14 @@ export default function Home() {
 
       <section className="metrics-grid" aria-label="Ledger summary">
         <article>
+          <span>Today purchases</span>
+          <strong>{formatCurrency(totals.todayPurchases)}</strong>
+        </article>
+        <article>
+          <span>Today sales</span>
+          <strong>{formatCurrency(totals.todaySales)}</strong>
+        </article>
+        <article>
           <span>Total credit</span>
           <strong>{formatCurrency(totals.credit)}</strong>
         </article>
@@ -743,6 +1007,22 @@ export default function Home() {
           <strong className={totals.balance >= 0 ? "positive" : "negative"}>{formatCurrency(totals.balance)}</strong>
         </article>
         <article>
+          <span>Cash in hand</span>
+          <strong className={totals.cashInHand >= 0 ? "positive" : "negative"}>{formatCurrency(totals.cashInHand)}</strong>
+        </article>
+        <article>
+          <span>Bank balance</span>
+          <strong className={totals.bankBalance >= 0 ? "positive" : "negative"}>{formatCurrency(totals.bankBalance)}</strong>
+        </article>
+        <article>
+          <span>Stock balance</span>
+          <strong>{totals.stockQuantity} pcs</strong>
+        </article>
+        <article>
+          <span>Aged stock alerts</span>
+          <strong className={totals.agedStock > 0 ? "negative" : "positive"}>{totals.agedStock}</strong>
+        </article>
+        <article>
           <span>Records</span>
           <strong>{totals.count}</strong>
         </article>
@@ -753,7 +1033,7 @@ export default function Home() {
           <div className="panel-heading">
             <div>
               <span className="eyebrow">{transactionForm.id ? formatTransactionId(transactionForm.id) : "New transaction"}</span>
-              <h2>{transactionForm.id ? "Edit transaction" : "Add credit or debit"}</h2>
+              <h2>{transactionForm.id ? "Edit transaction" : "Add agri trade entry"}</h2>
             </div>
             {transactionForm.id ? (
               <button className="secondary-button" type="button" onClick={() => setTransactionForm(emptyTransactionForm)}>
@@ -761,23 +1041,21 @@ export default function Home() {
               </button>
             ) : null}
           </div>
-          <div className="segmented">
-            <button
-              className={transactionForm.transaction_type === "credit" ? "active" : ""}
-              type="button"
-              onClick={() => setTransactionForm((form) => ({ ...form, transaction_type: "credit", category_id: "" }))}
-            >
-              Credit
-            </button>
-            <button
-              className={transactionForm.transaction_type === "debit" ? "active" : ""}
-              type="button"
-              onClick={() => setTransactionForm((form) => ({ ...form, transaction_type: "debit", category_id: "" }))}
-            >
-              Debit
-            </button>
-          </div>
           <div className="form-grid">
+            <label>
+              Workflow
+              <select value={transactionForm.workflow_type} onChange={(event) => updateWorkflowType(event.target.value as WorkflowType)}>
+                {workflowTypes.map((workflow) => (
+                  <option key={workflow.value} value={workflow.value}>
+                    {workflow.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Direction
+              <input readOnly value={transactionForm.transaction_type === "credit" ? "Credit" : "Debit"} />
+            </label>
             <label>
               Amount
               <input
@@ -797,6 +1075,32 @@ export default function Home() {
                 type="date"
                 value={transactionForm.transaction_date}
               />
+            </label>
+            <label>
+              Payment status
+              <select
+                value={transactionForm.payment_status}
+                onChange={(event) => setTransactionForm((form) => ({ ...form, payment_status: event.target.value as PaymentStatus }))}
+              >
+                {paymentStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Payment method
+              <select
+                value={transactionForm.payment_method}
+                onChange={(event) => setTransactionForm((form) => ({ ...form, payment_method: event.target.value as PaymentMethod }))}
+              >
+                {paymentMethods.map((method) => (
+                  <option key={method.value} value={method.value}>
+                    {method.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Customer or vendor
@@ -819,6 +1123,129 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+            </label>
+            {(transactionForm.workflow_type === "purchase" || transactionForm.workflow_type === "sale") ? (
+              <>
+                <label>
+                  Product
+                  <select value={transactionForm.product_type} onChange={(event) => setTransactionForm((form) => ({ ...form, product_type: event.target.value as ProductType }))}>
+                    {productTypes.map((product) => (
+                      <option key={product.value} value={product.value}>
+                        {product.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Quantity
+                  <input
+                    min="0.01"
+                    onChange={(event) => setTransactionForm((form) => ({ ...form, quantity: event.target.value }))}
+                    required
+                    step="0.01"
+                    type="number"
+                    value={transactionForm.quantity}
+                  />
+                </label>
+                <label>
+                  Unit
+                  <input onChange={(event) => setTransactionForm((form) => ({ ...form, unit: event.target.value }))} required value={transactionForm.unit} />
+                </label>
+                <label>
+                  Rate
+                  <input
+                    min="0"
+                    onChange={(event) => setTransactionForm((form) => ({ ...form, rate: event.target.value }))}
+                    step="0.01"
+                    type="number"
+                    value={transactionForm.rate}
+                  />
+                </label>
+              </>
+            ) : null}
+            {transactionForm.workflow_type === "purchase" ? (
+              <>
+                <label>
+                  Stock movement
+                  <select
+                    value={transactionForm.stock_status}
+                    onChange={(event) => setTransactionForm((form) => ({ ...form, stock_status: event.target.value as StockStatus }))}
+                  >
+                    {stockStatuses.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Warehouse
+                  <input
+                    onChange={(event) => setTransactionForm((form) => ({ ...form, warehouse_name: event.target.value }))}
+                    placeholder="Warehouse or yard name"
+                    value={transactionForm.warehouse_name}
+                  />
+                </label>
+                <label>
+                  Quality
+                  <select
+                    value={transactionForm.quality_status}
+                    onChange={(event) => setTransactionForm((form) => ({ ...form, quality_status: event.target.value as QualityStatus }))}
+                  >
+                    {qualityStatuses.map((quality) => (
+                      <option key={quality.value} value={quality.value}>
+                        {quality.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {transactionForm.workflow_type === "sale" ? (
+              <label>
+                Stock lot
+                <select
+                  value={transactionForm.stock_lot_id}
+                  onChange={(event) => {
+                    const selectedLot = stockLotById.get(Number(event.target.value));
+                    setTransactionForm((form) => ({
+                      ...form,
+                      stock_lot_id: event.target.value,
+                      product_type: selectedLot?.product_type ?? form.product_type,
+                      unit: selectedLot?.unit ?? form.unit,
+                      rate: selectedLot?.purchase_rate ? String(selectedLot.purchase_rate) : form.rate
+                    }));
+                  }}
+                  required
+                >
+                  <option value="">Select lot</option>
+                  {availableStockLots.map((lot) => (
+                    <option key={lot.id} value={lot.id}>
+                      LOT-{String(lot.id).padStart(5, "0")} - {productTypes.find((product) => product.value === lot.product_type)?.label} - {lot.remaining_quantity} {lot.unit}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label>
+              Logistics cost
+              <input
+                min="0"
+                onChange={(event) => setTransactionForm((form) => ({ ...form, logistics_cost: event.target.value }))}
+                step="0.01"
+                type="number"
+                value={transactionForm.logistics_cost}
+              />
+            </label>
+            <label>
+              Advance
+              <input
+                min="0"
+                onChange={(event) => setTransactionForm((form) => ({ ...form, advance_amount: event.target.value }))}
+                step="0.01"
+                type="number"
+                value={transactionForm.advance_amount}
+              />
             </label>
           </div>
           <label>
@@ -976,9 +1403,14 @@ export default function Home() {
               <tr>
                 <th>ID</th>
                 <th>Date</th>
+                <th>Workflow</th>
                 <th>Type</th>
                 <th>Contact</th>
                 <th>Category</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Payment</th>
+                <th>Lot</th>
                 <th>Description</th>
                 <th>Amount</th>
                 <th>Actions</th>
@@ -988,6 +1420,7 @@ export default function Home() {
               {filteredTransactions.map((transaction) => {
                 const contact = transaction.contact_id ? contactById.get(transaction.contact_id) : null;
                 const category = transaction.category_id ? categoryById.get(transaction.category_id) : null;
+                const productLabel = transaction.product_type ? productTypes.find((product) => product.value === transaction.product_type)?.label : null;
 
                 return (
                   <tr key={transaction.id}>
@@ -995,11 +1428,20 @@ export default function Home() {
                       <a href={`/transactions/${transaction.id}`}>{formatTransactionId(transaction.id)}</a>
                     </td>
                     <td>{transaction.transaction_date}</td>
+                    <td>{workflowTypes.find((workflow) => workflow.value === transaction.workflow_type)?.label ?? transaction.workflow_type}</td>
                     <td>
                       <span className={`pill ${transaction.transaction_type}`}>{transaction.transaction_type}</span>
                     </td>
                     <td>{contact ? `${contact.name}${contact.phone ? ` (${contact.phone})` : ""}` : "-"}</td>
                     <td>{category?.name ?? "-"}</td>
+                    <td>{productLabel ?? "-"}</td>
+                    <td>{transaction.quantity ? `${transaction.quantity} ${transaction.unit}` : "-"}</td>
+                    <td>
+                      <span>{paymentStatuses.find((status) => status.value === transaction.payment_status)?.label}</span>
+                      <br />
+                      <span className="muted-text">{paymentMethods.find((method) => method.value === transaction.payment_method)?.label}</span>
+                    </td>
+                    <td>{transaction.stock_lot_id ? `LOT-${String(transaction.stock_lot_id).padStart(5, "0")}` : "-"}</td>
                     <td>{transaction.description}</td>
                     <td className={transaction.transaction_type === "credit" ? "positive" : "negative"}>{formatCurrency(Number(transaction.amount))}</td>
                     <td>
@@ -1018,6 +1460,66 @@ export default function Home() {
             </tbody>
           </table>
           {filteredTransactions.length === 0 ? <p className="empty-state">No transactions match the current filters.</p> : null}
+        </div>
+      </section>
+
+      <section className="ledger-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">Inventory</span>
+            <h2>Lot-wise warehouse stock</h2>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Lot</th>
+                <th>Product</th>
+                <th>Received</th>
+                <th>Days</th>
+                <th>Quantity</th>
+                <th>Remaining</th>
+                <th>Rate</th>
+                <th>Warehouse</th>
+                <th>Quality</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stockLots.map((lot) => {
+                const daysInStock = Math.floor((Date.now() - new Date(lot.received_date).getTime()) / 86_400_000);
+                const productLabel = productTypes.find((product) => product.value === lot.product_type)?.label ?? lot.product_type;
+
+                return (
+                  <tr key={lot.id}>
+                    <td>
+                      {lot.source_transaction_id ? (
+                        <a href={`/transactions/${lot.source_transaction_id}`}>LOT-{String(lot.id).padStart(5, "0")}</a>
+                      ) : (
+                        `LOT-${String(lot.id).padStart(5, "0")}`
+                      )}
+                    </td>
+                    <td>{productLabel}</td>
+                    <td>{lot.received_date}</td>
+                    <td className={daysInStock >= 30 && lot.status === "in_stock" ? "negative" : ""}>{daysInStock}</td>
+                    <td>
+                      {lot.quantity} {lot.unit}
+                    </td>
+                    <td>
+                      {lot.remaining_quantity} {lot.unit}
+                    </td>
+                    <td>{lot.purchase_rate ? formatCurrency(Number(lot.purchase_rate)) : "-"}</td>
+                    <td>{lot.warehouse_name || "-"}</td>
+                    <td>{qualityStatuses.find((quality) => quality.value === lot.quality_status)?.label}</td>
+                    <td>{lot.status.replace("_", " ")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {stockLots.length === 0 ? <p className="empty-state">No warehouse stock lots yet.</p> : null}
         </div>
       </section>
     </main>
