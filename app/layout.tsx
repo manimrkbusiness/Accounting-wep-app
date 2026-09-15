@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Accounting Auth",
-  description: "Supabase-backed signup and signin flow"
+  title: "Coconut Trade Desk",
+  description: "Private farmer and coconut trader purchase records"
 };
 
 export default function RootLayout({
