@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
@@ -72,6 +73,11 @@ type TradeForm = {
   notes: string;
 };
 
+type LocationInput = {
+  id?: number;
+  name: string;
+};
+
 const today = new Date().toISOString().slice(0, 10);
 
 const roleOptions: Array<{ value: Role; label: string; description: string }> = [
@@ -85,6 +91,20 @@ const appSections: Array<{ value: AppSection; label: string; shortLabel: string 
   { value: "purchase", label: "New purchase", shortLabel: "Add" },
   { value: "history", label: "Purchase history", shortLabel: "History" }
 ];
+
+function getSectionForPath(pathname: string): AppSection {
+  if (pathname.endsWith("/farmers")) return "farmers";
+  if (pathname.endsWith("/new-purchase")) return "purchase";
+  if (pathname.endsWith("/purchase-history")) return "history";
+  return "dashboard";
+}
+
+function getPathForSection(section: AppSection) {
+  if (section === "farmers") return "/dashboard/farmers";
+  if (section === "purchase") return "/dashboard/new-purchase";
+  if (section === "history") return "/dashboard/purchase-history";
+  return "/dashboard";
+}
 
 const coconutColors: Array<{ value: CoconutColor; label: string }> = [
   { value: "green", label: "Green coconut" },
@@ -121,6 +141,10 @@ function formatCurrency(value: number) {
 
 function formatPurchaseId(id: number) {
   return `PUR-${String(id).padStart(6, "0")}`;
+}
+
+function formatFarmerId(id: number) {
+  return `FMR-${String(id).padStart(6, "0")}`;
 }
 
 function formatDate(value: string) {
@@ -171,6 +195,8 @@ function downloadCsv(filename: string, rows: string[][]) {
 }
 
 export default function Home() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [mode, setMode] = useState<Mode>("signup");
   const [email, setEmail] = useState("");
@@ -183,16 +209,26 @@ export default function Home() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [locations, setLocations] = useState<FarmerLocation[]>([]);
   const [trades, setTrades] = useState<CoconutTrade[]>([]);
-  const [activeSection, setActiveSection] = useState<AppSection>("dashboard");
+  const [activeSection, setActiveSection] = useState<AppSection>(() => getSectionForPath(pathname));
   const [farmerSearch, setFarmerSearch] = useState("");
-  const [farmerPicker, setFarmerPicker] = useState("");
   const [tradeSearch, setTradeSearch] = useState("");
   const [tradeForm, setTradeForm] = useState<TradeForm>(emptyTradeForm);
-  const [farmerForm, setFarmerForm] = useState({ name: "", phone: "", locations: [""] });
+  const [editingFarmerId, setEditingFarmerId] = useState<number | null>(null);
+  const [farmerForm, setFarmerForm] = useState<{ name: string; phone: string; locations: LocationInput[] }>({ name: "", phone: "", locations: [{ name: "" }] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setActiveSection(getSectionForPath(pathname));
+  }, [pathname]);
+
+  function navigateTo(section: AppSection) {
+    setActiveSection(section);
+    clearFeedback();
+    router.push(getPathForSection(section));
+  }
 
   const loadWorkspace = useCallback(async (activeSession: Session | null) => {
     if (!activeSession) {
@@ -265,6 +301,12 @@ export default function Home() {
       listener.subscription.unsubscribe();
     };
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (session && profile?.account_type && pathname === "/") {
+      router.replace("/dashboard");
+    }
+  }, [pathname, profile?.account_type, router, session]);
 
   const farmerById = useMemo(() => new Map(farmers.map((farmer) => [farmer.id, farmer])), [farmers]);
   const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
@@ -364,7 +406,7 @@ export default function Home() {
     }
 
     setProfile(data as Profile);
-    setActiveSection("dashboard");
+    navigateTo("dashboard");
     setMessage(roleChoice === "trader" ? "Trader workspace ready." : "Farmer profile created. Your workspace will be added in the next phase.");
     await loadWorkspace(session);
   }
@@ -377,37 +419,96 @@ export default function Home() {
       setError("Enter the farmer name and a valid 10-digit Indian mobile number.");
       return;
     }
-    const cleanLocations = farmerForm.locations.map((value) => value.trim()).filter(Boolean);
+    const cleanLocations = farmerForm.locations.map((location) => ({ ...location, name: location.name.trim() })).filter((location) => location.name);
     if (cleanLocations.length === 0) {
       setError("Add at least one farming location.");
       return;
     }
     setSaving(true);
-    const { data: farmer, error: farmerError } = await supabase.from("trader_farmers").insert({
-      trader_id: session.user.id,
-      name: farmerForm.name.trim(),
-      phone: getStoredIndianPhone(farmerForm.phone),
-      notes: null
-    }).select("*").single();
 
-    if (farmerError || !farmer) {
+    if (editingFarmerId) {
+      const { error: farmerError } = await supabase.from("trader_farmers").update({
+        name: farmerForm.name.trim(),
+        phone: getStoredIndianPhone(farmerForm.phone)
+      }).eq("id", editingFarmerId).eq("trader_id", session.user.id);
+      if (farmerError) {
+        setSaving(false);
+        setError(farmerError.code === "23505" ? "This farmer phone number is already in your portfolio." : farmerError.message);
+        return;
+      }
+
+      const originalLocations = locations.filter((location) => location.farmer_id === editingFarmerId);
+      const retainedIds = new Set(cleanLocations.flatMap((location) => location.id ? [location.id] : []));
+      for (const location of cleanLocations) {
+        const result = location.id
+          ? await supabase.from("farmer_locations").update({ location_name: location.name }).eq("id", location.id).eq("farmer_id", editingFarmerId)
+          : await supabase.from("farmer_locations").insert({ farmer_id: editingFarmerId, location_name: location.name, city: null });
+        if (result.error) {
+          setSaving(false);
+          setError(result.error.message);
+          return;
+        }
+      }
+      const usedLocationIds = new Set(trades.filter((trade) => trade.farmer_id === editingFarmerId && trade.location_id).map((trade) => trade.location_id as number));
+      const removableIds = originalLocations.filter((location) => !retainedIds.has(location.id) && !usedLocationIds.has(location.id)).map((location) => location.id);
+      if (removableIds.length) {
+        const { error: deleteLocationError } = await supabase.from("farmer_locations").delete().in("id", removableIds).eq("farmer_id", editingFarmerId);
+        if (deleteLocationError) {
+          setSaving(false);
+          setError(deleteLocationError.message);
+          return;
+        }
+      }
+
       setSaving(false);
-      setError(farmerError?.code === "23505" ? "This farmer phone number is already in your portfolio." : farmerError?.message || "Unable to add farmer.");
-      return;
+      setEditingFarmerId(null);
+      setFarmerForm({ name: "", phone: "", locations: [{ name: "" }] });
+      setMessage("Farmer details updated. Existing purchase records kept their permanent farmer ID.");
+    } else {
+      const { data: farmer, error: farmerError } = await supabase.from("trader_farmers").insert({
+        trader_id: session.user.id,
+        name: farmerForm.name.trim(),
+        phone: getStoredIndianPhone(farmerForm.phone),
+        notes: null
+      }).select("*").single();
+
+      if (farmerError || !farmer) {
+        setSaving(false);
+        setError(farmerError?.code === "23505" ? "This farmer phone number is already in your portfolio." : farmerError?.message || "Unable to add farmer.");
+        return;
+      }
+
+      const { error: locationError } = await supabase.from("farmer_locations").insert(
+        cleanLocations.map((location) => ({ farmer_id: farmer.id, location_name: location.name, city: null }))
+      );
+      if (locationError) {
+        setSaving(false);
+        setError(locationError.message);
+        return;
+      }
+      setSaving(false);
+      setFarmerForm({ name: "", phone: "", locations: [{ name: "" }] });
+      setMessage("Farmer added to your portfolio.");
     }
 
-    const { error: locationError } = await supabase.from("farmer_locations").insert(
-      cleanLocations.map((locationName) => ({ farmer_id: farmer.id, location_name: locationName, city: null }))
-    );
-    setSaving(false);
-    if (locationError) {
-      setError(locationError.message);
-      return;
-    }
-
-    setFarmerForm({ name: "", phone: "", locations: [""] });
-    setMessage("Farmer added to your portfolio.");
     await loadWorkspace(session);
+    const returnToPurchase = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("returnTo") === "new-purchase";
+    if (returnToPurchase) navigateTo("purchase");
+  }
+
+  function editFarmer(farmer: Farmer) {
+    setEditingFarmerId(farmer.id);
+    setFarmerForm({
+      name: farmer.name,
+      phone: getIndianPhoneValue(farmer.phone),
+      locations: locations.filter((location) => location.farmer_id === farmer.id).map((location) => ({ id: location.id, name: location.location_name }))
+    });
+    navigateTo("farmers");
+  }
+
+  function cancelFarmerEdit() {
+    setEditingFarmerId(null);
+    setFarmerForm({ name: "", phone: "", locations: [{ name: "" }] });
   }
 
   async function savePurchase(event: React.FormEvent<HTMLFormElement>) {
@@ -458,8 +559,7 @@ export default function Home() {
     }
 
     setTradeForm({ ...emptyTradeForm, trade_date: today });
-    setFarmerPicker("");
-    setActiveSection("history");
+    navigateTo("history");
     setMessage(tradeForm.id ? "Purchase updated." : "Purchase recorded.");
     await loadWorkspace(session);
   }
@@ -494,9 +594,7 @@ export default function Home() {
       advance_amount: String(trade.advance_amount),
       notes: trade.notes ?? ""
     });
-    const selectedFarmer = farmerById.get(trade.farmer_id);
-    setFarmerPicker(selectedFarmer ? `${selectedFarmer.name} - ${selectedFarmer.phone}` : "");
-    setActiveSection("purchase");
+    navigateTo("purchase");
   }
 
   function exportTrades() {
@@ -583,7 +681,7 @@ export default function Home() {
     <main className="authenticated-shell">
       <aside className="desktop-sidebar">
         <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark">CT</span><div><strong>COCONUT TRADE DESK</strong><span>{isTrader ? "Trader workspace" : "Farmer workspace"}</span></div></div></div>
-        {isTrader ? <nav className="sidebar-nav" aria-label="Main navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => { setActiveSection(section.value); clearFeedback(); }} type="button">{section.label}</button>)}</nav> : null}
+        {isTrader ? <nav className="sidebar-nav" aria-label="Main navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button">{section.label}</button>)}</nav> : null}
         <div className="sidebar-account"><span className="eyebrow">Signed in as</span><strong>{profile.business_name || profile.full_name}</strong><span>{profile.email}</span></div>
         <button className="secondary-button sidebar-signout" onClick={signOut} type="button">Sign out</button>
       </aside>
@@ -594,14 +692,14 @@ export default function Home() {
           <button className="secondary-button topbar-signout" onClick={signOut} type="button">Sign out</button>
         </header>
 
-        {isTrader ? <nav className="mobile-section-nav" aria-label="Mobile navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => { setActiveSection(section.value); clearFeedback(); }} type="button">{section.shortLabel}</button>)}</nav> : null}
+        {isTrader ? <nav className="mobile-section-nav" aria-label="Mobile navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button">{section.shortLabel}</button>)}</nav> : null}
         {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}
 
         {!isTrader ? <section className="empty-workspace"><span className="eyebrow">Farmer workspace</span><h2>Your farmer tools are coming next.</h2><p>Your account and contact details are saved. The farmer purchase, crop, expense, and income tools will be added in the next phase.</p></section> : null}
 
         {isTrader && activeSection === "dashboard" ? <>
-          <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => setActiveSection("purchase")} type="button">Record a purchase</button></section>
+          <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => navigateTo("purchase")} type="button">Record a purchase</button></section>
           <section className="metrics-grid">
             <article><span>Farmers</span><strong>{farmers.length}</strong><small>in your portfolio</small></article>
             <article><span>Purchases</span><strong>{trades.length}</strong><small>purchase records</small></article>
@@ -609,18 +707,29 @@ export default function Home() {
             <article><span>Purchase value</span><strong>{formatCurrency(totalPurchases)}</strong><small>all recorded purchases</small></article>
           </section>
           <section className="dashboard-grid">
-            <article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent purchases</h2></div><button className="link-button" onClick={() => setActiveSection("history")} type="button">View history</button></div>{recentTrades.length ? <div className="summary-list">{recentTrades.map((trade) => <div key={trade.id}><span>{formatPurchaseId(trade.id)}</span><strong>{farmerById.get(trade.farmer_id)?.name ?? "Farmer"}</strong><span>{formatCurrency(Number(trade.total_amount))}</span></div>)}</div> : <p className="empty-state">No purchases recorded yet.</p>}</article>
-            <article className="tool-panel"><span className="eyebrow">Outstanding</span><h2>Balance with farmers</h2><strong className="large-number">{formatCurrency(totalBalance)}</strong><p className="muted-text">Advance payments are subtracted from each purchase total.</p><button className="secondary-button" onClick={() => setActiveSection("history")} type="button">Open purchase history</button></article>
+            <article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent purchases</h2></div><button className="link-button" onClick={() => navigateTo("history")} type="button">View history</button></div>{recentTrades.length ? <div className="summary-list">{recentTrades.map((trade) => <div key={trade.id}><span>{formatPurchaseId(trade.id)}</span><strong>{farmerById.get(trade.farmer_id)?.name ?? "Farmer"}</strong><span>{formatCurrency(Number(trade.total_amount))}</span></div>)}</div> : <p className="empty-state">No purchases recorded yet.</p>}</article>
+            <article className="tool-panel"><span className="eyebrow">Outstanding</span><h2>Balance with farmers</h2><strong className="large-number">{formatCurrency(totalBalance)}</strong><p className="muted-text">Advance payments are subtracted from each purchase total.</p><button className="secondary-button" onClick={() => navigateTo("history")} type="button">Open purchase history</button></article>
           </section>
         </> : null}
 
         {isTrader && activeSection === "farmers" ? <section className="workspace-grid">
-          <form className="tool-panel" onSubmit={saveFarmer}><div className="panel-heading"><div><span className="eyebrow">Portfolio</span><h2>Add a farmer</h2></div></div><p className="muted-text">Farmer ID is the Indian phone number. Add every farming land as its own location.</p><label>Farmer name<input value={farmerForm.name} onChange={(event) => setFarmerForm((form) => ({ ...form, name: event.target.value }))} required /></label><label>Farmer ID / phone<div className="phone-input"><span>{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span><input inputMode="tel" value={farmerForm.phone} onChange={(event) => setFarmerForm((form) => ({ ...form, phone: getIndianPhoneValue(event.target.value) }))} placeholder="10-digit mobile number" required /></div></label><div className="field-heading"><label>Farming locations</label><button className="link-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: [...form.locations, ""] }))} type="button">+ Add location</button></div>{farmerForm.locations.map((location, index) => <div className="location-row" key={`location-${index}`}><input aria-label={`Farming location ${index + 1}`} value={location} onChange={(event) => setFarmerForm((form) => ({ ...form, locations: form.locations.map((value, locationIndex) => locationIndex === index ? event.target.value : value) }))} placeholder="Village, town, or farm area" required />{farmerForm.locations.length > 1 ? <button className="remove-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: form.locations.filter((_value, locationIndex) => locationIndex !== index) }))} type="button" aria-label="Remove location">Remove</button> : null}</div>)}<button className="primary-button" disabled={saving} type="submit">{saving ? "Saving..." : "Add farmer"}</button></form>
-          <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Your portfolio</span><h2>Find a farmer</h2></div><strong>{farmers.length}</strong></div><label>Search by name or phone<input value={farmerSearch} onChange={(event) => setFarmerSearch(event.target.value)} placeholder="Try +91 or a name" /></label><div className="farmer-list">{visibleFarmers.map((farmer) => <article className="farmer-card" key={farmer.id}><div><strong>{farmer.name}</strong><span>{farmer.phone}</span></div><div className="location-tags">{locations.filter((location) => location.farmer_id === farmer.id).map((location) => <span key={location.id}>{location.location_name}</span>)}</div></article>)}{visibleFarmers.length === 0 ? <p className="empty-state">No farmers match this search.</p> : null}</div></section>
+          <form className="tool-panel" onSubmit={saveFarmer}>
+            <div className="panel-heading">
+              <div><span className="eyebrow">{editingFarmerId ? "Edit farmer" : "Portfolio"}</span><h2>{editingFarmerId ? "Update farmer details" : "Add a farmer"}</h2></div>
+              {editingFarmerId ? <button className="link-button" onClick={cancelFarmerEdit} type="button">Cancel edit</button> : null}
+            </div>
+            <p className="muted-text">Farmer ID is the Indian phone number. Add every farming land as its own location.</p>
+            <label>Farmer name<input value={farmerForm.name} onChange={(event) => setFarmerForm((form) => ({ ...form, name: event.target.value }))} required /></label>
+            <label>Farmer ID / phone<div className="phone-input"><span>{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span><input inputMode="tel" value={farmerForm.phone} onChange={(event) => setFarmerForm((form) => ({ ...form, phone: getIndianPhoneValue(event.target.value) }))} placeholder="10-digit mobile number" required /></div></label>
+            <div className="field-heading"><label>Farming locations</label><button className="link-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: [...form.locations, { name: "" }] }))} type="button">+ Add location</button></div>
+            {farmerForm.locations.map((location, index) => <div className="location-row" key={location.id ?? `location-${index}`}><input aria-label={`Farming location ${index + 1}`} value={location.name} onChange={(event) => setFarmerForm((form) => ({ ...form, locations: form.locations.map((item, locationIndex) => locationIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Village, town, or farm area" required />{farmerForm.locations.length > 1 ? <button className="remove-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: form.locations.filter((_item, locationIndex) => locationIndex !== index) }))} type="button" aria-label="Remove location">Remove</button> : null}</div>)}
+            <button className="primary-button" disabled={saving} type="submit">{saving ? "Saving..." : editingFarmerId ? "Update farmer" : "Add farmer"}</button>
+          </form>
+          <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Your portfolio</span><h2>Find a farmer</h2></div><strong>{farmers.length}</strong></div><label>Search by name or phone<input value={farmerSearch} onChange={(event) => setFarmerSearch(event.target.value)} placeholder="Try +91 or a name" /></label><div className="farmer-list">{visibleFarmers.map((farmer) => <article className="farmer-card" key={farmer.id}><div><strong>{farmer.name}</strong><span>{formatFarmerId(farmer.id)} · {farmer.phone}</span></div><div className="location-tags">{locations.filter((location) => location.farmer_id === farmer.id).map((location) => <span key={location.id}>{location.location_name}</span>)}</div><button className="secondary-button" onClick={() => editFarmer(farmer)} type="button">Edit farmer</button></article>)}{visibleFarmers.length === 0 ? <p className="empty-state">No farmers match this search.</p> : null}</div></section>
         </section> : null}
 
         {isTrader && activeSection === "purchase" ? <section className="workspace-grid">
-          <form className="tool-panel purchase-form" onSubmit={savePurchase}><div className="panel-heading"><div><span className="eyebrow">{tradeForm.id ? formatPurchaseId(tradeForm.id) : "New record"}</span><h2>{tradeForm.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{tradeForm.id ? <button className="link-button" onClick={() => { setTradeForm({ ...emptyTradeForm, trade_date: today }); setFarmerPicker(""); }} type="button">Cancel edit</button> : null}</div><div className="form-grid"><label>Farmer<input list="farmer-options" value={farmerPicker} onChange={(event) => { const value = event.target.value; const match = farmers.find((farmer) => `${farmer.name} - ${farmer.phone}` === value); setFarmerPicker(value); setTradeForm((form) => ({ ...form, farmer_id: match ? String(match.id) : "", location_id: "" })); }} placeholder={farmers.length ? "Search name or phone" : "Add a farmer first"} required /><datalist id="farmer-options">{farmers.map((farmer) => <option key={farmer.id} value={`${farmer.name} - ${farmer.phone}`} />)}</datalist></label><label>Farming location<select value={tradeForm.location_id} onChange={(event) => setTradeForm((form) => ({ ...form, location_id: event.target.value }))} required><option value="">Select location</option>{selectedTradeLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label><label>Purchase date<input type="date" value={tradeForm.trade_date} onChange={(event) => setTradeForm((form) => ({ ...form, trade_date: event.target.value }))} required /></label><label>Coconut colour<select value={tradeForm.coconut_color} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_color: event.target.value as CoconutColor }))}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label></div><fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? "3" : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset><div className="form-grid"><label>Gross weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.gross_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, gross_weight_kg: event.target.value }))} required /></label><label>Empty weight (kg)<input type="number" min="0" step="0.001" value={tradeForm.empty_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, empty_weight_kg: event.target.value }))} placeholder="Vehicle / basket weight" required /></label>{tradeForm.processing_type === "kudume" ? <label>Wastage deduction (%)<input type="number" min="0" max="100" step="0.01" value={tradeForm.wastage_percent} onChange={(event) => setTradeForm((form) => ({ ...form, wastage_percent: event.target.value }))} /><span className="field-hint">Default is 3%: 30 kg per 1,000 kg.</span></label> : null}<label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label><label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label></div><label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label><button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button></form>
+          <form className="tool-panel purchase-form" onSubmit={savePurchase}><div className="panel-heading"><div><span className="eyebrow">{tradeForm.id ? formatPurchaseId(tradeForm.id) : "New record"}</span><h2>{tradeForm.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{tradeForm.id ? <button className="link-button" onClick={() => { setTradeForm({ ...emptyTradeForm, trade_date: today }); }} type="button">Cancel edit</button> : null}</div><div className="form-grid"><label>Farmer<select value={tradeForm.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add_farmer__") { router.push("/dashboard/farmers?returnTo=new-purchase"); return; } setTradeForm((form) => ({ ...form, farmer_id: value, location_id: "" })); }} required><option value="__add_farmer__">+ Add farmer</option><option value="">Select a farmer</option>{farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{formatFarmerId(farmer.id)} - {farmer.name} - {farmer.phone}</option>)}</select></label><label>Farming location<select value={tradeForm.location_id} onChange={(event) => setTradeForm((form) => ({ ...form, location_id: event.target.value }))} required><option value="">Select location</option>{selectedTradeLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label><label>Purchase date<input type="date" value={tradeForm.trade_date} onChange={(event) => setTradeForm((form) => ({ ...form, trade_date: event.target.value }))} required /></label><label>Coconut colour<select value={tradeForm.coconut_color} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_color: event.target.value as CoconutColor }))}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label></div><fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? "3" : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset><div className="form-grid"><label>Gross weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.gross_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, gross_weight_kg: event.target.value }))} required /></label><label>Empty weight (kg)<input type="number" min="0" step="0.001" value={tradeForm.empty_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, empty_weight_kg: event.target.value }))} placeholder="Vehicle / basket weight" required /></label>{tradeForm.processing_type === "kudume" ? <label>Wastage deduction (%)<input type="number" min="0" max="100" step="0.01" value={tradeForm.wastage_percent} onChange={(event) => setTradeForm((form) => ({ ...form, wastage_percent: event.target.value }))} /><span className="field-hint">Default is 3%: 30 kg per 1,000 kg.</span></label> : null}<label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label><label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label></div><label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label><button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button></form>
           <aside className="side-stack"><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Weighbridge summary</h2><dl className="calculation-list"><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div><div><dt>Purchase total</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Net = gross weight - empty weight. Payable weight subtracts the Kudume wastage deduction.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer phone record and one of their farming locations. The purchase ID is generated automatically and can be used in the history URL.</p></section></aside>
         </section> : null}
 

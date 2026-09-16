@@ -26,7 +26,7 @@ type Trade = {
   notes: string | null;
 };
 
-type Farmer = { name: string; phone: string };
+type Farmer = { id: number; name: string; phone: string };
 type Location = { location_name: string; city: string | null };
 
 function formatCurrency(value: number) {
@@ -39,6 +39,10 @@ function formatNumber(value: number) {
 
 function formatPurchaseId(id: number) {
   return `PUR-${String(id).padStart(6, "0")}`;
+}
+
+function formatFarmerId(id: number) {
+  return `FMR-${String(id).padStart(6, "0")}`;
 }
 
 export default function TradeDetail() {
@@ -77,7 +81,7 @@ export default function TradeDetail() {
       const loadedTrade = data as Trade;
       setTrade(loadedTrade);
       const [farmerResult, locationResult] = await Promise.all([
-        supabase.from("trader_farmers").select("name, phone").eq("id", loadedTrade.farmer_id).maybeSingle(),
+        supabase.from("trader_farmers").select("id, name, phone").eq("id", loadedTrade.farmer_id).maybeSingle(),
         loadedTrade.location_id ? supabase.from("farmer_locations").select("location_name, city").eq("id", loadedTrade.location_id).maybeSingle() : Promise.resolve({ data: null, error: null })
       ]);
       if (!active) return;
@@ -96,5 +100,5 @@ export default function TradeDetail() {
   if (!session) return <main className="page-shell"><section className="auth-panel"><h1>Sign in required</h1><p>This purchase record is private to the trader who created it.</p><a className="primary-button" href="/">Go to sign in</a></section></main>;
   if (!trade) return <main className="page-shell"><section className="auth-panel"><h1>Purchase not found</h1><p>This record may not exist or may belong to another trader.</p><a className="primary-button" href="/">Back to workspace</a></section></main>;
 
-  return <main className="page-shell"><section className="detail-page"><header className="detail-header"><div><span className="eyebrow">Purchase detail</span><h1>{title}</h1><p>{trade.trade_date} · Private trader record</p></div><a className="secondary-button" href="/">Back to workspace</a></header>{error ? <p className="error-message">{error}</p> : null}<div className="detail-grid"><article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Farmer purchase</span><h2>{farmer?.name ?? "Unknown farmer"}</h2></div><span className="status-badge">{trade.payment_status}</span></div><p className="muted-text">{farmer?.phone ?? "Phone unavailable"} · {location?.location_name ?? "Location unavailable"}</p><dl className="detail-list"><div><dt>Coconut</dt><dd>{trade.coconut_color} · {trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</dd></div><div><dt>Gross weight</dt><dd>{formatNumber(Number(trade.gross_weight_kg))} kg</dd></div><div><dt>Empty weight</dt><dd>{formatNumber(Number(trade.empty_weight_kg))} kg</dd></div><div><dt>Net weight</dt><dd>{formatNumber(Number(trade.net_weight_kg))} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(Number(trade.wastage_weight_kg))} kg ({trade.wastage_percent}%)</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(Number(trade.payable_weight_kg))} kg</dd></div><div><dt>Rate</dt><dd>{formatCurrency(Number(trade.rate_per_kg))} / kg</dd></div><div><dt>Notes</dt><dd>{trade.notes || "-"}</dd></div></dl></article><article className="calculation-panel"><span className="eyebrow">Payment summary</span><h2>Purchase total</h2><strong className="large-number">{formatCurrency(Number(trade.total_amount))}</strong><dl className="calculation-list"><div><dt>Advance paid</dt><dd>{formatCurrency(Number(trade.advance_amount))}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(Number(trade.balance_amount))}</dd></div></dl><p className="field-hint">Purchase IDs are permanent references for auditing and future exports.</p></article></div></section></main>;
+  return <main className="page-shell"><section className="detail-page"><header className="detail-header"><div><span className="eyebrow">Purchase detail</span><h1>{title}</h1><p>{trade.trade_date} · Private trader record</p></div><a className="secondary-button" href="/">Back to workspace</a></header>{error ? <p className="error-message">{error}</p> : null}<div className="detail-grid"><article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Farmer purchase</span><h2>{farmer?.name ?? "Unknown farmer"}</h2></div><span className="status-badge">{trade.payment_status}</span></div><p className="muted-text">{farmer ? `${formatFarmerId(farmer.id)} · ${farmer.phone}` : "Phone unavailable"} · {location?.location_name ?? "Location unavailable"}</p><dl className="detail-list"><div><dt>Coconut</dt><dd>{trade.coconut_color} · {trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</dd></div><div><dt>Gross weight</dt><dd>{formatNumber(Number(trade.gross_weight_kg))} kg</dd></div><div><dt>Empty weight</dt><dd>{formatNumber(Number(trade.empty_weight_kg))} kg</dd></div><div><dt>Net weight</dt><dd>{formatNumber(Number(trade.net_weight_kg))} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(Number(trade.wastage_weight_kg))} kg ({trade.wastage_percent}%)</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(Number(trade.payable_weight_kg))} kg</dd></div><div><dt>Rate</dt><dd>{formatCurrency(Number(trade.rate_per_kg))} / kg</dd></div><div><dt>Notes</dt><dd>{trade.notes || "-"}</dd></div></dl></article><article className="calculation-panel"><span className="eyebrow">Payment summary</span><h2>Purchase total</h2><strong className="large-number">{formatCurrency(Number(trade.total_amount))}</strong><dl className="calculation-list"><div><dt>Advance paid</dt><dd>{formatCurrency(Number(trade.advance_amount))}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(Number(trade.balance_amount))}</dd></div></dl><p className="field-hint">Purchase IDs are permanent references for auditing and future exports.</p></article></div></section></main>;
 }
