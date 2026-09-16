@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
+import { jsPDF } from "jspdf";
 import { supabase } from "./supabaseClient";
 
 type Mode = "signup" | "signin";
@@ -47,6 +48,12 @@ type CoconutTrade = {
   empty_weight_kg: number;
   wastage_percent: number;
   rate_per_kg: number;
+  coconut_quantity: number;
+  husk_removal_rate_per_1000: number;
+  tree_collection_rate_per_1000: number;
+  husk_removal_cost: number;
+  tree_collection_cost: number;
+  labor_cost_total: number;
   advance_amount: number;
   payment_status: PaymentStatus;
   notes: string | null;
@@ -58,6 +65,13 @@ type CoconutTrade = {
   created_at: string;
 };
 
+type TraderSettings = {
+  trader_id: string;
+  husk_removal_rate_per_1000: number;
+  tree_collection_rate_per_1000: number;
+  kudume_wastage_percent: number;
+};
+
 type TradeForm = {
   id?: number;
   farmer_id: string;
@@ -65,10 +79,13 @@ type TradeForm = {
   trade_date: string;
   coconut_color: CoconutColor;
   processing_type: ProcessingType;
+  coconut_quantity: string;
   gross_weight_kg: string;
   empty_weight_kg: string;
   wastage_percent: string;
   rate_per_kg: string;
+  husk_removal_rate_per_1000: string;
+  tree_collection_rate_per_1000: string;
   advance_amount: string;
   notes: string;
 };
@@ -123,10 +140,13 @@ const emptyTradeForm: TradeForm = {
   trade_date: today,
   coconut_color: "green",
   processing_type: "mottai",
+  coconut_quantity: "",
   gross_weight_kg: "",
   empty_weight_kg: "",
   wastage_percent: "0",
   rate_per_kg: "",
+  husk_removal_rate_per_1000: "1100",
+  tree_collection_rate_per_1000: "1450",
   advance_amount: "0",
   notes: ""
 };
@@ -141,10 +161,6 @@ function formatCurrency(value: number) {
 
 function formatPurchaseId(id: number) {
   return `PUR-${String(id).padStart(6, "0")}`;
-}
-
-function formatFarmerId(id: number) {
-  return `FMR-${String(id).padStart(6, "0")}`;
 }
 
 function formatDate(value: string) {
@@ -182,16 +198,62 @@ function getAuthErrorMessage(caughtError: unknown) {
   return caughtError.message || "Something went wrong.";
 }
 
-function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows
-    .map((row) => row.map((cell) => /[",\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell).join(","))
-    .join("\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, location: FarmerLocation | null) {
+  const doc = new jsPDF();
+  const left = 18;
+  let y = 20;
+  const line = (label: string, value: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.text(label, left, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(value, 85, y);
+    y += 8;
+  };
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("COCONUT TRADE DESK", left, y);
+  y += 10;
+  doc.setFontSize(14);
+  doc.text(`PUR-${String(trade.id).padStart(6, "0")}`, left, y);
+  y += 10;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Purchase invoice", left, y);
+  y += 10;
+  doc.line(left, y, 192, y);
+  y += 10;
+
+  line("Date", formatDate(trade.trade_date));
+  line("Farmer", farmer?.name ?? "Unknown farmer");
+  line("Phone", farmer?.phone ?? "Unavailable");
+  line("Location", location?.location_name ?? "Unavailable");
+  line("Coconut", `${trade.coconut_color} / ${trade.processing_type === "mottai" ? "Mottai" : "Kudume"}`);
+  line("Quantity", `${formatNumber(Number(trade.coconut_quantity), 2)} pieces`);
+  line("Gross weight", `${formatNumber(Number(trade.gross_weight_kg))} kg`);
+  line("Empty weight", `${formatNumber(Number(trade.empty_weight_kg))} kg`);
+  line("Net weight", `${formatNumber(Number(trade.net_weight_kg))} kg`);
+  line("Wastage", `${formatNumber(Number(trade.wastage_weight_kg))} kg (${trade.wastage_percent}%)`);
+  line("Payable weight", `${formatNumber(Number(trade.payable_weight_kg))} kg`);
+  line("Rate", `INR ${formatNumber(Number(trade.rate_per_kg), 2)} / kg`);
+  y += 3;
+  doc.line(left, y, 192, y);
+  y += 10;
+  line("Coconut purchase", formatCurrency(Number(trade.total_amount) - Number(trade.labor_cost_total)).replace("₹", "INR "));
+  line("Husk removal", formatCurrency(Number(trade.husk_removal_cost)).replace("₹", "INR "));
+  line("Tree collection", formatCurrency(Number(trade.tree_collection_cost)).replace("₹", "INR "));
+  line("Total payable", formatCurrency(Number(trade.total_amount)).replace("₹", "INR "));
+  line("Advance paid", formatCurrency(Number(trade.advance_amount)).replace("₹", "INR "));
+  line("Balance", formatCurrency(Number(trade.balance_amount)).replace("₹", "INR "));
+  if (trade.notes) {
+    y += 3;
+    line("Notes", trade.notes);
+  }
+
+  doc.setFontSize(9);
+  doc.setTextColor(100, 115, 109);
+  doc.text("Generated from Coconut Trade Desk. Keep this invoice for your records.", left, 282);
+  doc.save(`purchase-${String(trade.id).padStart(6, "0")}.pdf`);
 }
 
 export default function Home() {
@@ -209,6 +271,9 @@ export default function Home() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [locations, setLocations] = useState<FarmerLocation[]>([]);
   const [trades, setTrades] = useState<CoconutTrade[]>([]);
+  const [traderSettings, setTraderSettings] = useState<TraderSettings | null>(null);
+  const [settingsForm, setSettingsForm] = useState({ huskRemoval: "1100", treeCollection: "1450", kudumeWastage: "3" });
+  const [editingSettings, setEditingSettings] = useState(false);
   const [activeSection, setActiveSection] = useState<AppSection>(() => getSectionForPath(pathname));
   const [farmerSearch, setFarmerSearch] = useState("");
   const [tradeSearch, setTradeSearch] = useState("");
@@ -236,6 +301,7 @@ export default function Home() {
       setFarmers([]);
       setLocations([]);
       setTrades([]);
+      setTraderSettings(null);
       setLoading(false);
       return;
     }
@@ -258,23 +324,43 @@ export default function Home() {
     setRoleChoice(loadedProfile?.account_type ?? "");
 
     if (loadedProfile?.account_type === "trader") {
-      const [farmersResult, locationsResult, tradesResult] = await Promise.all([
+      const [farmersResult, locationsResult, tradesResult, settingsResult] = await Promise.all([
         supabase.from("trader_farmers").select("*").order("name", { ascending: true }),
         supabase.from("farmer_locations").select("*").order("location_name", { ascending: true }),
-        supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false })
+        supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false }),
+        supabase.from("trader_settings").select("*").maybeSingle()
       ]);
 
-      if (farmersResult.error || locationsResult.error || tradesResult.error) {
-        setError(farmersResult.error?.message || locationsResult.error?.message || tradesResult.error?.message || "Unable to load trader data.");
+      if (farmersResult.error || locationsResult.error || tradesResult.error || settingsResult.error) {
+        setError(farmersResult.error?.message || locationsResult.error?.message || tradesResult.error?.message || settingsResult.error?.message || "Unable to load trader data.");
       } else {
         setFarmers((farmersResult.data ?? []) as Farmer[]);
         setLocations((locationsResult.data ?? []) as FarmerLocation[]);
         setTrades((tradesResult.data ?? []) as CoconutTrade[]);
+        const loadedSettings = (settingsResult.data ?? {
+          trader_id: activeSession.user.id,
+          husk_removal_rate_per_1000: 1100,
+          tree_collection_rate_per_1000: 1450,
+          kudume_wastage_percent: 3
+        }) as TraderSettings;
+        setTraderSettings(loadedSettings);
+        setSettingsForm({
+          huskRemoval: String(loadedSettings.husk_removal_rate_per_1000),
+          treeCollection: String(loadedSettings.tree_collection_rate_per_1000),
+          kudumeWastage: String(loadedSettings.kudume_wastage_percent)
+        });
+        setTradeForm((form) => form.id ? form : {
+          ...form,
+          wastage_percent: form.processing_type === "kudume" ? String(loadedSettings.kudume_wastage_percent) : "0",
+          husk_removal_rate_per_1000: String(loadedSettings.husk_removal_rate_per_1000),
+          tree_collection_rate_per_1000: String(loadedSettings.tree_collection_rate_per_1000)
+        });
       }
     } else {
       setFarmers([]);
       setLocations([]);
       setTrades([]);
+      setTraderSettings(null);
     }
 
     setLoading(false);
@@ -330,15 +416,20 @@ export default function Home() {
   }, [farmerById, locationById, tradeSearch, trades]);
 
   const calculation = useMemo(() => {
+    const quantity = Number(tradeForm.coconut_quantity) || 0;
     const gross = Number(tradeForm.gross_weight_kg) || 0;
     const empty = Number(tradeForm.empty_weight_kg) || 0;
     const net = Math.max(gross - empty, 0);
     const wastagePercent = Number(tradeForm.wastage_percent) || 0;
     const wastage = net * wastagePercent / 100;
     const payable = Math.max(net - wastage, 0);
-    const total = payable * (Number(tradeForm.rate_per_kg) || 0);
+    const coconutTotal = payable * (Number(tradeForm.rate_per_kg) || 0);
+    const huskRemovalCost = quantity / 1000 * (Number(tradeForm.husk_removal_rate_per_1000) || 0);
+    const treeCollectionCost = quantity / 1000 * (Number(tradeForm.tree_collection_rate_per_1000) || 0);
+    const laborTotal = huskRemovalCost + treeCollectionCost;
+    const total = coconutTotal + laborTotal;
     const advance = Number(tradeForm.advance_amount) || 0;
-    return { gross, empty, net, wastagePercent, wastage, payable, total, advance, balance: total - advance };
+    return { quantity, gross, empty, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, laborTotal, total, advance, balance: total - advance };
   }, [tradeForm]);
 
   function clearFeedback() {
@@ -511,6 +602,40 @@ export default function Home() {
     setFarmerForm({ name: "", phone: "", locations: [{ name: "" }] });
   }
 
+  async function saveTraderSettings() {
+    if (!session || profile?.account_type !== "trader") return;
+    const huskRemoval = Number(settingsForm.huskRemoval);
+    const treeCollection = Number(settingsForm.treeCollection);
+    const kudumeWastage = Number(settingsForm.kudumeWastage);
+    if ([huskRemoval, treeCollection, kudumeWastage].some((value) => !Number.isFinite(value) || value < 0) || kudumeWastage > 100) {
+      setError("Enter valid non-negative labor rates and a wastage percentage from 0 to 100.");
+      return;
+    }
+    setSaving(true);
+    const { data, error: settingsError } = await supabase.from("trader_settings").upsert({
+      trader_id: session.user.id,
+      husk_removal_rate_per_1000: huskRemoval,
+      tree_collection_rate_per_1000: treeCollection,
+      kudume_wastage_percent: kudumeWastage
+    }).select("*").single();
+    setSaving(false);
+    if (settingsError || !data) {
+      setError(settingsError?.message || "Unable to save purchase settings.");
+      return;
+    }
+    const savedSettings = data as TraderSettings;
+    setTraderSettings(savedSettings);
+    setSettingsForm({ huskRemoval: String(huskRemoval), treeCollection: String(treeCollection), kudumeWastage: String(kudumeWastage) });
+    setTradeForm((form) => form.id ? form : {
+      ...form,
+      wastage_percent: form.processing_type === "kudume" ? String(kudumeWastage) : "0",
+      husk_removal_rate_per_1000: String(huskRemoval),
+      tree_collection_rate_per_1000: String(treeCollection)
+    });
+    setEditingSettings(false);
+    setMessage("Purchase settings saved for future records.");
+  }
+
   async function savePurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearFeedback();
@@ -521,6 +646,10 @@ export default function Home() {
     }
     if (calculation.gross <= 0 || calculation.empty > calculation.gross) {
       setError("Gross weight must be greater than zero and greater than or equal to empty weight.");
+      return;
+    }
+    if (calculation.quantity <= 0) {
+      setError("Enter the coconut quantity in pieces so labor costs can be calculated.");
       return;
     }
     if (Number(tradeForm.rate_per_kg) < 0 || !tradeForm.rate_per_kg) {
@@ -540,10 +669,13 @@ export default function Home() {
       trade_date: tradeForm.trade_date,
       coconut_color: tradeForm.coconut_color,
       processing_type: tradeForm.processing_type,
+      coconut_quantity: calculation.quantity,
       gross_weight_kg: calculation.gross,
       empty_weight_kg: calculation.empty,
       wastage_percent: tradeForm.processing_type === "kudume" ? calculation.wastagePercent : 0,
       rate_per_kg: Number(tradeForm.rate_per_kg),
+      husk_removal_rate_per_1000: Number(tradeForm.husk_removal_rate_per_1000),
+      tree_collection_rate_per_1000: Number(tradeForm.tree_collection_rate_per_1000),
       advance_amount: calculation.advance,
       payment_status: paymentStatus,
       notes: tradeForm.notes.trim() || null
@@ -587,25 +719,23 @@ export default function Home() {
       trade_date: trade.trade_date,
       coconut_color: trade.coconut_color,
       processing_type: trade.processing_type,
+      coconut_quantity: String(trade.coconut_quantity),
       gross_weight_kg: String(trade.gross_weight_kg),
       empty_weight_kg: String(trade.empty_weight_kg),
       wastage_percent: String(trade.wastage_percent),
       rate_per_kg: String(trade.rate_per_kg),
+      husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
+      tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
       advance_amount: String(trade.advance_amount),
       notes: trade.notes ?? ""
     });
     navigateTo("purchase");
   }
 
-  function exportTrades() {
-    downloadCsv("coconut-purchase-history.csv", [
-      ["Purchase ID", "Date", "Farmer", "Farmer phone", "Location", "Coconut", "Type", "Gross kg", "Empty kg", "Net kg", "Wastage kg", "Payable kg", "Rate/kg", "Total", "Advance", "Balance", "Payment"],
-      ...visibleTrades.map((trade) => {
-        const farmer = farmerById.get(trade.farmer_id);
-        const location = trade.location_id ? locationById.get(trade.location_id) : null;
-        return [formatPurchaseId(trade.id), trade.trade_date, farmer?.name ?? "", farmer?.phone ?? "", location?.location_name ?? "", trade.coconut_color, trade.processing_type, String(trade.gross_weight_kg), String(trade.empty_weight_kg), String(trade.net_weight_kg), String(trade.wastage_weight_kg), String(trade.payable_weight_kg), String(trade.rate_per_kg), String(trade.total_amount), String(trade.advance_amount), String(trade.balance_amount), trade.payment_status];
-      })
-    ]);
+  function exportPurchasePdf(trade: CoconutTrade) {
+    const farmer = farmerById.get(trade.farmer_id);
+    const location = trade.location_id ? locationById.get(trade.location_id) ?? null : null;
+    downloadPurchasePdf(trade, farmer, location);
   }
 
   async function signOut() {
@@ -718,22 +848,22 @@ export default function Home() {
               <div><span className="eyebrow">{editingFarmerId ? "Edit farmer" : "Portfolio"}</span><h2>{editingFarmerId ? "Update farmer details" : "Add a farmer"}</h2></div>
               {editingFarmerId ? <button className="link-button" onClick={cancelFarmerEdit} type="button">Cancel edit</button> : null}
             </div>
-            <p className="muted-text">Farmer ID is the Indian phone number. Add every farming land as its own location.</p>
+            <p className="muted-text">Use the farmer phone number to identify the contact. Add every farming land as its own location.</p>
             <label>Farmer name<input value={farmerForm.name} onChange={(event) => setFarmerForm((form) => ({ ...form, name: event.target.value }))} required /></label>
-            <label>Farmer ID / phone<div className="phone-input"><span>{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span><input inputMode="tel" value={farmerForm.phone} onChange={(event) => setFarmerForm((form) => ({ ...form, phone: getIndianPhoneValue(event.target.value) }))} placeholder="10-digit mobile number" required /></div></label>
+            <label>Phone number<div className="phone-input"><span>{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span><input inputMode="tel" value={farmerForm.phone} onChange={(event) => setFarmerForm((form) => ({ ...form, phone: getIndianPhoneValue(event.target.value) }))} placeholder="10-digit mobile number" required /></div></label>
             <div className="field-heading"><label>Farming locations</label><button className="link-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: [...form.locations, { name: "" }] }))} type="button">+ Add location</button></div>
             {farmerForm.locations.map((location, index) => <div className="location-row" key={location.id ?? `location-${index}`}><input aria-label={`Farming location ${index + 1}`} value={location.name} onChange={(event) => setFarmerForm((form) => ({ ...form, locations: form.locations.map((item, locationIndex) => locationIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Village, town, or farm area" required />{farmerForm.locations.length > 1 ? <button className="remove-button" onClick={() => setFarmerForm((form) => ({ ...form, locations: form.locations.filter((_item, locationIndex) => locationIndex !== index) }))} type="button" aria-label="Remove location">Remove</button> : null}</div>)}
             <button className="primary-button" disabled={saving} type="submit">{saving ? "Saving..." : editingFarmerId ? "Update farmer" : "Add farmer"}</button>
           </form>
-          <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Your portfolio</span><h2>Find a farmer</h2></div><strong>{farmers.length}</strong></div><label>Search by name or phone<input value={farmerSearch} onChange={(event) => setFarmerSearch(event.target.value)} placeholder="Try +91 or a name" /></label><div className="farmer-list">{visibleFarmers.map((farmer) => <article className="farmer-card" key={farmer.id}><div><strong>{farmer.name}</strong><span>{formatFarmerId(farmer.id)} · {farmer.phone}</span></div><div className="location-tags">{locations.filter((location) => location.farmer_id === farmer.id).map((location) => <span key={location.id}>{location.location_name}</span>)}</div><button className="secondary-button" onClick={() => editFarmer(farmer)} type="button">Edit farmer</button></article>)}{visibleFarmers.length === 0 ? <p className="empty-state">No farmers match this search.</p> : null}</div></section>
+          <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Your portfolio</span><h2>Find a farmer</h2></div><strong>{farmers.length}</strong></div><label>Search by name or phone<input value={farmerSearch} onChange={(event) => setFarmerSearch(event.target.value)} placeholder="Try +91 or a name" /></label><div className="farmer-list">{visibleFarmers.map((farmer) => <article className="farmer-card" key={farmer.id}><div><strong>{farmer.name}</strong><span>{farmer.phone}</span></div><div className="location-tags">{locations.filter((location) => location.farmer_id === farmer.id).map((location) => <span key={location.id}>{location.location_name}</span>)}</div><a className="secondary-button" href={`/dashboard/farmers/${farmer.id}`}>View farmer</a><button className="secondary-button" onClick={() => editFarmer(farmer)} type="button">Edit farmer</button></article>)}{visibleFarmers.length === 0 ? <p className="empty-state">No farmers match this search.</p> : null}</div></section>
         </section> : null}
 
         {isTrader && activeSection === "purchase" ? <section className="workspace-grid">
-          <form className="tool-panel purchase-form" onSubmit={savePurchase}><div className="panel-heading"><div><span className="eyebrow">{tradeForm.id ? formatPurchaseId(tradeForm.id) : "New record"}</span><h2>{tradeForm.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{tradeForm.id ? <button className="link-button" onClick={() => { setTradeForm({ ...emptyTradeForm, trade_date: today }); }} type="button">Cancel edit</button> : null}</div><div className="form-grid"><label>Farmer<select value={tradeForm.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add_farmer__") { router.push("/dashboard/farmers?returnTo=new-purchase"); return; } setTradeForm((form) => ({ ...form, farmer_id: value, location_id: "" })); }} required><option value="__add_farmer__">+ Add farmer</option><option value="">Select a farmer</option>{farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{formatFarmerId(farmer.id)} - {farmer.name} - {farmer.phone}</option>)}</select></label><label>Farming location<select value={tradeForm.location_id} onChange={(event) => setTradeForm((form) => ({ ...form, location_id: event.target.value }))} required><option value="">Select location</option>{selectedTradeLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label><label>Purchase date<input type="date" value={tradeForm.trade_date} onChange={(event) => setTradeForm((form) => ({ ...form, trade_date: event.target.value }))} required /></label><label>Coconut colour<select value={tradeForm.coconut_color} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_color: event.target.value as CoconutColor }))}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label></div><fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? "3" : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset><div className="form-grid"><label>Gross weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.gross_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, gross_weight_kg: event.target.value }))} required /></label><label>Empty weight (kg)<input type="number" min="0" step="0.001" value={tradeForm.empty_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, empty_weight_kg: event.target.value }))} placeholder="Vehicle / basket weight" required /></label>{tradeForm.processing_type === "kudume" ? <label>Wastage deduction (%)<input type="number" min="0" max="100" step="0.01" value={tradeForm.wastage_percent} onChange={(event) => setTradeForm((form) => ({ ...form, wastage_percent: event.target.value }))} /><span className="field-hint">Default is 3%: 30 kg per 1,000 kg.</span></label> : null}<label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label><label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label></div><label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label><button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button></form>
-          <aside className="side-stack"><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Weighbridge summary</h2><dl className="calculation-list"><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div><div><dt>Purchase total</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Net = gross weight - empty weight. Payable weight subtracts the Kudume wastage deduction.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer phone record and one of their farming locations. The purchase ID is generated automatically and can be used in the history URL.</p></section></aside>
+          <form className="tool-panel purchase-form" onSubmit={savePurchase}><div className="panel-heading"><div><span className="eyebrow">{tradeForm.id ? formatPurchaseId(tradeForm.id) : "New record"}</span><h2>{tradeForm.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{tradeForm.id ? <button className="link-button" onClick={() => { setTradeForm({ ...emptyTradeForm, trade_date: today }); }} type="button">Cancel edit</button> : null}</div><div className="form-grid"><label>Farmer<select value={tradeForm.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add_farmer__") { router.push("/dashboard/farmers?returnTo=new-purchase"); return; } setTradeForm((form) => ({ ...form, farmer_id: value, location_id: "" })); }} required><option value="__add_farmer__">+ Add farmer</option><option value="">Select a farmer</option>{farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label><label>Farming location<select value={tradeForm.location_id} onChange={(event) => setTradeForm((form) => ({ ...form, location_id: event.target.value }))} required><option value="">Select location</option>{selectedTradeLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label><label>Purchase date<input type="date" value={tradeForm.trade_date} onChange={(event) => setTradeForm((form) => ({ ...form, trade_date: event.target.value }))} required /></label><label>Coconut colour<select value={tradeForm.coconut_color} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_color: event.target.value as CoconutColor }))}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label></div><fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? String(traderSettings?.kudume_wastage_percent ?? 3) : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset><div className="form-grid"><label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={tradeForm.coconut_quantity} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_quantity: event.target.value }))} required /><span className="field-hint">Labor charges are calculated per 1,000 pieces.</span></label><label>Gross weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.gross_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, gross_weight_kg: event.target.value }))} required /></label><label>Empty weight (kg)<input type="number" min="0" step="0.001" value={tradeForm.empty_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, empty_weight_kg: event.target.value }))} placeholder="Vehicle / basket weight" required /></label><label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label><label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label></div><label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label><button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button></form>
+          <aside className="side-stack"><section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => { setEditingSettings(false); setSettingsForm({ huskRemoval: String(traderSettings?.husk_removal_rate_per_1000 ?? 1100), treeCollection: String(traderSettings?.tree_collection_rate_per_1000 ?? 1450), kudumeWastage: String(traderSettings?.kudume_wastage_percent ?? 3) }); }} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid"><label>Husk removal / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskRemoval: event.target.value }))} /></label><label>Tree collection / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, treeCollection: event.target.value }))} /></label><label>Kudume wastage (%)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, kudumeWastage: event.target.value }))} /></label></div>{editingSettings ? <button className="primary-button" disabled={saving} onClick={saveTraderSettings} type="button">Save settings</button> : null}</section><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Weighbridge summary</h2><dl className="calculation-list"><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div><div><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div><div><dt>Husk removal</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div><div><dt>Tree collection</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div><div><dt>Total payable</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Labor charges are calculated per 1,000 pieces and paid by the farmer.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer and location, enter the piece quantity and weighbridge details, then save the invoice.</p></section></aside>
         </section> : null}
 
-        {isTrader && activeSection === "history" ? <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div><button className="secondary-button" onClick={exportTrades} type="button">Download CSV</button></div><label className="search-field">Search purchase ID, farmer, phone, or location<input value={tradeSearch} onChange={(event) => setTradeSearch(event.target.value)} placeholder="PUR-000001 or +91..." /></label><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Location</th><th>Coconut</th><th>Weight</th><th>Total</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{visibleTrades.map((trade) => { const farmer = farmerById.get(trade.farmer_id); const location = trade.location_id ? locationById.get(trade.location_id) : null; return <tr key={trade.id}><td><a href={`/trades/${trade.id}`}>{formatPurchaseId(trade.id)}</a><span className="muted-text">{trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{formatDate(trade.trade_date)}</td><td><strong>{farmer?.name ?? "Unknown farmer"}</strong><span className="muted-text">{farmer?.phone}</span></td><td>{location?.location_name ?? "-"}</td><td><span className={`coconut-dot ${trade.coconut_color}`}></span>{trade.coconut_color}</td><td>{formatNumber(Number(trade.payable_weight_kg))} kg<span className="muted-text">Gross {formatNumber(Number(trade.gross_weight_kg))} kg</span></td><td className="amount-cell">{formatCurrency(Number(trade.total_amount))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}<span className="muted-text">{trade.payment_status}</span></td><td><div className="row-actions"><button className="secondary-button" onClick={() => editPurchase(trade)} type="button">Edit</button><button className="danger-button" disabled={saving} onClick={() => deletePurchase(trade.id)} type="button">Delete</button></div></td></tr>; })}</tbody></table>{visibleTrades.length === 0 ? <p className="empty-state">No purchases match this search.</p> : null}</div></section> : null}
+        {isTrader && activeSection === "history" ? <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div></div><label className="search-field">Search purchase ID, farmer, phone, or location<input value={tradeSearch} onChange={(event) => setTradeSearch(event.target.value)} placeholder="PUR-000001 or +91..." /></label><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Location</th><th>Coconut</th><th>Weight</th><th>Total</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{visibleTrades.map((trade) => { const farmer = farmerById.get(trade.farmer_id); const location = trade.location_id ? locationById.get(trade.location_id) : null; return <tr key={trade.id}><td><a href={`/trades/${trade.id}`}>{formatPurchaseId(trade.id)}</a><span className="muted-text">{trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{formatDate(trade.trade_date)}</td><td><strong>{farmer?.name ?? "Unknown farmer"}</strong><span className="muted-text">{farmer?.phone}</span></td><td>{location?.location_name ?? "-"}</td><td><span className={`coconut-dot ${trade.coconut_color}`}></span>{trade.coconut_color}</td><td>{formatNumber(Number(trade.payable_weight_kg))} kg<span className="muted-text">Gross {formatNumber(Number(trade.gross_weight_kg))} kg</span></td><td className="amount-cell">{formatCurrency(Number(trade.total_amount))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}<span className="muted-text">{trade.payment_status}</span></td><td><div className="row-actions"><button className="secondary-button" onClick={() => exportPurchasePdf(trade)} type="button">Export PDF</button><button className="secondary-button" onClick={() => editPurchase(trade)} type="button">Edit</button><button className="danger-button" disabled={saving} onClick={() => deletePurchase(trade.id)} type="button">Delete</button></div></td></tr>; })}</tbody></table>{visibleTrades.length === 0 ? <p className="empty-state">No purchases match this search.</p> : null}</div></section> : null}
       </section>
     </main>
   );

@@ -661,6 +661,21 @@ textarea:focus {
   color: #34483f;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-grid input:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.detail-tags {
+  margin-top: 4px;
+}
+
 .location-row {
   align-items: start;
   display: grid;
@@ -845,6 +860,12 @@ td > .muted-text {
 }
 
 .row-actions button {
+  font-size: 0.78rem;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.row-actions a {
   font-size: 0.78rem;
   min-height: 34px;
   padding: 7px 10px;
