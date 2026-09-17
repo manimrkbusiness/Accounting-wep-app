@@ -791,6 +791,98 @@ legend {
   font-size: 1.3rem;
 }
 
+.calculation-list .calculation-deduction dt,
+.calculation-list .calculation-deduction dd {
+  color: #ffb0a8;
+}
+
+.calculation-list .calculation-credit dt,
+.calculation-list .calculation-credit dd {
+  color: #a7e6bd;
+}
+
+.calculation-list .calculation-total dt,
+.calculation-list .calculation-total dd {
+  color: #b8f0c8;
+}
+
+.farmer-workspace {
+  display: grid;
+  gap: 20px;
+}
+
+.request-list {
+  display: grid;
+  gap: 12px;
+}
+
+.request-card {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 15px;
+}
+
+.request-card > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.request-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.adjustment-panel {
+  margin-top: 20px;
+}
+
+.adjustment-actions,
+.adjustment-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.adjustment-toggle {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.adjustment-toggle.credit {
+  background: #e4f5e9;
+  color: var(--green-dark);
+}
+
+.adjustment-toggle.debit {
+  background: #fff0ed;
+  color: var(--danger);
+}
+
+.adjustment-fields {
+  border-left: 3px solid var(--green);
+  margin-top: 2px;
+  padding-left: 14px;
+}
+
+.adjustment-fields.debit-fields {
+  border-left-color: var(--danger);
+}
+
+.required-note {
+  color: var(--danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .calculation-panel .field-hint {
   color: #bed0c6;
 }
@@ -1110,5 +1202,18 @@ td > .muted-text {
   .detail-header {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 680px) {
+  .request-card,
+  .adjustment-actions,
+  .adjustment-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .request-card {
+    align-items: stretch;
+    display: grid;
   }
 }

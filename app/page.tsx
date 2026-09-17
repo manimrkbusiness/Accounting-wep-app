@@ -39,6 +39,7 @@ type FarmerLocation = {
 
 type CoconutTrade = {
   id: number;
+  trader_id: string;
   farmer_id: number;
   location_id: number | null;
   trade_date: string;
@@ -56,6 +57,10 @@ type CoconutTrade = {
   labor_cost_total: number;
   average_weight_kg: number;
   average_price_per_piece: number;
+  additional_credit_amount: number;
+  additional_credit_reason: string | null;
+  additional_debit_amount: number;
+  additional_debit_reason: string | null;
   advance_amount: number;
   payment_status: PaymentStatus;
   notes: string | null;
@@ -65,6 +70,20 @@ type CoconutTrade = {
   total_amount: number;
   balance_amount: number;
   created_at: string;
+};
+
+type FarmerAccessRequest = {
+  id: number;
+  trader_id: string;
+  trader_farmer_id: number;
+  farmer_user_id: string;
+  trader_name: string;
+  trader_business_name: string | null;
+  farmer_name: string;
+  farmer_phone: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+  responded_at: string | null;
 };
 
 type TraderSettings = {
@@ -89,6 +108,10 @@ type TradeForm = {
   husk_removal_rate_per_1000: string;
   tree_collection_rate_per_1000: string;
   advance_amount: string;
+  additional_credit_amount: string;
+  additional_credit_reason: string;
+  additional_debit_amount: string;
+  additional_debit_reason: string;
   notes: string;
 };
 
@@ -101,7 +124,7 @@ const today = new Date().toISOString().slice(0, 10);
 
 const roleOptions: Array<{ value: Role; label: string; description: string }> = [
   { value: "trader", label: "Trader", description: "Manage farmers and record coconut purchases." },
-  { value: "farmer", label: "Farmer", description: "Your farmer workspace will be added in the next phase." }
+  { value: "farmer", label: "Farmer", description: "Review purchases shared with you by traders." }
 ];
 
 const appSections: Array<{ value: AppSection; label: string; shortLabel: string }> = [
@@ -150,6 +173,10 @@ const emptyTradeForm: TradeForm = {
   husk_removal_rate_per_1000: "1100",
   tree_collection_rate_per_1000: "1450",
   advance_amount: "0",
+  additional_credit_amount: "0",
+  additional_credit_reason: "",
+  additional_debit_amount: "0",
+  additional_debit_reason: "",
   notes: ""
 };
 
@@ -232,8 +259,8 @@ function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, lo
   line("Location", location?.location_name ?? "Unavailable");
   line("Coconut", `${trade.coconut_color} / ${trade.processing_type === "mottai" ? "Mottai" : "Kudume"}`);
   line("Quantity", `${formatNumber(Number(trade.coconut_quantity), 2)} pieces`);
-  line("Average weight", `${formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g per coconut`);
-  line("Average price", `INR ${formatNumber(Number(trade.average_price_per_piece), 2)} per coconut`);
+  line("Average weight per nut", `${formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g per nut`);
+  line("Average price per nut", `INR ${formatNumber(Number(trade.average_price_per_piece), 2)} per nut`);
   line("Gross weight", `${formatNumber(Number(trade.gross_weight_kg))} kg`);
   line("Empty weight", `${formatNumber(Number(trade.empty_weight_kg))} kg`);
   line("Net weight", `${formatNumber(Number(trade.net_weight_kg))} kg`);
@@ -244,10 +271,18 @@ function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, lo
   doc.line(left, y, 192, y);
   y += 10;
   line("Coconut purchase", formatCurrency(Number(trade.total_amount) - Number(trade.labor_cost_total)).replace("₹", "INR "));
-  line("Husk removal", formatCurrency(Number(trade.husk_removal_cost)).replace("₹", "INR "));
+  line("Dehusking", formatCurrency(Number(trade.husk_removal_cost)).replace("₹", "INR "));
   line("Coconut harvesting", formatCurrency(Number(trade.tree_collection_cost)).replace("₹", "INR "));
   line("Net payable to farmer", formatCurrency(Number(trade.total_amount)).replace("₹", "INR "));
   line("Advance paid", formatCurrency(Number(trade.advance_amount)).replace("₹", "INR "));
+  if (Number(trade.additional_credit_amount) > 0) {
+    line("Additional credit", formatCurrency(Number(trade.additional_credit_amount)).replace("₹", "INR "));
+    line("Credit reason", trade.additional_credit_reason ?? "");
+  }
+  if (Number(trade.additional_debit_amount) > 0) {
+    line("Additional debit", formatCurrency(Number(trade.additional_debit_amount)).replace("₹", "INR "));
+    line("Debit reason", trade.additional_debit_reason ?? "");
+  }
   line("Balance", formatCurrency(Number(trade.balance_amount)).replace("₹", "INR "));
   if (trade.notes) {
     y += 3;
@@ -275,6 +310,7 @@ export default function Home() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [locations, setLocations] = useState<FarmerLocation[]>([]);
   const [trades, setTrades] = useState<CoconutTrade[]>([]);
+  const [accessRequests, setAccessRequests] = useState<FarmerAccessRequest[]>([]);
   const [traderSettings, setTraderSettings] = useState<TraderSettings | null>(null);
   const [settingsForm, setSettingsForm] = useState({ huskRemoval: "1100", treeCollection: "1450", kudumeWastage: "3" });
   const [editingSettings, setEditingSettings] = useState(false);
@@ -282,6 +318,8 @@ export default function Home() {
   const [farmerSearch, setFarmerSearch] = useState("");
   const [tradeSearch, setTradeSearch] = useState("");
   const [tradeForm, setTradeForm] = useState<TradeForm>(emptyTradeForm);
+  const [showCreditAdjustment, setShowCreditAdjustment] = useState(false);
+  const [showDebitAdjustment, setShowDebitAdjustment] = useState(false);
   const [editingFarmerId, setEditingFarmerId] = useState<number | null>(null);
   const [farmerForm, setFarmerForm] = useState<{ name: string; phone: string; locations: LocationInput[] }>({ name: "", phone: "", locations: [{ name: "" }] });
   const [loading, setLoading] = useState(true);
@@ -313,8 +351,14 @@ export default function Home() {
       husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
       tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
       advance_amount: String(trade.advance_amount),
+      additional_credit_amount: String(trade.additional_credit_amount ?? 0),
+      additional_credit_reason: trade.additional_credit_reason ?? "",
+      additional_debit_amount: String(trade.additional_debit_amount ?? 0),
+      additional_debit_reason: trade.additional_debit_reason ?? "",
       notes: trade.notes ?? ""
     });
+    setShowCreditAdjustment(Number(trade.additional_credit_amount) > 0);
+    setShowDebitAdjustment(Number(trade.additional_debit_amount) > 0);
   }, [pathname, trades]);
 
   function navigateTo(section: AppSection) {
@@ -329,6 +373,7 @@ export default function Home() {
       setFarmers([]);
       setLocations([]);
       setTrades([]);
+      setAccessRequests([]);
       setTraderSettings(null);
       setLoading(false);
       return;
@@ -352,19 +397,21 @@ export default function Home() {
     setRoleChoice(loadedProfile?.account_type ?? "");
 
     if (loadedProfile?.account_type === "trader") {
-      const [farmersResult, locationsResult, tradesResult, settingsResult] = await Promise.all([
+      const [farmersResult, locationsResult, tradesResult, settingsResult, requestsResult] = await Promise.all([
         supabase.from("trader_farmers").select("*").order("name", { ascending: true }),
         supabase.from("farmer_locations").select("*").order("location_name", { ascending: true }),
         supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false }),
-        supabase.from("trader_settings").select("*").maybeSingle()
+        supabase.from("trader_settings").select("*").maybeSingle(),
+        supabase.from("farmer_access_requests").select("*").order("requested_at", { ascending: false })
       ]);
 
-      if (farmersResult.error || locationsResult.error || tradesResult.error || settingsResult.error) {
-        setError(farmersResult.error?.message || locationsResult.error?.message || tradesResult.error?.message || settingsResult.error?.message || "Unable to load trader data.");
+      if (farmersResult.error || locationsResult.error || tradesResult.error || settingsResult.error || requestsResult.error) {
+        setError(farmersResult.error?.message || locationsResult.error?.message || tradesResult.error?.message || settingsResult.error?.message || requestsResult.error?.message || "Unable to load trader data.");
       } else {
         setFarmers((farmersResult.data ?? []) as Farmer[]);
         setLocations((locationsResult.data ?? []) as FarmerLocation[]);
         setTrades((tradesResult.data ?? []) as CoconutTrade[]);
+        setAccessRequests((requestsResult.data ?? []) as FarmerAccessRequest[]);
         const loadedSettings = (settingsResult.data ?? {
           trader_id: activeSession.user.id,
           husk_removal_rate_per_1000: 1100,
@@ -384,10 +431,28 @@ export default function Home() {
           tree_collection_rate_per_1000: String(loadedSettings.tree_collection_rate_per_1000)
         });
       }
+    } else if (loadedProfile?.account_type === "farmer") {
+      const [requestsResult, farmersResult, locationsResult, tradesResult] = await Promise.all([
+        supabase.from("farmer_access_requests").select("*").order("requested_at", { ascending: false }),
+        supabase.from("trader_farmers").select("*").order("name", { ascending: true }),
+        supabase.from("farmer_locations").select("*").order("location_name", { ascending: true }),
+        supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false })
+      ]);
+
+      if (requestsResult.error || farmersResult.error || locationsResult.error || tradesResult.error) {
+        setError(requestsResult.error?.message || farmersResult.error?.message || locationsResult.error?.message || tradesResult.error?.message || "Unable to load shared purchases.");
+      } else {
+        setAccessRequests((requestsResult.data ?? []) as FarmerAccessRequest[]);
+        setFarmers((farmersResult.data ?? []) as Farmer[]);
+        setLocations((locationsResult.data ?? []) as FarmerLocation[]);
+        setTrades((tradesResult.data ?? []) as CoconutTrade[]);
+      }
+      setTraderSettings(null);
     } else {
       setFarmers([]);
       setLocations([]);
       setTrades([]);
+      setAccessRequests([]);
       setTraderSettings(null);
     }
 
@@ -457,10 +522,13 @@ export default function Home() {
     const laborTotal = huskRemovalCost + treeCollectionCost;
     const total = Math.max(coconutTotal - laborTotal, 0);
     const advance = Number(tradeForm.advance_amount) || 0;
+    const additionalCredit = Number(tradeForm.additional_credit_amount) || 0;
+    const additionalDebit = Number(tradeForm.additional_debit_amount) || 0;
     const averageWeightKg = quantity > 0 ? net / quantity : 0;
     const averageWeightGrams = averageWeightKg * 1000;
     const averagePricePerPiece = quantity > 0 ? total / quantity : 0;
-    return { quantity, gross, empty, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, laborTotal, total, advance, balance: total - advance, averageWeightKg, averageWeightGrams, averagePricePerPiece };
+    const balance = total - advance + additionalCredit - additionalDebit;
+    return { quantity, gross, empty, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightKg, averageWeightGrams, averagePricePerPiece };
   }, [tradeForm]);
 
   function clearFeedback() {
@@ -529,7 +597,7 @@ export default function Home() {
 
     setProfile(data as Profile);
     navigateTo("dashboard");
-    setMessage(roleChoice === "trader" ? "Trader workspace ready." : "Farmer profile created. Your workspace will be added in the next phase.");
+    setMessage(roleChoice === "trader" ? "Trader workspace ready." : "Farmer profile created. Approve trader requests here before shared purchases appear.");
     await loadWorkspace(session);
   }
 
@@ -691,7 +759,21 @@ export default function Home() {
       setError("Advance cannot be greater than the calculated purchase amount.");
       return;
     }
-    const paymentStatus: PaymentStatus = calculation.advance >= calculation.total ? "paid" : calculation.advance > 0 ? "partial" : "pending";
+    const creditReason = tradeForm.additional_credit_reason.trim();
+    const debitReason = tradeForm.additional_debit_reason.trim();
+    if (calculation.additionalCredit > 0 && !creditReason) {
+      setError("Add a reason for the additional credit.");
+      return;
+    }
+    if (calculation.additionalDebit > 0 && !debitReason) {
+      setError("Add a reason for the additional debit.");
+      return;
+    }
+    if (calculation.additionalDebit > calculation.total - calculation.advance + calculation.additionalCredit) {
+      setError("Additional debit cannot be greater than the amount still payable.");
+      return;
+    }
+    const paymentStatus: PaymentStatus = calculation.balance <= 0 ? "paid" : calculation.advance > 0 ? "partial" : "pending";
     setSaving(true);
     const payload = {
       trader_id: session.user.id,
@@ -708,6 +790,10 @@ export default function Home() {
       husk_removal_rate_per_1000: Number(tradeForm.husk_removal_rate_per_1000),
       tree_collection_rate_per_1000: Number(tradeForm.tree_collection_rate_per_1000),
       advance_amount: calculation.advance,
+      additional_credit_amount: calculation.additionalCredit,
+      additional_credit_reason: calculation.additionalCredit > 0 ? creditReason : null,
+      additional_debit_amount: calculation.additionalDebit,
+      additional_debit_reason: calculation.additionalDebit > 0 ? debitReason : null,
       payment_status: paymentStatus,
       notes: tradeForm.notes.trim() || null
     };
@@ -722,8 +808,10 @@ export default function Home() {
     }
 
     setTradeForm({ ...emptyTradeForm, trade_date: today });
+    setShowCreditAdjustment(false);
+    setShowDebitAdjustment(false);
     navigateTo("history");
-    setMessage(tradeForm.id ? "Purchase updated." : "Purchase recorded.");
+    setMessage(tradeForm.id ? "Purchase updated and sharing status refreshed." : "Purchase recorded. A sharing request was sent when a farmer account matched this phone number.");
     await loadWorkspace(session);
   }
 
@@ -738,6 +826,23 @@ export default function Home() {
       return;
     }
     setMessage("Purchase deleted.");
+    await loadWorkspace(session);
+  }
+
+  async function respondToAccessRequest(requestId: number, decision: "approved" | "rejected") {
+    if (!session || profile?.account_type !== "farmer") return;
+    clearFeedback();
+    setSaving(true);
+    const { error: responseError } = await supabase.rpc("respond_to_farmer_access_request", {
+      request_key: requestId,
+      decision
+    });
+    setSaving(false);
+    if (responseError) {
+      setError(responseError.message);
+      return;
+    }
+    setMessage(decision === "approved" ? "Trader connection approved. Shared purchases are now visible." : "Trader connection declined.");
     await loadWorkspace(session);
   }
 
@@ -758,8 +863,14 @@ export default function Home() {
       husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
       tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
       advance_amount: String(trade.advance_amount),
+      additional_credit_amount: String(trade.additional_credit_amount ?? 0),
+      additional_credit_reason: trade.additional_credit_reason ?? "",
+      additional_debit_amount: String(trade.additional_debit_amount ?? 0),
+      additional_debit_reason: trade.additional_debit_reason ?? "",
       notes: trade.notes ?? ""
     });
+    setShowCreditAdjustment(Number(trade.additional_credit_amount) > 0);
+    setShowDebitAdjustment(Number(trade.additional_debit_amount) > 0);
     router.push(`/dashboard/new-purchase?edit=${trade.id}`);
   }
 
@@ -837,6 +948,8 @@ export default function Home() {
   const totalBalance = trades.reduce((sum, trade) => sum + Number(trade.balance_amount), 0);
   const totalPayableWeight = trades.reduce((sum, trade) => sum + Number(trade.payable_weight_kg), 0);
   const recentTrades = trades.slice(0, 5);
+  const pendingAccessRequests = accessRequests.filter((request) => request.status === "pending");
+  const requestByTraderId = new Map(accessRequests.map((request) => [request.trader_id, request]));
 
   return (
     <main className="authenticated-shell">
@@ -857,7 +970,10 @@ export default function Home() {
         {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}
 
-        {!isTrader ? <section className="empty-workspace"><span className="eyebrow">Farmer workspace</span><h2>Your farmer tools are coming next.</h2><p>Your account and contact details are saved. The farmer purchase, crop, expense, and income tools will be added in the next phase.</p></section> : null}
+        {!isTrader ? <section className="farmer-workspace">
+          <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Private connections</span><h2>Purchase requests</h2></div><strong>{pendingAccessRequests.length}</strong></div><p className="muted-text">A trader can only share purchase records with you after you approve the connection while signed in to this account.</p>{pendingAccessRequests.length ? <div className="request-list">{pendingAccessRequests.map((request) => <article className="request-card" key={request.id}><div><strong>{request.trader_business_name || request.trader_name}</strong><span>{request.trader_name} wants to share purchases for {request.farmer_name} ({request.farmer_phone}).</span><small>{new Date(request.requested_at).toLocaleDateString("en-IN")}</small></div><div className="row-actions"><button className="primary-button" disabled={saving} onClick={() => respondToAccessRequest(request.id, "approved")} type="button">Approve</button><button className="danger-button" disabled={saving} onClick={() => respondToAccessRequest(request.id, "rejected")} type="button">Decline</button></div></article>)}</div> : <p className="empty-state">No pending purchase-sharing requests.</p>}</section>
+          <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Shared purchase history</span><h2>Purchases shared with you</h2></div></div><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Trader</th><th>Date</th><th>Quantity</th><th>Avg weight per nut</th><th>Avg price per nut</th><th>Balance</th></tr></thead><tbody>{trades.map((trade) => { const request = requestByTraderId.get(trade.trader_id); return <tr key={`${trade.trader_id}-${trade.id}`}><td><strong>{formatPurchaseId(trade.id)}</strong><span className="muted-text">{trade.coconut_color} / {trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{request?.trader_business_name || request?.trader_name || "Approved trader"}</td><td>{formatDate(trade.trade_date)}</td><td>{formatNumber(Number(trade.coconut_quantity), 0)} pieces</td><td>{formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g</td><td>{formatCurrency(Number(trade.average_price_per_piece))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}</td></tr>; })}</tbody></table>{trades.length === 0 ? <p className="empty-state">Approved purchases will appear here.</p> : null}</div></section>
+        </section> : null}
 
         {isTrader && activeSection === "dashboard" ? <>
           <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => navigateTo("purchase")} type="button">Record a purchase</button></section>
@@ -891,10 +1007,12 @@ export default function Home() {
 
         {isTrader && activeSection === "purchase" ? <section className="workspace-grid">
           <form className="tool-panel purchase-form" onSubmit={savePurchase}><div className="panel-heading"><div><span className="eyebrow">{tradeForm.id ? formatPurchaseId(tradeForm.id) : "New record"}</span><h2>{tradeForm.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{tradeForm.id ? <button className="link-button" onClick={() => { setTradeForm({ ...emptyTradeForm, trade_date: today }); router.push("/dashboard/new-purchase"); }} type="button">Cancel edit</button> : null}</div><div className="form-grid"><label>Farmer<select value={tradeForm.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add_farmer__") { router.push("/dashboard/farmers?returnTo=new-purchase"); return; } setTradeForm((form) => ({ ...form, farmer_id: value, location_id: "" })); }} required><option value="__add_farmer__">+ Add farmer</option><option value="">Select a farmer</option>{farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label><label>Farming location<select value={tradeForm.location_id} onChange={(event) => setTradeForm((form) => ({ ...form, location_id: event.target.value }))} required><option value="">Select location</option>{selectedTradeLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label><label>Purchase date<input type="date" value={tradeForm.trade_date} onChange={(event) => setTradeForm((form) => ({ ...form, trade_date: event.target.value }))} required /></label><label>Coconut colour<select value={tradeForm.coconut_color} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_color: event.target.value as CoconutColor }))}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label></div><fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? String(traderSettings?.kudume_wastage_percent ?? 3) : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset><div className="form-grid"><label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={tradeForm.coconut_quantity} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_quantity: event.target.value }))} required /><span className="field-hint">Labor charges are calculated per 1,000 pieces.</span></label><label>Empty weight (kg)<input type="number" min="0" step="0.001" value={tradeForm.empty_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, empty_weight_kg: event.target.value }))} placeholder="Vehicle / basket weight" required /></label><label>Gross weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.gross_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, gross_weight_kg: event.target.value }))} required /></label><div className="calculated-field"><span>Net weight (kg)</span><strong>{formatNumber(calculation.net)} kg</strong></div><label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label><label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label></div><label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label><button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button></form>
-          <aside className="side-stack"><section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => { setEditingSettings(false); setSettingsForm({ huskRemoval: String(traderSettings?.husk_removal_rate_per_1000 ?? 1100), treeCollection: String(traderSettings?.tree_collection_rate_per_1000 ?? 1450), kudumeWastage: String(traderSettings?.kudume_wastage_percent ?? 3) }); }} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid"><label>Husk removal / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskRemoval: event.target.value }))} /></label><label>Coconut harvesting / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, treeCollection: event.target.value }))} /></label><label>Kudume wastage (%)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, kudumeWastage: event.target.value }))} /></label></div>{editingSettings ? <button className="primary-button" disabled={saving} onClick={saveTraderSettings} type="button">Save settings</button> : null}</section><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Weighbridge summary</h2><dl className="calculation-list"><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div><div><dt>Average weight</dt><dd>{formatNumber(calculation.averageWeightGrams, 1)} g / coconut</dd></div><div><dt>Average farmer price</dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / coconut</dd></div><div><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div><div><dt>Husk removal</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div><div><dt>Coconut harvesting</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div><div><dt>Net payable to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div><div className="calculation-total"><dt>Balance</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Average weight uses net weight. Average farmer price uses the amount after labor deductions.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer and location, enter the piece quantity and weighbridge details, then save the invoice.</p></section></aside>
+          <aside className="side-stack"><section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => { setEditingSettings(false); setSettingsForm({ huskRemoval: String(traderSettings?.husk_removal_rate_per_1000 ?? 1100), treeCollection: String(traderSettings?.tree_collection_rate_per_1000 ?? 1450), kudumeWastage: String(traderSettings?.kudume_wastage_percent ?? 3) }); }} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid"><label>Dehusking / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskRemoval: event.target.value }))} /></label><label>Coconut harvesting / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, treeCollection: event.target.value }))} /></label><label>Kudume wastage (%)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, kudumeWastage: event.target.value }))} /></label></div>{editingSettings ? <button className="primary-button" disabled={saving} onClick={saveTraderSettings} type="button">Save settings</button> : null}</section><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Weighbridge summary</h2><dl className="calculation-list"><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div><div><dt>Average weight per nut</dt><dd>{formatNumber(calculation.averageWeightGrams, 1)} g / nut</dd></div><div><dt>Average price per nut</dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / nut</dd></div><div><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div><div className="calculation-deduction"><dt>Dehusking</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div><div className="calculation-deduction"><dt>Coconut harvesting</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div><div><dt>Net payable to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div>{calculation.additionalCredit > 0 ? <div className="calculation-credit"><dt>Additional credit</dt><dd>{formatCurrency(calculation.additionalCredit)}</dd></div> : null}{calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}<div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Dehusking and coconut harvesting are paid by the trader and deducted from the farmer payment. Credits add to the balance; debits reduce it.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer and location, enter the piece quantity and weighbridge details, then save the invoice.</p></section></aside>
         </section> : null}
 
-        {isTrader && activeSection === "history" ? <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div></div><label className="search-field">Search purchase ID, farmer, phone, or location<input value={tradeSearch} onChange={(event) => setTradeSearch(event.target.value)} placeholder="PUR-000001 or +91..." /></label><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Location</th><th>Coconut</th><th>Quantity</th><th>Avg weight</th><th>Weight</th><th>Avg price</th><th>Net payable</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{visibleTrades.map((trade) => { const farmer = farmerById.get(trade.farmer_id); const location = trade.location_id ? locationById.get(trade.location_id) : null; return <tr key={trade.id}><td><a href={`/trades/${trade.id}`}>{formatPurchaseId(trade.id)}</a><span className="muted-text">{trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{formatDate(trade.trade_date)}</td><td><strong>{farmer?.name ?? "Unknown farmer"}</strong><span className="muted-text">{farmer?.phone}</span></td><td>{location?.location_name ?? "-"}</td><td><span className={`coconut-dot ${trade.coconut_color}`}></span>{trade.coconut_color}</td><td>{formatNumber(Number(trade.coconut_quantity), 0)} pieces</td><td>{formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g</td><td>{formatNumber(Number(trade.payable_weight_kg))} kg<span className="muted-text">Gross {formatNumber(Number(trade.gross_weight_kg))} kg</span></td><td>{formatCurrency(Number(trade.average_price_per_piece))}</td><td className="amount-cell">{formatCurrency(Number(trade.total_amount))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}<span className="muted-text">{trade.payment_status}</span></td><td><div className="row-actions"><button className="secondary-button" onClick={() => exportPurchasePdf(trade)} type="button">Export PDF</button><button className="secondary-button" onClick={() => editPurchase(trade)} type="button">Edit</button><button className="danger-button" disabled={saving} onClick={() => deletePurchase(trade.id)} type="button">Delete</button></div></td></tr>; })}</tbody></table>{visibleTrades.length === 0 ? <p className="empty-state">No purchases match this search.</p> : null}</div></section> : null}
+        {isTrader && activeSection === "purchase" ? <section className="tool-panel adjustment-panel"><div className="panel-heading"><div><span className="eyebrow">After advance</span><h2>Farmer adjustments</h2></div><span className="muted-text">Optional</span></div><p className="muted-text">Add a documented amount to pay the farmer or deduct an amount from the farmer balance.</p><div className="adjustment-actions"><button className="adjustment-toggle credit" onClick={() => { setShowCreditAdjustment(true); setTradeForm((form) => ({ ...form, additional_credit_amount: form.additional_credit_amount === "0" ? "" : form.additional_credit_amount })); }} type="button">+ Add credit to farmer</button><button className="adjustment-toggle debit" onClick={() => { setShowDebitAdjustment(true); setTradeForm((form) => ({ ...form, additional_debit_amount: form.additional_debit_amount === "0" ? "" : form.additional_debit_amount })); }} type="button">- Add debit to farmer</button></div>{showCreditAdjustment || Number(tradeForm.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={tradeForm.additional_credit_amount} onChange={(event) => setTradeForm((form) => ({ ...form, additional_credit_amount: event.target.value }))} /></label><label>Why is this being credited? <span className="required-note">Required when amount is entered</span><input value={tradeForm.additional_credit_reason} onChange={(event) => setTradeForm((form) => ({ ...form, additional_credit_reason: event.target.value }))} placeholder="Reason for additional payment" /></label></div> : null}{showDebitAdjustment || Number(tradeForm.additional_debit_amount) > 0 ? <div className="adjustment-fields debit-fields"><label>Debit amount (INR)<input type="number" min="0" step="0.01" value={tradeForm.additional_debit_amount} onChange={(event) => setTradeForm((form) => ({ ...form, additional_debit_amount: event.target.value }))} /></label><label>Why is this being deducted? <span className="required-note">Required when amount is entered</span><input value={tradeForm.additional_debit_reason} onChange={(event) => setTradeForm((form) => ({ ...form, additional_debit_reason: event.target.value }))} placeholder="Reason for deduction" /></label></div> : null}</section> : null}
+
+        {isTrader && activeSection === "history" ? <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div></div><label className="search-field">Search purchase ID, farmer, phone, or location<input value={tradeSearch} onChange={(event) => setTradeSearch(event.target.value)} placeholder="PUR-000001 or +91..." /></label><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Location</th><th>Coconut</th><th>Quantity</th><th>Avg weight per nut</th><th>Weight</th><th>Avg price per nut</th><th>Net payable</th><th>Balance</th><th>Sharing</th><th>Actions</th></tr></thead><tbody>{visibleTrades.map((trade) => { const farmer = farmerById.get(trade.farmer_id); const location = trade.location_id ? locationById.get(trade.location_id) : null; const sharingRequest = accessRequests.find((request) => request.trader_farmer_id === trade.farmer_id); return <tr key={trade.id}><td><a href={`/trades/${trade.id}`}>{formatPurchaseId(trade.id)}</a><span className="muted-text">{trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{formatDate(trade.trade_date)}</td><td><strong>{farmer?.name ?? "Unknown farmer"}</strong><span className="muted-text">{farmer?.phone}</span></td><td>{location?.location_name ?? "-"}</td><td><span className={`coconut-dot ${trade.coconut_color}`}></span>{trade.coconut_color}</td><td>{formatNumber(Number(trade.coconut_quantity), 0)} pieces</td><td>{formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g</td><td>{formatNumber(Number(trade.payable_weight_kg))} kg<span className="muted-text">Gross {formatNumber(Number(trade.gross_weight_kg))} kg</span></td><td>{formatCurrency(Number(trade.average_price_per_piece))}</td><td className="amount-cell">{formatCurrency(Number(trade.total_amount))}<span className="muted-text">Dehusking {formatCurrency(Number(trade.husk_removal_cost))}</span><span className="muted-text">Harvesting {formatCurrency(Number(trade.tree_collection_cost))}</span></td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}<span className="muted-text">{trade.payment_status}</span>{Number(trade.additional_credit_amount) > 0 ? <span className="positive">+{formatCurrency(Number(trade.additional_credit_amount))}</span> : null}{Number(trade.additional_debit_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(trade.additional_debit_amount))}</span> : null}</td><td><span className={`status-badge ${sharingRequest?.status ?? "pending"}`}>{sharingRequest?.status ?? "No account match"}</span></td><td><div className="row-actions"><button className="secondary-button" onClick={() => exportPurchasePdf(trade)} type="button">Export PDF</button><button className="secondary-button" onClick={() => editPurchase(trade)} type="button">Edit</button><button className="danger-button" disabled={saving} onClick={() => deletePurchase(trade.id)} type="button">Delete</button></div></td></tr>; })}</tbody></table>{visibleTrades.length === 0 ? <p className="empty-state">No purchases match this search.</p> : null}</div></section> : null}
       </section>
     </main>
   );
