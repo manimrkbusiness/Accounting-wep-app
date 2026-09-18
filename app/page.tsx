@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
+import { BarChart3, ChevronRight, CirclePlus, IndianRupee, LayoutDashboard, LogOut, ReceiptText, Scale, Sprout, UsersRound } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
 type Mode = "signup" | "signin";
@@ -139,11 +141,11 @@ const roleOptions: Array<{ value: Role; label: string; description: string }> = 
   { value: "farmer", label: "Farmer", description: "Review purchases shared with you by traders." }
 ];
 
-const appSections: Array<{ value: AppSection; label: string; shortLabel: string }> = [
-  { value: "dashboard", label: "Dashboard", shortLabel: "Home" },
-  { value: "farmers", label: "Farmers", shortLabel: "Farmers" },
-  { value: "purchase", label: "New purchase", shortLabel: "Add" },
-  { value: "history", label: "Purchase history", shortLabel: "History" }
+const appSections: Array<{ value: AppSection; label: string; shortLabel: string; icon: LucideIcon }> = [
+  { value: "dashboard", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard },
+  { value: "farmers", label: "Farmers", shortLabel: "Farmers", icon: UsersRound },
+  { value: "purchase", label: "New purchase", shortLabel: "Add", icon: CirclePlus },
+  { value: "history", label: "Purchase history", shortLabel: "History", icon: ReceiptText }
 ];
 
 function getSectionForPath(pathname: string): AppSection {
@@ -249,16 +251,25 @@ function getAuthErrorMessage(caughtError: unknown) {
   return caughtError.message || "Something went wrong.";
 }
 
-function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, location: FarmerLocation | null) {
+type PdfTone = "normal" | "credit" | "debit" | "final";
+
+function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, location: FarmerLocation | null, traderName: string) {
   const doc = new jsPDF();
   const left = 18;
   let y = 20;
-  const line = (label: string, value: string) => {
+  const line = (label: string, value: string, tone: PdfTone = "normal") => {
+    const valueColor = tone === "credit" ? [18, 107, 82] : tone === "debit" ? [182, 66, 54] : tone === "final" ? [7, 91, 65] : [30, 42, 38];
+    const fontSize = tone === "final" ? 13 : 10;
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(30, 42, 38);
     doc.text(label, left, y);
     doc.setFont("helvetica", "normal");
+    doc.setTextColor(valueColor[0], valueColor[1], valueColor[2]);
     doc.text(value, 85, y);
-    y += 8;
+    y += tone === "final" ? 11 : 8;
+    doc.setFontSize(10);
+    doc.setTextColor(30, 42, 38);
   };
 
   doc.setFontSize(18);
@@ -276,10 +287,11 @@ function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, lo
   y += 10;
 
   line("Date", formatDate(trade.trade_date));
+  line("Trader", traderName);
   line("Farmer", farmer?.name ?? "Unknown farmer");
   line("Phone", farmer?.phone ?? "Unavailable");
   line("Location", location?.location_name ?? "Unavailable");
-  line("Coconut", `${trade.coconut_color} / ${trade.processing_type === "mottai" ? "Mottai" : "Kudume"}`);
+  line("Coconut", trade.purchase_mode === "quantity" ? trade.coconut_color : `${trade.coconut_color} / ${trade.processing_type === "mottai" ? "Mottai" : "Kudume"}`);
   line("Purchase method", trade.purchase_mode === "quantity" ? "Per nut" : "Weight / weighbridge");
   line("Quantity", `${formatNumber(Number(trade.coconut_quantity), 2)} pieces`);
   if (trade.purchase_mode === "weight") {
@@ -297,21 +309,23 @@ function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, lo
   y += 3;
   doc.line(left, y, 192, y);
   y += 10;
-  line("Coconut purchase", formatCurrency(Number(trade.total_amount) - Number(trade.husk_price_total) + Number(trade.labor_cost_total)).replace("₹", "INR "));
-  line("Dehusking", formatCurrency(Number(trade.husk_removal_cost)).replace("₹", "INR "));
-  line("Coconut harvesting", formatCurrency(Number(trade.tree_collection_cost)).replace("₹", "INR "));
-  line("Husk / Mattai credit", formatCurrency(Number(trade.husk_price_total)).replace("₹", "INR "));
-  line("Net payable to farmer", formatCurrency(Number(trade.total_amount)).replace("₹", "INR "));
-  line("Advance paid", formatCurrency(Number(trade.advance_amount)).replace("₹", "INR "));
+  line("Coconut purchase", formatCurrency(Number(trade.total_amount) - Number(trade.husk_price_total) + Number(trade.labor_cost_total)).replace("₹", "INR "), "credit");
+  line("Dehusking", formatCurrency(Number(trade.husk_removal_cost)).replace("₹", "INR "), "debit");
+  line("Coconut harvesting", formatCurrency(Number(trade.tree_collection_cost)).replace("₹", "INR "), "debit");
+  line("Husk / Mattai credit", formatCurrency(Number(trade.husk_price_total)).replace("₹", "INR "), "credit");
+  line("Net payable to farmer", formatCurrency(Number(trade.total_amount)).replace("₹", "INR "), "credit");
+  line("Advance paid", formatCurrency(Number(trade.advance_amount)).replace("₹", "INR "), "credit");
   if (Number(trade.additional_credit_amount) > 0) {
-    line("Additional credit", formatCurrency(Number(trade.additional_credit_amount)).replace("₹", "INR "));
+    line("Additional credit", formatCurrency(Number(trade.additional_credit_amount)).replace("₹", "INR "), "credit");
     line("Credit reason", trade.additional_credit_reason ?? "");
   }
   if (Number(trade.additional_debit_amount) > 0) {
-    line("Additional debit", formatCurrency(Number(trade.additional_debit_amount)).replace("₹", "INR "));
+    line("Additional debit", formatCurrency(Number(trade.additional_debit_amount)).replace("₹", "INR "), "debit");
     line("Debit reason", trade.additional_debit_reason ?? "");
   }
-  line("Balance", formatCurrency(Number(trade.balance_amount)).replace("₹", "INR "));
+  doc.setFillColor(229, 242, 236);
+  doc.roundedRect(left, y - 6, 174, 16, 2, 2, "F");
+  line("Balance to pay", formatCurrency(Number(trade.balance_amount)).replace("₹", "INR "), "final");
   if (trade.notes) {
     y += 3;
     line("Notes", trade.notes);
@@ -940,7 +954,8 @@ export default function Home() {
   function exportPurchasePdf(trade: CoconutTrade) {
     const farmer = farmerById.get(trade.farmer_id);
     const location = trade.location_id ? locationById.get(trade.location_id) ?? null : null;
-    downloadPurchasePdf(trade, farmer, location);
+    const traderName = profile?.business_name ? `${profile.business_name} (${profile.full_name})` : profile?.full_name ?? "Trader";
+    downloadPurchasePdf(trade, farmer, location, traderName);
   }
 
   async function signOut() {
@@ -958,7 +973,7 @@ export default function Home() {
     return (
       <main className="page-shell auth-page">
         <section className="auth-panel">
-          <div className="brand-lockup"><span className="brand-mark">CT</span><div><strong>COCONUT TRADE DESK</strong><span>Farmer and trader records</span></div></div>
+          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Farmer and trader records</span></div></div>
           <div className="auth-copy"><span className="eyebrow">Private workspace</span><h1>{mode === "signup" ? "Create your account" : "Welcome back"}</h1><p>{mode === "signup" ? "Start with your name, phone, and email. Choose Farmer or Trader after signing in." : "Sign in to continue to your private farmer or trader workspace."}</p></div>
           <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
             <button className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); clearFeedback(); }} type="button">Sign up</button>
@@ -985,7 +1000,7 @@ export default function Home() {
     return (
       <main className="page-shell onboarding-page">
         <section className="onboarding-panel">
-          <div className="brand-lockup"><span className="brand-mark">CT</span><div><strong>COCONUT TRADE DESK</strong><span>Set up your private workspace</span></div></div>
+          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Set up your private workspace</span></div></div>
           <div className="auth-copy"><span className="eyebrow">One last step</span><h1>What best describes you?</h1><p>Choose your workspace. You can use the same email and phone to sign in later.</p></div>
           <form onSubmit={saveProfile}>
             <div className="role-grid">
@@ -1011,16 +1026,32 @@ export default function Home() {
   const totalBalance = trades.reduce((sum, trade) => sum + Number(trade.balance_amount), 0);
   const totalPayableWeight = trades.reduce((sum, trade) => sum + Number(trade.payable_weight_kg), 0);
   const recentTrades = trades.slice(0, 5);
+  const activitySeries = useMemo(() => {
+    const totals = new Map<string, number>();
+    trades.forEach((trade) => totals.set(trade.trade_date, (totals.get(trade.trade_date) ?? 0) + Number(trade.total_amount)));
+    const latestDate = trades[0]?.trade_date ? new Date(`${trades[0].trade_date}T00:00:00`) : new Date();
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(latestDate);
+      date.setDate(latestDate.getDate() - (6 - index));
+      const dateKey = date.toISOString().slice(0, 10);
+      return {
+        dateKey,
+        label: date.toLocaleDateString("en-IN", { weekday: "short" }),
+        value: totals.get(dateKey) ?? 0
+      };
+    });
+  }, [trades]);
+  const activityMax = Math.max(1, ...activitySeries.map((item) => item.value));
   const pendingAccessRequests = accessRequests.filter((request) => request.status === "pending");
   const requestByTraderId = new Map(accessRequests.map((request) => [request.trader_id, request]));
 
   return (
     <main className="authenticated-shell">
       <aside className="desktop-sidebar">
-        <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark">CT</span><div><strong>COCONUT TRADE DESK</strong><span>{isTrader ? "Trader workspace" : "Farmer workspace"}</span></div></div></div>
-        {isTrader ? <nav className="sidebar-nav" aria-label="Main navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button">{section.label}</button>)}</nav> : null}
+        <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>{isTrader ? "Trader workspace" : "Farmer workspace"}</span></div></div></div>
+        {isTrader ? <nav className="sidebar-nav" aria-label="Main navigation">{appSections.map((section) => { const SectionIcon = section.icon; return <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button" aria-current={activeSection === section.value ? "page" : undefined}><SectionIcon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{section.label}</span></button>; })}</nav> : null}
         <div className="sidebar-account"><span className="eyebrow">Signed in as</span><strong>{profile.business_name || profile.full_name}</strong><span>{profile.email}</span></div>
-        <button className="secondary-button sidebar-signout" onClick={signOut} type="button">Sign out</button>
+        <button className="secondary-button sidebar-signout" onClick={signOut} type="button"><LogOut size={17} strokeWidth={2.2} aria-hidden="true" />Sign out</button>
       </aside>
 
       <section className="app-main">
@@ -1029,7 +1060,7 @@ export default function Home() {
           <button className="secondary-button topbar-signout" onClick={signOut} type="button">Sign out</button>
         </header>
 
-        {isTrader ? <nav className="mobile-section-nav" aria-label="Mobile navigation">{appSections.map((section) => <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button">{section.shortLabel}</button>)}</nav> : null}
+        {isTrader ? <nav className="mobile-section-nav" aria-label="Mobile navigation">{appSections.map((section) => { const SectionIcon = section.icon; return <button className={activeSection === section.value ? "active" : ""} key={section.value} onClick={() => navigateTo(section.value)} type="button" aria-current={activeSection === section.value ? "page" : undefined}><SectionIcon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{section.shortLabel}</span></button>; })}</nav> : null}
         {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}
 
@@ -1039,16 +1070,17 @@ export default function Home() {
         </section> : null}
 
         {isTrader && activeSection === "dashboard" ? <>
-          <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => navigateTo("purchase")} type="button">Record a purchase</button></section>
+          <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => navigateTo("purchase")} type="button"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />Record a purchase</button></section>
           <section className="metrics-grid">
-            <article><span>Farmers</span><strong>{farmers.length}</strong><small>in your portfolio</small></article>
-            <article><span>Purchases</span><strong>{trades.length}</strong><small>purchase records</small></article>
-            <article><span>Payable weight</span><strong>{formatNumber(totalPayableWeight)} kg</strong><small>after wastage</small></article>
-            <article><span>Purchase value</span><strong>{formatCurrency(totalPurchases)}</strong><small>all recorded purchases</small></article>
+            <article><div className="metric-head"><span className="metric-icon"><UsersRound size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>Farmers</span></div><strong>{farmers.length}</strong><small>in your portfolio</small></article>
+            <article><div className="metric-head"><span className="metric-icon"><ReceiptText size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>Purchases</span></div><strong>{trades.length}</strong><small>purchase records</small></article>
+            <article><div className="metric-head"><span className="metric-icon"><Scale size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>Payable weight</span></div><strong>{formatNumber(totalPayableWeight)} kg</strong><small>after wastage</small></article>
+            <article><div className="metric-head"><span className="metric-icon"><IndianRupee size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>Purchase value</span></div><strong>{formatCurrency(totalPurchases)}</strong><small>all recorded purchases</small></article>
           </section>
           <section className="dashboard-grid">
-            <article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent purchases</h2></div><button className="link-button" onClick={() => navigateTo("history")} type="button">View history</button></div>{recentTrades.length ? <div className="summary-list">{recentTrades.map((trade) => <div key={trade.id}><span>{formatPurchaseId(trade.id)}</span><strong>{farmerById.get(trade.farmer_id)?.name ?? "Farmer"}</strong><span>{formatCurrency(Number(trade.total_amount))}</span></div>)}</div> : <p className="empty-state">No purchases recorded yet.</p>}</article>
-            <article className="tool-panel"><span className="eyebrow">Outstanding</span><h2>Balance with farmers</h2><strong className="large-number">{formatCurrency(totalBalance)}</strong><p className="muted-text">Advance payments are subtracted from each purchase total.</p><button className="secondary-button" onClick={() => navigateTo("history")} type="button">Open purchase history</button></article>
+            <article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Latest activity</span><h2>Recent purchases</h2></div><button className="link-button" onClick={() => navigateTo("history")} type="button">View history<ChevronRight size={16} strokeWidth={2.2} aria-hidden="true" /></button></div>{recentTrades.length ? <div className="summary-list">{recentTrades.map((trade) => <div key={trade.id}><span>{formatPurchaseId(trade.id)}</span><strong>{farmerById.get(trade.farmer_id)?.name ?? "Farmer"}</strong><span>{formatCurrency(Number(trade.total_amount))}</span></div>)}</div> : <p className="empty-state">No purchases recorded yet.</p>}</article>
+            <article className="tool-panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">Live chart</span><h2>Purchase value</h2></div><BarChart3 size={22} strokeWidth={2} aria-hidden="true" /></div><p className="muted-text">Daily farmer payable value for the last seven recorded days.</p><div className="activity-chart" role="img" aria-label="Purchase value for the last seven recorded days"><div className="activity-chart-bars">{activitySeries.map((item) => <div className="activity-bar-slot" key={item.dateKey} title={item.dateKey + ": " + formatCurrency(item.value)}><div className="activity-bar" style={{ height: String(Math.max(item.value > 0 ? item.value / activityMax * 100 : 4, 4)) + "%" }}></div><small>{item.label}</small></div>)}</div></div></article>
+            <article className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Outstanding</span><h2>Balance with farmers</h2></div><IndianRupee size={22} strokeWidth={2} aria-hidden="true" /></div><strong className="large-number">{formatCurrency(totalBalance)}</strong><p className="muted-text">Advance payments are subtracted from each purchase total.</p><button className="secondary-button" onClick={() => navigateTo("history")} type="button"><ReceiptText size={16} strokeWidth={2.2} aria-hidden="true" />Open purchase history</button></article>
           </section>
         </> : null}
 
