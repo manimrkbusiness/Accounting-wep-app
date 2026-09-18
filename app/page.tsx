@@ -588,6 +588,22 @@ export default function Home() {
     return { purchaseMode, quantity, gross, empty, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightKg, averageWeightGrams, averagePricePerPiece };
   }, [tradeForm]);
 
+  const activitySeries = useMemo(() => {
+    const totals = new Map<string, number>();
+    trades.forEach((trade) => totals.set(trade.trade_date, (totals.get(trade.trade_date) ?? 0) + Number(trade.total_amount)));
+    const latestDate = trades[0]?.trade_date ? new Date(`${trades[0].trade_date}T00:00:00`) : new Date();
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(latestDate);
+      date.setDate(latestDate.getDate() - (6 - index));
+      const dateKey = date.toISOString().slice(0, 10);
+      return {
+        dateKey,
+        label: date.toLocaleDateString("en-IN", { weekday: "short" }),
+        value: totals.get(dateKey) ?? 0
+      };
+    });
+  }, [trades]);
+
   function clearFeedback() {
     setMessage("");
     setError("");
@@ -1026,21 +1042,6 @@ export default function Home() {
   const totalBalance = trades.reduce((sum, trade) => sum + Number(trade.balance_amount), 0);
   const totalPayableWeight = trades.reduce((sum, trade) => sum + Number(trade.payable_weight_kg), 0);
   const recentTrades = trades.slice(0, 5);
-  const activitySeries = useMemo(() => {
-    const totals = new Map<string, number>();
-    trades.forEach((trade) => totals.set(trade.trade_date, (totals.get(trade.trade_date) ?? 0) + Number(trade.total_amount)));
-    const latestDate = trades[0]?.trade_date ? new Date(`${trades[0].trade_date}T00:00:00`) : new Date();
-    return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(latestDate);
-      date.setDate(latestDate.getDate() - (6 - index));
-      const dateKey = date.toISOString().slice(0, 10);
-      return {
-        dateKey,
-        label: date.toLocaleDateString("en-IN", { weekday: "short" }),
-        value: totals.get(dateKey) ?? 0
-      };
-    });
-  }, [trades]);
   const activityMax = Math.max(1, ...activitySeries.map((item) => item.value));
   const pendingAccessRequests = accessRequests.filter((request) => request.status === "pending");
   const requestByTraderId = new Map(accessRequests.map((request) => [request.trader_id, request]));
