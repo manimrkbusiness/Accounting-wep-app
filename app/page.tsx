@@ -278,16 +278,20 @@ function downloadPurchasePdf(trade: CoconutTrade, farmer: Farmer | undefined, lo
   y += 10;
   doc.setFontSize(14);
   doc.text(`PUR-${String(trade.id).padStart(6, "0")}`, left, y);
+  y += 8;
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(18, 107, 82);
+  doc.text(`Trader: ${traderName}`, left, y);
   y += 10;
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setTextColor(30, 42, 38);
   doc.text("Purchase invoice", left, y);
   y += 10;
   doc.line(left, y, 192, y);
   y += 10;
 
   line("Date", formatDate(trade.trade_date));
-  line("Trader", traderName);
   line("Farmer", farmer?.name ?? "Unknown farmer");
   line("Phone", farmer?.phone ?? "Unavailable");
   line("Location", location?.location_name ?? "Unavailable");
@@ -970,7 +974,7 @@ export default function Home() {
   function exportPurchasePdf(trade: CoconutTrade) {
     const farmer = farmerById.get(trade.farmer_id);
     const location = trade.location_id ? locationById.get(trade.location_id) ?? null : null;
-    const traderName = profile?.business_name ? `${profile.business_name} (${profile.full_name})` : profile?.full_name ?? "Trader";
+    const traderName = profile?.full_name ?? "Trader";
     downloadPurchasePdf(trade, farmer, location, traderName);
   }
 
