@@ -672,6 +672,75 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+.settings-grid select:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.mode-note {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 12px 14px;
+}
+
+.deduction-options {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.deduction-options legend {
+  padding: 0 4px;
+}
+
+.checkbox-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checkbox-field {
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+}
+
+.checkbox-field input {
+  accent-color: var(--green);
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 2px 0 0;
+  width: 18px;
+}
+
+.checkbox-field span {
+  display: grid;
+  gap: 4px;
+}
+
+.checkbox-field strong {
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.checkbox-field small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
 .calculated-field {
   align-content: center;
   background: var(--surface-muted);
@@ -1208,7 +1277,8 @@ td > .muted-text {
 @media (max-width: 680px) {
   .request-card,
   .adjustment-actions,
-  .adjustment-fields {
+  .adjustment-fields,
+  .checkbox-grid {
     grid-template-columns: 1fr;
   }
 
