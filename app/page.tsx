@@ -348,6 +348,7 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -445,7 +446,8 @@ export default function Home() {
     setFullName(loadedProfile?.full_name ?? activeSession.user.user_metadata?.full_name ?? "");
     setPhone(loadedProfile?.phone?.replace("+91", "") ?? activeSession.user.user_metadata?.phone?.replace("+91", "") ?? "");
     setBusinessName(loadedProfile?.business_name ?? activeSession.user.user_metadata?.business_name ?? "");
-    setRoleChoice(loadedProfile?.account_type ?? "");
+    const metadataRole = activeSession.user.user_metadata?.account_type;
+    setRoleChoice(loadedProfile?.account_type ?? (metadataRole === "trader" || metadataRole === "farmer" ? metadataRole : ""));
 
     if (loadedProfile?.account_type === "trader") {
       const [farmersResult, locationsResult, tradesResult, settingsResult, requestsResult] = await Promise.all([
@@ -620,18 +622,25 @@ export default function Home() {
 
     try {
       if (mode === "signup") {
-        if (!fullName.trim() || !isValidIndianPhone(phone)) {
-          throw new Error("Enter your name and a valid 10-digit Indian mobile number.");
+        if (!fullName.trim() || !isValidIndianPhone(phone) || !roleChoice) {
+          throw new Error("Enter your name, a valid 10-digit Indian mobile number, and choose a workspace.");
+        }
+        if (password.length < 6) {
+          throw new Error("Password must be at least 6 characters.");
+        }
+        if (password !== confirmPassword) {
+          throw new Error("Passwords do not match.");
         }
         const { error: signupError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { full_name: fullName.trim(), phone: getStoredIndianPhone(phone), business_name: businessName.trim() || null } }
+          options: { data: { full_name: fullName.trim(), phone: getStoredIndianPhone(phone), business_name: businessName.trim() || null, account_type: roleChoice } }
         });
         if (signupError) throw signupError;
         setMode("signin");
         setPassword("");
-        setMessage("Account created. Sign in to choose Farmer or Trader and finish your profile.");
+        setConfirmPassword("");
+        setMessage("Account created. Sign in to open your selected workspace and finish your profile.");
       } else {
         const { data, error: signinError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (signinError) throw signinError;
@@ -668,7 +677,7 @@ export default function Home() {
     setSaving(false);
 
     if (profileError) {
-      setError(profileError.message);
+      setError(profileError.message.includes("already linked") || profileError.code === "23505" ? "This mobile number is already linked to another account." : profileError.message);
       return;
     }
 
@@ -971,10 +980,10 @@ export default function Home() {
     router.push(`/dashboard/new-purchase?edit=${trade.id}`);
   }
 
-  function exportPurchasePdf(trade: CoconutTrade) {
+  function exportPurchasePdf(trade: CoconutTrade, traderNameOverride?: string) {
     const farmer = farmerById.get(trade.farmer_id);
     const location = trade.location_id ? locationById.get(trade.location_id) ?? null : null;
-    const traderName = profile?.full_name ?? "Trader";
+    const traderName = traderNameOverride ?? profile?.full_name ?? "Trader";
     downloadPurchasePdf(trade, farmer, location, traderName);
   }
 
@@ -994,7 +1003,7 @@ export default function Home() {
       <main className="page-shell auth-page">
         <section className="auth-panel">
           <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Farmer and trader records</span></div></div>
-          <div className="auth-copy"><span className="eyebrow">Private workspace</span><h1>{mode === "signup" ? "Create your account" : "Welcome back"}</h1><p>{mode === "signup" ? "Start with your name, phone, and email. Choose Farmer or Trader after signing in." : "Sign in to continue to your private farmer or trader workspace."}</p></div>
+          <div className="auth-copy"><span className="eyebrow">Private workspace</span><h1>{mode === "signup" ? "Create your account" : "Welcome back"}</h1><p>{mode === "signup" ? "Use your phone, email, password, and workspace choice to create an account." : "Sign in to continue to your private farmer or trader workspace."}</p></div>
           <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
             <button className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); clearFeedback(); }} type="button">Sign up</button>
             <button className={mode === "signin" ? "active" : ""} onClick={() => { setMode("signin"); clearFeedback(); }} type="button">Sign in</button>
@@ -1004,9 +1013,14 @@ export default function Home() {
               <label>Full name<input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required /></label>
               <label>Phone number<div className="phone-input"><span>{"\uD83C\uDDEE\uD83C\uDDF3 +91"}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))} placeholder="10-digit mobile number" required /></div></label>
               <label>Business or farm name <span className="optional">Optional</span><input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="Your business or farm name" /></label>
+              <span className="form-section-label">Workspace</span>
+              <div className="role-grid" aria-label="Choose your workspace">
+                {roleOptions.map((role) => <button aria-pressed={roleChoice === role.value} className={`role-choice ${roleChoice === role.value ? "selected" : ""}`} key={role.value} onClick={() => setRoleChoice(role.value)} type="button"><span className="role-title">{role.label}</span><span>{role.description}</span></button>)}
+              </div>
             </> : null}
             <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
             <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={6} required /></label>
+            {mode === "signup" ? <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label> : null}
             {error ? <p className="error-message">{error}</p> : null}
             {message ? <p className="status-message">{message}</p> : null}
             <button className="primary-button" disabled={saving} type="submit">{saving ? "Please wait..." : mode === "signup" ? "Create account" : "Sign in"}</button>
@@ -1048,7 +1062,7 @@ export default function Home() {
   const recentTrades = trades.slice(0, 5);
   const activityMax = Math.max(1, ...activitySeries.map((item) => item.value));
   const pendingAccessRequests = accessRequests.filter((request) => request.status === "pending");
-  const requestByTraderId = new Map(accessRequests.map((request) => [request.trader_id, request]));
+  const requestByFarmerId = new Map(accessRequests.map((request) => [request.trader_farmer_id, request]));
 
   return (
     <main className="authenticated-shell">
@@ -1071,7 +1085,7 @@ export default function Home() {
 
         {!isTrader ? <section className="farmer-workspace">
           <section className="tool-panel"><div className="panel-heading"><div><span className="eyebrow">Private connections</span><h2>Purchase requests</h2></div><strong>{pendingAccessRequests.length}</strong></div><p className="muted-text">A trader can only share purchase records with you after you approve the connection while signed in to this account.</p>{pendingAccessRequests.length ? <div className="request-list">{pendingAccessRequests.map((request) => <article className="request-card" key={request.id}><div><strong>{request.trader_business_name || request.trader_name}</strong><span>{request.trader_name} wants to share purchases for {request.farmer_name} ({request.farmer_phone}).</span><small>{new Date(request.requested_at).toLocaleDateString("en-IN")}</small></div><div className="row-actions"><button className="primary-button" disabled={saving} onClick={() => respondToAccessRequest(request.id, "approved")} type="button">Approve</button><button className="danger-button" disabled={saving} onClick={() => respondToAccessRequest(request.id, "rejected")} type="button">Decline</button></div></article>)}</div> : <p className="empty-state">No pending purchase-sharing requests.</p>}</section>
-          <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Shared purchase history</span><h2>Purchases shared with you</h2></div></div><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Trader</th><th>Date</th><th>Quantity</th><th>Avg weight per nut</th><th>Avg price per nut</th><th>Balance</th></tr></thead><tbody>{trades.map((trade) => { const request = requestByTraderId.get(trade.trader_id); return <tr key={`${trade.trader_id}-${trade.id}`}><td><strong>{formatPurchaseId(trade.id)}</strong><span className="muted-text">{trade.coconut_color} / {trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{request?.trader_business_name || request?.trader_name || "Approved trader"}</td><td>{formatDate(trade.trade_date)}</td><td>{formatNumber(Number(trade.coconut_quantity), 0)} pieces</td><td>{formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g</td><td>{formatCurrency(Number(trade.average_price_per_piece))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}</td></tr>; })}</tbody></table>{trades.length === 0 ? <p className="empty-state">Approved purchases will appear here.</p> : null}</div></section>
+          <section className="ledger-panel"><div className="panel-heading"><div><span className="eyebrow">Shared purchase history</span><h2>Purchases shared with you</h2></div></div><div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Trader</th><th>Date</th><th>Quantity</th><th>Avg weight per nut</th><th>Avg price per nut</th><th>Balance</th><th>Document</th></tr></thead><tbody>{trades.map((trade) => { const request = requestByFarmerId.get(trade.farmer_id); return <tr key={`${trade.trader_id}-${trade.id}`}><td><strong>{formatPurchaseId(trade.id)}</strong><span className="muted-text">{trade.coconut_color} / {trade.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td><td>{request?.trader_business_name || request?.trader_name || "Approved trader"}</td><td>{formatDate(trade.trade_date)}</td><td>{formatNumber(Number(trade.coconut_quantity), 0)} pieces</td><td>{formatNumber(Number(trade.average_weight_kg) * 1000, 1)} g</td><td>{formatCurrency(Number(trade.average_price_per_piece))}</td><td className={Number(trade.balance_amount) > 0 ? "balance-cell" : "positive"}>{formatCurrency(Number(trade.balance_amount))}</td><td><button className="secondary-button" onClick={() => exportPurchasePdf(trade, request?.trader_name ?? "Trader")} type="button">Export PDF</button></td></tr>; })}</tbody></table>{trades.length === 0 ? <p className="empty-state">Approved purchases will appear here.</p> : null}</div></section>
         </section> : null}
 
         {isTrader && activeSection === "dashboard" ? <>

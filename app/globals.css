@@ -209,6 +209,12 @@ label {
   gap: 7px;
 }
 
+.form-section-label {
+  color: #34483f;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 input,
 select,
 textarea {
