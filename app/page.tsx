@@ -1080,6 +1080,7 @@ export default function Home() {
         </section> : null}
 
         {isTrader && activeSection === "dashboard" ? <>
+          <section className="v2-banner"><div><span className="eyebrow">Preview</span><h2>Version 2 workspace is ready to test</h2><p>Sales to buyers, stock tracking, expenses, cash book and profit &amp; loss, built on top of your existing farmers and purchases.</p></div><button className="primary-button" onClick={() => router.push("/v2")} type="button">Open Version 2<ChevronRight size={18} strokeWidth={2.2} aria-hidden="true" /></button></section>
           <section className="welcome-band"><div><span className="eyebrow">Trader overview</span><h2>Keep every farmer purchase clear.</h2><p>Search farmers by phone, record weighbridge details, and keep a private purchase history.</p></div><button className="primary-button" onClick={() => navigateTo("purchase")} type="button"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />Record a purchase</button></section>
           <section className="metrics-grid">
             <article><div className="metric-head"><span className="metric-icon"><UsersRound size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>Farmers</span></div><strong>{farmers.length}</strong><small>in your portfolio</small></article>
