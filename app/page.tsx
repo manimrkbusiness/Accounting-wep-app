@@ -392,8 +392,8 @@ export default function Home() {
       wastage_percent: String(trade.wastage_percent),
       rate_per_kg: String(trade.rate_per_kg),
       rate_per_piece: String(trade.rate_per_piece ?? 0),
-      husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
-      tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
+      husk_removal_rate_per_1000: String(Number(trade.husk_removal_rate_per_1000) > 0 ? trade.husk_removal_rate_per_1000 : traderSettings?.husk_removal_rate_per_1000 ?? 1100),
+      tree_collection_rate_per_1000: String(Number(trade.tree_collection_rate_per_1000) > 0 ? trade.tree_collection_rate_per_1000 : traderSettings?.tree_collection_rate_per_1000 ?? 1450),
       husk_price_per_piece: String(trade.husk_price_per_piece ?? 0),
       deduct_dehusking: Number(trade.husk_removal_rate_per_1000) > 0,
       deduct_harvesting: Number(trade.tree_collection_rate_per_1000) > 0,
@@ -406,7 +406,7 @@ export default function Home() {
     });
     setShowCreditAdjustment(Number(trade.additional_credit_amount) > 0);
     setShowDebitAdjustment(Number(trade.additional_debit_amount) > 0);
-  }, [pathname, trades]);
+  }, [pathname, trades, traderSettings]);
 
   function navigateTo(section: AppSection) {
     setActiveSection(section);
@@ -954,8 +954,8 @@ export default function Home() {
       wastage_percent: String(trade.wastage_percent),
       rate_per_kg: String(trade.rate_per_kg),
       rate_per_piece: String(trade.rate_per_piece ?? 0),
-      husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
-      tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
+      husk_removal_rate_per_1000: String(Number(trade.husk_removal_rate_per_1000) > 0 ? trade.husk_removal_rate_per_1000 : traderSettings?.husk_removal_rate_per_1000 ?? 1100),
+      tree_collection_rate_per_1000: String(Number(trade.tree_collection_rate_per_1000) > 0 ? trade.tree_collection_rate_per_1000 : traderSettings?.tree_collection_rate_per_1000 ?? 1450),
       husk_price_per_piece: String(trade.husk_price_per_piece ?? 0),
       deduct_dehusking: Number(trade.husk_removal_rate_per_1000) > 0,
       deduct_harvesting: Number(trade.tree_collection_rate_per_1000) > 0,

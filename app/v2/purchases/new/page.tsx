@@ -63,7 +63,11 @@ function blankForm(settings: TraderSettings): PurchaseForm {
   };
 }
 
-function formFromPurchase(purchase: Purchase): PurchaseForm {
+function formFromPurchase(purchase: Purchase, settings: TraderSettings): PurchaseForm {
+  // A deduction that was unchecked is stored as a 0 rate. Load the current default
+  // instead, so ticking the box on edit applies a real deduction.
+  const dehuskingRate = Number(purchase.husk_removal_rate_per_1000) > 0 ? purchase.husk_removal_rate_per_1000 : settings.husk_removal_rate_per_1000;
+  const harvestingRate = Number(purchase.tree_collection_rate_per_1000) > 0 ? purchase.tree_collection_rate_per_1000 : settings.tree_collection_rate_per_1000;
   return {
     id: purchase.id,
     farmer_id: String(purchase.farmer_id),
@@ -77,8 +81,8 @@ function formFromPurchase(purchase: Purchase): PurchaseForm {
     wastage_percent: String(purchase.wastage_percent),
     rate_per_kg: String(purchase.rate_per_kg),
     rate_per_piece: String(purchase.rate_per_piece ?? 0),
-    husk_removal_rate_per_1000: String(purchase.husk_removal_rate_per_1000),
-    tree_collection_rate_per_1000: String(purchase.tree_collection_rate_per_1000),
+    husk_removal_rate_per_1000: String(dehuskingRate),
+    tree_collection_rate_per_1000: String(harvestingRate),
     husk_price_per_piece: String(purchase.husk_price_per_piece ?? 0),
     deduct_dehusking: Number(purchase.husk_removal_rate_per_1000) > 0,
     deduct_harvesting: Number(purchase.tree_collection_rate_per_1000) > 0,
@@ -107,7 +111,7 @@ export default function NewPurchasePage() {
     if (editId && editId !== loadedEdit) {
       const purchase = ws.purchaseById.get(editId);
       if (purchase) {
-        setForm(formFromPurchase(purchase));
+        setForm(formFromPurchase(purchase, ws.settings ?? defaultSettings));
         setShowCredit(Number(purchase.additional_credit_amount) > 0);
         setShowDebit(Number(purchase.additional_debit_amount) > 0);
         setLoadedEdit(editId);
