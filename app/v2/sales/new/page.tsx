@@ -7,7 +7,7 @@ import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
 import { allocationCost, calculateSale } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
-import { processingTypes, type PaymentStatus, type ProcessingType, type Purchase, type Sale, type SaleColor, type SaleKind, type SaleUnit } from "../../lib/types";
+import { type PaymentStatus, type ProcessingType, type Purchase, type Sale, type SaleColor, type SaleKind, type SaleUnit } from "../../lib/types";
 
 type SaleForm = {
   id?: number;
@@ -77,7 +77,6 @@ export default function NewSalePage() {
   const [form, setForm] = useState<SaleForm>(blankForm);
   const [selection, setSelection] = useState<Map<number, string>>(new Map());
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
-  const [autoType, setAutoType] = useState(true);
   const [useGrossTare, setUseGrossTare] = useState(false);
   const [filters, setFilters] = useState({ from: addDays(today(), -60), to: today(), farmer: "", onlyStock: true });
 
@@ -90,7 +89,6 @@ export default function NewSalePage() {
         setKind(sale.sale_kind);
         setForm(formFromSale(sale));
         setUseGrossTare(sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0);
-        setAutoType(false);
         const items = ws.saleItems.filter((item) => item.sale_id === editId);
         setSelection(new Map(items.map((item) => [item.purchase_id, String(item.quantity_pieces)])));
         if (items.length) {
@@ -128,17 +126,25 @@ export default function NewSalePage() {
   const costBasis = kind === "coconut" ? allocationCost(allocations, ws.stock) : 0;
   const calculation = useMemo(() => calculateSale(form, allocatedPieces, costBasis), [form, allocatedPieces, costBasis]);
 
-  useEffect(() => {
-    if (kind !== "coconut" || !autoType) return;
+  // Colour and condition come from the purchases in the load: the purchase itself for
+  // weight-based coconut, the stock entry for per-nut coconut. Nothing to type.
+  const loadMix = useMemo(() => {
     const included = allocations
       .map((item) => ({ purchase: ws.purchaseById.get(item.purchase_id), pieces: item.quantity_pieces }))
       .filter((entry): entry is { purchase: Purchase; pieces: number } => Boolean(entry.purchase));
-    if (!included.length) return;
     const colors = new Set(included.map((entry) => entry.purchase.coconut_color));
     const piecesOf = (type: ProcessingType) => included.filter((entry) => (ws.stock.get(entry.purchase.id)?.stockCondition ?? entry.purchase.processing_type) === type).reduce((sum, entry) => sum + entry.pieces, 0);
-    const condition: ProcessingType = piecesOf("kudume") > piecesOf("mottai") ? "kudume" : "mottai";
-    setForm((current) => ({ ...current, coconut_color: colors.size === 1 ? included[0].purchase.coconut_color : "mixed", processing_type: condition }));
-  }, [allocations, autoType, kind, ws.purchaseById, ws.stock]);
+    const mottaiPieces = piecesOf("mottai");
+    const kudumePieces = piecesOf("kudume");
+    const condition: ProcessingType = kudumePieces > mottaiPieces ? "kudume" : "mottai";
+    const color: SaleColor = included.length === 0 ? "green" : colors.size === 1 ? included[0].purchase.coconut_color : "mixed";
+    return { included, mottaiPieces, kudumePieces, condition, color };
+  }, [allocations, ws.purchaseById, ws.stock]);
+
+  useEffect(() => {
+    if (kind !== "coconut" || loadMix.included.length === 0) return;
+    setForm((current) => current.coconut_color === loadMix.color && current.processing_type === loadMix.condition ? current : { ...current, coconut_color: loadMix.color, processing_type: loadMix.condition });
+  }, [kind, loadMix]);
 
   useEffect(() => {
     if (!useGrossTare) return;
@@ -221,7 +227,7 @@ export default function NewSalePage() {
       {!form.id ? <div className="segmented sale-kind"><button className={kind === "coconut" ? "active" : ""} onClick={() => { setKind("coconut"); setForm((current) => ({ ...current, unit: "kg", buyer_id: "" })); }} type="button"><strong>Coconut load</strong><span>Sell coconut from purchases in stock</span></button><button className={kind === "husk" ? "active" : ""} onClick={() => { setKind("husk"); setForm((current) => ({ ...current, unit: "load", buyer_id: "" })); setSelection(new Map()); }} type="button"><strong>Husk sale</strong><span>Sell husk kept from your purchases</span></button></div> : null}
 
       {kind === "coconut" ? <section className="ledger-panel select-table">
-        <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
+        <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{allocatedPieces > 0 ? <span className="chip">{loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)}` : loadMix.condition === "kudume" ? "Kudume" : "Mottai"}</span> : null}{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
         <p className="muted-text">Tick each purchase that is being loaded. Reduce the pieces if only part of a purchase goes in this load; the rest stays in stock. Per-nut purchases appear here only after they are weighed on the <Link href="/v2/stock">Stock</Link> page.</p>
         <div className="filter-bar">
           <label>Purchased from<input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></label>
@@ -254,7 +260,6 @@ export default function NewSalePage() {
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>
-            {kind === "coconut" ? <label>Coconut condition<select value={form.processing_type} onChange={(event) => { setAutoType(false); setField("processing_type", event.target.value as ProcessingType); }}>{processingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><span className="field-hint">Filled from the purchases in this load. Change it only if the load differs.</span></label> : null}
             <label>Sold by<select value={form.unit} onChange={(event) => setField("unit", event.target.value as SaleUnit)}>{kind === "coconut" ? <><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></> : <><option value="load">Load</option><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></>}</select></label>
             <label>Rate (INR per {form.unit === "kg" ? "kg" : form.unit === "piece" ? "nut" : "load"})<input type="number" min="0" step="0.01" value={form.rate} onChange={(event) => setField("rate", event.target.value)} required /></label>
           </div>
@@ -281,7 +286,7 @@ export default function NewSalePage() {
         </form>
         <aside className="side-stack">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>{kind === "coconut" ? "Load summary" : "Husk sale summary"}</h2><dl className="calculation-list">
-            {kind === "coconut" ? <><div><dt>Pieces in load</dt><dd>{formatNumber(allocatedPieces, 0)} pieces</dd></div>{form.unit === "kg" ? <div><dt>Average weight per nut</dt><dd>{allocatedPieces > 0 && calculation.quantity > 0 ? `${formatNumber(calculation.averageKgPerNut * 1000, 1)} g / nut` : "-"}</dd></div> : null}<div><dt>Sale price per nut</dt><dd>{allocatedPieces > 0 ? `${formatCurrency(calculation.pricePerPiece)} / nut` : "-"}</dd></div></> : null}
+            {kind === "coconut" ? <><div><dt>Pieces in load</dt><dd>{formatNumber(allocatedPieces, 0)} pieces</dd></div><div><dt>Coconut condition</dt><dd>{allocatedPieces > 0 ? (loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `${loadMix.condition === "kudume" ? "Kudume" : "Mottai"} (Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)})` : loadMix.condition === "kudume" ? "Kudume" : "Mottai") : "-"}</dd></div>{form.unit === "kg" ? <div><dt>Average weight per nut</dt><dd>{allocatedPieces > 0 && calculation.quantity > 0 ? `${formatNumber(calculation.averageKgPerNut * 1000, 1)} g / nut` : "-"}</dd></div> : null}<div><dt>Sale price per nut</dt><dd>{allocatedPieces > 0 ? `${formatCurrency(calculation.pricePerPiece)} / nut` : "-"}</dd></div></> : null}
             <div><dt>{form.unit === "kg" ? "Net weight" : "Quantity"}</dt><dd>{formatNumber(calculation.quantity)} {unitLabel}</dd></div>
             <div className="calculation-credit"><dt>Sale amount</dt><dd>{formatCurrency(calculation.saleAmount)}</dd></div>
             {calculation.transport > 0 ? <div className="calculation-credit"><dt>Transport charged</dt><dd>{formatCurrency(calculation.transport)}</dd></div> : null}
