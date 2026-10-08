@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { CirclePlus } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { receivedFromBuyer, saleOutstanding, statusForBalance } from "../lib/calc";
+import { receivedFromBuyer, saleOutstanding, saleStatusWithout, statusForBalance } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
-import { cashMethods, type CashMethod, type Sale } from "../lib/types";
+import { cashMethods, type CashEntry, type CashMethod, type Sale } from "../lib/types";
 import { downloadSalePdf } from "../lib/pdf";
 import { EmptyState, StatusBadge } from "../components/ui";
 
@@ -67,6 +67,19 @@ export default function SalesPage() {
     await ws.refresh();
   }
 
+  async function undoReceipt(sale: Sale, entry: CashEntry) {
+    if (!ws.session) return;
+    if (!window.confirm(`Undo the receipt of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It will be removed from the cash book and the amount due will go back up.`)) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
+    if (!error) await supabase.from("sales").update({ payment_status: saleStatusWithout(sale, ws.cashEntries, entry.id) }).eq("id", sale.id).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify("Receipt undone. The cash book and balance due are restored.");
+    await ws.refresh();
+  }
+
   async function deleteSale(sale: Sale) {
     if (!ws.session) return;
     if (!window.confirm(`Delete ${formatSaleId(sale.id)}? The included purchases return to stock. Receipts recorded against it stay in the cash book.`)) return;
@@ -92,6 +105,7 @@ export default function SalesPage() {
         {rows.map((sale) => {
           const buyer = ws.buyerById.get(sale.buyer_id);
           const items = itemsBySale.get(sale.id) ?? [];
+          const receipts = ws.cashEntries.filter((entry) => entry.kind === "buyer_receipt" && entry.sale_id === sale.id);
           const received = Number(sale.advance_amount) + receivedFromBuyer(sale.id, ws.cashEntries);
           const due = saleOutstanding(sale, ws.cashEntries);
           const status = statusForBalance(due, received > 0);
@@ -104,7 +118,7 @@ export default function SalesPage() {
             <td>{formatNumber(Number(sale.quantity))} {unit}{sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0 ? <span className="muted-text">Gross {formatNumber(Number(sale.gross_weight_kg))} kg</span> : null}</td>
             <td>{formatCurrency(Number(sale.rate))} / {sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "nut" : "load"}</td>
             <td className="amount-cell">{formatCurrency(Number(sale.total_amount))}{Number(sale.transport_charge) > 0 ? <span className="muted-text">incl. transport {formatCurrency(Number(sale.transport_charge))}</span> : null}{Number(sale.deduction_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(sale.deduction_amount))}</span> : null}</td>
-            <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}</td>
+            <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoReceipt(sale, entry)} type="button">Undo</button></span>)}</div> : null}</td>
             <td>{items.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div> : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName)} type="button">PDF</button>

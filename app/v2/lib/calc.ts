@@ -147,6 +147,20 @@ export function statusForBalance(outstanding: number, paidSomething: boolean): "
   return paidSomething ? "partial" : "pending";
 }
 
+/** Payment status a purchase should have once the given cash entry is removed. */
+export function purchaseStatusWithout(purchase: Purchase, cashEntries: CashEntry[], excludeEntryId?: number) {
+  const entries = excludeEntryId ? cashEntries.filter((entry) => entry.id !== excludeEntryId) : cashEntries;
+  const payments = paidToFarmer(purchase.id, entries);
+  return statusForBalance(Number(purchase.balance_amount) - payments, Number(purchase.advance_amount) + payments > 0);
+}
+
+/** Payment status a sale should have once the given cash entry is removed. */
+export function saleStatusWithout(sale: Sale, cashEntries: CashEntry[], excludeEntryId?: number) {
+  const entries = excludeEntryId ? cashEntries.filter((entry) => entry.id !== excludeEntryId) : cashEntries;
+  const receipts = receivedFromBuyer(sale.id, entries);
+  return statusForBalance(Number(sale.balance_amount) - receipts, Number(sale.advance_amount) + receipts > 0);
+}
+
 // ---------------------------------------------------------------------------
 // Period filters, profit and loss, cash position
 // ---------------------------------------------------------------------------

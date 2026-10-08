@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { CirclePlus } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { paidToFarmer, purchaseOutstanding, statusForBalance } from "../lib/calc";
+import { paidToFarmer, purchaseOutstanding, purchaseStatusWithout, statusForBalance } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../lib/format";
-import { cashMethods, type CashMethod, type Purchase } from "../lib/types";
+import { cashMethods, type CashEntry, type CashMethod, type Purchase } from "../lib/types";
 import { downloadPurchasePdf } from "../lib/pdf";
 import { EmptyState, StatusBadge } from "../components/ui";
 
@@ -77,6 +77,19 @@ export default function PurchasesPage() {
     await ws.refresh();
   }
 
+  async function undoPayment(purchase: Purchase, entry: CashEntry) {
+    if (!ws.session) return;
+    if (!window.confirm(`Undo the payment of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It will be removed from the cash book and the amount due will go back up.`)) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
+    if (!error) await supabase.from("coconut_trades").update({ payment_status: purchaseStatusWithout(purchase, ws.cashEntries, entry.id) }).eq("id", purchase.id).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify("Payment undone. The cash book and balance due are restored.");
+    await ws.refresh();
+  }
+
   async function deletePurchase(purchase: Purchase) {
     if (!ws.session) return;
     const info = ws.stock.get(purchase.id);
@@ -104,6 +117,7 @@ export default function PurchasesPage() {
           const farmer = ws.farmerById.get(purchase.farmer_id);
           const location = purchase.location_id ? ws.locationById.get(purchase.location_id) ?? null : null;
           const info = ws.stock.get(purchase.id);
+          const payments = ws.cashEntries.filter((entry) => entry.kind === "farmer_payment" && entry.purchase_id === purchase.id);
           const paid = Number(purchase.advance_amount) + paidToFarmer(purchase.id, ws.cashEntries);
           const due = purchaseOutstanding(purchase, ws.cashEntries);
           const status = statusForBalance(due, paid > 0);
@@ -116,7 +130,7 @@ export default function PurchasesPage() {
             <td>{info && info.remainingPieces > 0.5 ? <span className="chip good">{formatNumber(info.remainingPieces, 0)} left</span> : <span className="chip">Sold out</span>}{info && info.soldPieces > 0 ? <span className="muted-text">{formatNumber(info.soldPieces, 0)} sold</span> : null}</td>
             <td>{purchase.purchase_mode === "quantity" ? "Per nut" : `${formatNumber(Number(purchase.payable_weight_kg))} kg`}{purchase.purchase_mode === "weight" ? <span className="muted-text">Net {formatNumber(Number(purchase.net_weight_kg))} kg</span> : null}</td>
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
-            <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}</td>
+            <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoPayment(purchase, entry)} type="button">Undo</button></span>)}</div> : null}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName)} type="button">PDF</button>
               <button className="secondary-button" onClick={() => router.push(`/v2/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>

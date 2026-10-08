@@ -1781,3 +1781,21 @@ td > .muted-text {
     flex: 1 1 100%;
   }
 }
+
+.payment-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.payment-list .undo-link {
+  color: var(--danger);
+  display: inline-flex;
+  font-size: 0.74rem;
+  margin-left: 8px;
+}
+
+.payment-list .undo-link:hover {
+  color: #8f2721;
+  text-decoration: underline;
+}

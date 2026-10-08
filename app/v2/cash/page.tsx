@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Banknote, IndianRupee, Receipt, TrendingUp, Wallet } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { cashDirection, inRange, purchaseOutstanding, saleOutstanding, statusForBalance, summarizeCash } from "../lib/calc";
+import { cashDirection, inRange, purchaseOutstanding, purchaseStatusWithout, saleOutstanding, saleStatusWithout, statusForBalance, summarizeCash } from "../lib/calc";
 import { formatCurrency, formatDate, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
 import { cashKinds, cashMethods, type CashEntry, type CashKind, type CashMethod } from "../lib/types";
 import { EmptyState, KeyValueList, Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "../components/ui";
@@ -67,10 +67,19 @@ export default function CashPage() {
     if (!ws.session || !window.confirm(`Delete this ${kindLabel(entry.kind).toLowerCase()} entry?`)) return;
     ws.clearFeedback();
     ws.setSaving(true);
-    const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
+    const traderId = ws.session.user.id;
+    const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", traderId);
+    if (!error && entry.kind === "farmer_payment" && entry.purchase_id) {
+      const purchase = ws.purchaseById.get(entry.purchase_id);
+      if (purchase) await supabase.from("coconut_trades").update({ payment_status: purchaseStatusWithout(purchase, ws.cashEntries, entry.id) }).eq("id", purchase.id).eq("trader_id", traderId);
+    }
+    if (!error && entry.kind === "buyer_receipt" && entry.sale_id) {
+      const sale = ws.saleById.get(entry.sale_id);
+      if (sale) await supabase.from("sales").update({ payment_status: saleStatusWithout(sale, ws.cashEntries, entry.id) }).eq("id", sale.id).eq("trader_id", traderId);
+    }
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify("Cash entry deleted. Payment status on linked records updates with the next payment.");
+    ws.notify("Cash entry deleted. Linked purchase or sale balances are restored.");
     await ws.refresh();
   }
 
