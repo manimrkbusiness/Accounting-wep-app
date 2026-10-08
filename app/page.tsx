@@ -58,7 +58,7 @@ type CoconutTrade = {
   husk_removal_cost: number;
   tree_collection_cost: number;
   labor_cost_total: number;
-  husk_price_per_1000: number;
+  husk_price_per_piece: number;
   husk_price_total: number;
   average_weight_kg: number;
   average_price_per_piece: number;
@@ -96,7 +96,7 @@ type TraderSettings = {
   purchase_mode: PurchaseMode;
   husk_removal_rate_per_1000: number;
   tree_collection_rate_per_1000: number;
-  husk_price_per_1000: number;
+  husk_price_per_piece: number;
   kudume_wastage_percent: number;
 };
 
@@ -115,7 +115,7 @@ type TradeForm = {
   rate_per_piece: string;
   husk_removal_rate_per_1000: string;
   tree_collection_rate_per_1000: string;
-  husk_price_per_1000: string;
+  husk_price_per_piece: string;
   deduct_dehusking: boolean;
   deduct_harvesting: boolean;
   advance_amount: string;
@@ -189,7 +189,7 @@ const emptyTradeForm: TradeForm = {
   rate_per_piece: "",
   husk_removal_rate_per_1000: "1100",
   tree_collection_rate_per_1000: "1450",
-  husk_price_per_1000: "0",
+  husk_price_per_piece: "0",
   deduct_dehusking: true,
   deduct_harvesting: true,
   advance_amount: "0",
@@ -394,7 +394,7 @@ export default function Home() {
       rate_per_piece: String(trade.rate_per_piece ?? 0),
       husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
       tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
-      husk_price_per_1000: String(trade.husk_price_per_1000 ?? 0),
+      husk_price_per_piece: String(trade.husk_price_per_piece ?? 0),
       deduct_dehusking: Number(trade.husk_removal_rate_per_1000) > 0,
       deduct_harvesting: Number(trade.tree_collection_rate_per_1000) > 0,
       advance_amount: String(trade.advance_amount),
@@ -465,7 +465,7 @@ export default function Home() {
           purchase_mode: "weight",
           husk_removal_rate_per_1000: 1100,
           tree_collection_rate_per_1000: 1450,
-          husk_price_per_1000: 0,
+          husk_price_per_piece: 0,
           kudume_wastage_percent: 3
         }) as TraderSettings;
         setTraderSettings(loadedSettings);
@@ -473,7 +473,7 @@ export default function Home() {
           purchaseMode: loadedSettings.purchase_mode,
           huskRemoval: String(loadedSettings.husk_removal_rate_per_1000),
           treeCollection: String(loadedSettings.tree_collection_rate_per_1000),
-          huskPrice: String(loadedSettings.husk_price_per_1000),
+          huskPrice: String(loadedSettings.husk_price_per_piece),
           kudumeWastage: String(loadedSettings.kudume_wastage_percent)
         });
         setTradeForm((form) => form.id ? form : {
@@ -482,7 +482,7 @@ export default function Home() {
           wastage_percent: form.processing_type === "kudume" ? String(loadedSettings.kudume_wastage_percent) : "0",
           husk_removal_rate_per_1000: String(loadedSettings.husk_removal_rate_per_1000),
           tree_collection_rate_per_1000: String(loadedSettings.tree_collection_rate_per_1000),
-          husk_price_per_1000: String(loadedSettings.husk_price_per_1000),
+          husk_price_per_piece: String(loadedSettings.husk_price_per_piece),
           deduct_dehusking: Number(loadedSettings.husk_removal_rate_per_1000) > 0,
           deduct_harvesting: Number(loadedSettings.tree_collection_rate_per_1000) > 0
         });
@@ -574,7 +574,7 @@ export default function Home() {
     const coconutTotal = purchaseMode === "quantity" ? quantity * (Number(tradeForm.rate_per_piece) || 0) : payable * (Number(tradeForm.rate_per_kg) || 0);
     const huskRemovalCost = tradeForm.deduct_dehusking ? quantity / 1000 * (Number(tradeForm.husk_removal_rate_per_1000) || 0) : 0;
     const treeCollectionCost = tradeForm.deduct_harvesting ? quantity / 1000 * (Number(tradeForm.tree_collection_rate_per_1000) || 0) : 0;
-    const huskPriceIncome = purchaseMode === "weight" ? quantity / 1000 * (Number(tradeForm.husk_price_per_1000) || 0) : 0;
+    const huskPriceIncome = purchaseMode === "weight" ? quantity * (Number(tradeForm.husk_price_per_piece) || 0) : 0;
     const laborTotal = huskRemovalCost + treeCollectionCost;
     const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
     const advance = Number(tradeForm.advance_amount) || 0;
@@ -796,7 +796,7 @@ export default function Home() {
       purchase_mode: settingsForm.purchaseMode,
       husk_removal_rate_per_1000: huskRemoval,
       tree_collection_rate_per_1000: treeCollection,
-      husk_price_per_1000: huskPrice,
+      husk_price_per_piece: huskPrice,
       kudume_wastage_percent: kudumeWastage
     }).select("*").single();
     setSaving(false);
@@ -813,7 +813,7 @@ export default function Home() {
       wastage_percent: form.processing_type === "kudume" ? String(kudumeWastage) : "0",
       husk_removal_rate_per_1000: String(huskRemoval),
       tree_collection_rate_per_1000: String(treeCollection),
-      husk_price_per_1000: String(huskPrice),
+      husk_price_per_piece: String(huskPrice),
       deduct_dehusking: huskRemoval > 0,
       deduct_harvesting: treeCollection > 0
     });
@@ -881,7 +881,7 @@ export default function Home() {
       rate_per_piece: calculation.purchaseMode === "quantity" ? Number(tradeForm.rate_per_piece) : 0,
       husk_removal_rate_per_1000: tradeForm.deduct_dehusking ? Number(tradeForm.husk_removal_rate_per_1000) : 0,
       tree_collection_rate_per_1000: tradeForm.deduct_harvesting ? Number(tradeForm.tree_collection_rate_per_1000) : 0,
-      husk_price_per_1000: calculation.purchaseMode === "weight" ? Number(tradeForm.husk_price_per_1000) || 0 : 0,
+      husk_price_per_piece: calculation.purchaseMode === "weight" ? Number(tradeForm.husk_price_per_piece) || 0 : 0,
       advance_amount: calculation.advance,
       additional_credit_amount: calculation.additionalCredit,
       additional_credit_reason: calculation.additionalCredit > 0 ? creditReason : null,
@@ -956,7 +956,7 @@ export default function Home() {
       rate_per_piece: String(trade.rate_per_piece ?? 0),
       husk_removal_rate_per_1000: String(trade.husk_removal_rate_per_1000),
       tree_collection_rate_per_1000: String(trade.tree_collection_rate_per_1000),
-      husk_price_per_1000: String(trade.husk_price_per_1000 ?? 0),
+      husk_price_per_piece: String(trade.husk_price_per_piece ?? 0),
       deduct_dehusking: Number(trade.husk_removal_rate_per_1000) > 0,
       deduct_harvesting: Number(trade.tree_collection_rate_per_1000) > 0,
       advance_amount: String(trade.advance_amount),
@@ -1123,7 +1123,7 @@ export default function Home() {
             </div>
             {tradeForm.purchase_mode === "weight" ? <fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={tradeForm.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setTradeForm((form) => ({ ...form, processing_type: item.value, wastage_percent: item.value === "kudume" ? (form.wastage_percent === "0" ? String(traderSettings?.kudume_wastage_percent ?? 3) : form.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset> : <p className="mode-note">Quantity-based purchases use individual coconut pieces and do not use Mottai, Kudume wastage, Husk / Mattai credit, or weighbridge fields.</p>}
             <div className="form-grid">
-              <label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={tradeForm.coconut_quantity} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_quantity: event.target.value }))} required /><span className="field-hint">{tradeForm.purchase_mode === "weight" ? "Labor and Mattai credit are calculated per 1,000 pieces." : "Labor deductions are calculated per 1,000 pieces."}</span></label>
+              <label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={tradeForm.coconut_quantity} onChange={(event) => setTradeForm((form) => ({ ...form, coconut_quantity: event.target.value }))} required /><span className="field-hint">{tradeForm.purchase_mode === "weight" ? "Labor is deducted per 1,000 pieces; husk credit is added per nut." : "Labor deductions are calculated per 1,000 pieces."}</span></label>
               {tradeForm.purchase_mode === "weight" ? <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={tradeForm.net_weight_kg} onChange={(event) => setTradeForm((form) => ({ ...form, net_weight_kg: event.target.value }))} placeholder="Weighbridge net weight" required /><span className="field-hint">Enter the net coconut weight from the weighbridge slip. Wastage and payable weight are calculated from it.</span></label> : null}
               {tradeForm.purchase_mode === "weight" ? <label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_kg} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_kg: event.target.value }))} required /></label> : <label>Price per coconut (INR)<input type="number" min="0" step="0.01" value={tradeForm.rate_per_piece} onChange={(event) => setTradeForm((form) => ({ ...form, rate_per_piece: event.target.value }))} required /><span className="field-hint">The purchase total is pieces multiplied by this price.</span></label>}
               <label>Advance paid (INR)<input type="number" min="0" step="0.01" value={tradeForm.advance_amount} onChange={(event) => setTradeForm((form) => ({ ...form, advance_amount: event.target.value }))} /></label>
@@ -1132,7 +1132,7 @@ export default function Home() {
             <label>Notes <span className="optional">Optional</span><textarea value={tradeForm.notes} onChange={(event) => setTradeForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Any quality, transport, or payment note" /></label>
             <button className="primary-button" disabled={saving || farmers.length === 0} type="submit">{saving ? "Saving..." : tradeForm.id ? "Update purchase" : "Save purchase"}</button>
           </form>
-          <aside className="side-stack"><section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => { setEditingSettings(false); setSettingsForm({ purchaseMode: traderSettings?.purchase_mode ?? "weight", huskRemoval: String(traderSettings?.husk_removal_rate_per_1000 ?? 1100), treeCollection: String(traderSettings?.tree_collection_rate_per_1000 ?? 1450), huskPrice: String(traderSettings?.husk_price_per_1000 ?? 0), kudumeWastage: String(traderSettings?.kudume_wastage_percent ?? 3) }); }} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid"><label>Default purchase method<select value={settingsForm.purchaseMode} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, purchaseMode: event.target.value as PurchaseMode }))}>{purchaseModes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label>Dehusking deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskRemoval: event.target.value }))} /></label><label>Coconut harvesting deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, treeCollection: event.target.value }))} /></label><label>Husk / Mattai price / 1,000 (weight-based)<input type="number" min="0" step="0.01" value={settingsForm.huskPrice} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskPrice: event.target.value }))} /></label><label>Kudume wastage % (weight-based)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, kudumeWastage: event.target.value }))} /></label></div>{editingSettings ? <button className="primary-button" disabled={saving} onClick={saveTraderSettings} type="button">Save settings</button> : null}</section><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>{calculation.purchaseMode === "quantity" ? "Per-nut summary" : "Weighbridge summary"}</h2><dl className="calculation-list">{calculation.purchaseMode === "weight" ? <><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div></> : null}<div><dt>Coconut quantity</dt><dd>{formatNumber(calculation.quantity, 0)} pieces</dd></div><div><dt>Average weight per nut</dt><dd>{calculation.purchaseMode === "weight" ? formatNumber(calculation.averageWeightGrams, 1) + " g / nut" : "Not used"}</dd></div><div><dt>Average price per nut</dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / nut</dd></div><div className="calculation-credit"><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div><div className="calculation-deduction"><dt>Dehusking</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div><div className="calculation-deduction"><dt>Coconut harvesting</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div>{calculation.purchaseMode === "weight" ? <div className="calculation-credit"><dt>Husk / Mattai credit</dt><dd>{formatCurrency(calculation.huskPriceIncome)}</dd></div> : null}<div className="calculation-total"><dt>Net payable to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div>{calculation.additionalCredit > 0 ? <div className="calculation-credit"><dt>Additional credit</dt><dd>{formatCurrency(calculation.additionalCredit)}</dd></div> : null}{calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}<div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Checked dehusking and harvesting amounts are deducted from the farmer payment. Unchecked costs are borne by the trader. Green credits increase the farmer amount; red deductions reduce it. Husk / Mattai credit and Kudume wastage apply to weight-based purchases only.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer and location, enter the piece quantity and weighbridge details, then save the invoice.</p></section></aside>
+          <aside className="side-stack"><section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => { setEditingSettings(false); setSettingsForm({ purchaseMode: traderSettings?.purchase_mode ?? "weight", huskRemoval: String(traderSettings?.husk_removal_rate_per_1000 ?? 1100), treeCollection: String(traderSettings?.tree_collection_rate_per_1000 ?? 1450), huskPrice: String(traderSettings?.husk_price_per_piece ?? 0), kudumeWastage: String(traderSettings?.kudume_wastage_percent ?? 3) }); }} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid"><label>Default purchase method<select value={settingsForm.purchaseMode} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, purchaseMode: event.target.value as PurchaseMode }))}>{purchaseModes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label>Dehusking deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskRemoval: event.target.value }))} /></label><label>Coconut harvesting deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, treeCollection: event.target.value }))} /></label><label>Husk / Mattai price per nut (weight-based)<input type="number" min="0" step="0.01" value={settingsForm.huskPrice} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, huskPrice: event.target.value }))} /></label><label>Kudume wastage % (weight-based)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((form) => ({ ...form, kudumeWastage: event.target.value }))} /></label></div>{editingSettings ? <button className="primary-button" disabled={saving} onClick={saveTraderSettings} type="button">Save settings</button> : null}</section><section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>{calculation.purchaseMode === "quantity" ? "Per-nut summary" : "Weighbridge summary"}</h2><dl className="calculation-list">{calculation.purchaseMode === "weight" ? <><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage</dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight</dt><dd>{formatNumber(calculation.payable)} kg</dd></div></> : null}<div><dt>Coconut quantity</dt><dd>{formatNumber(calculation.quantity, 0)} pieces</dd></div><div><dt>Average weight per nut</dt><dd>{calculation.purchaseMode === "weight" ? formatNumber(calculation.averageWeightGrams, 1) + " g / nut" : "Not used"}</dd></div><div><dt>Average price per nut</dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / nut</dd></div><div className="calculation-credit"><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div><div className="calculation-deduction"><dt>Dehusking</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div><div className="calculation-deduction"><dt>Coconut harvesting</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div>{calculation.purchaseMode === "weight" ? <div className="calculation-credit"><dt>Husk / Mattai credit</dt><dd>{formatCurrency(calculation.huskPriceIncome)}</dd></div> : null}<div className="calculation-total"><dt>Net payable to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div><div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div>{calculation.additionalCredit > 0 ? <div className="calculation-credit"><dt>Additional credit</dt><dd>{formatCurrency(calculation.additionalCredit)}</dd></div> : null}{calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}<div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div></dl><p className="field-hint">Checked dehusking and harvesting amounts are deducted from the farmer payment. Unchecked costs are borne by the trader. Green credits increase the farmer amount; red deductions reduce it. Husk / Mattai credit and Kudume wastage apply to weight-based purchases only.</p></section><section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">Choose the farmer and location, enter the piece quantity and weighbridge details, then save the invoice.</p></section></aside>
         </section> : null}
 
         {isTrader && activeSection === "purchase" ? <section className="tool-panel adjustment-panel"><div className="panel-heading"><div><span className="eyebrow">After advance</span><h2>Farmer adjustments</h2></div><span className="muted-text">Optional</span></div><p className="muted-text">Add a documented amount to pay the farmer or deduct an amount from the farmer balance.</p><div className="adjustment-actions"><button className="adjustment-toggle credit" onClick={() => { setShowCreditAdjustment(true); setTradeForm((form) => ({ ...form, additional_credit_amount: form.additional_credit_amount === "0" ? "" : form.additional_credit_amount })); }} type="button">+ Add credit to farmer</button><button className="adjustment-toggle debit" onClick={() => { setShowDebitAdjustment(true); setTradeForm((form) => ({ ...form, additional_debit_amount: form.additional_debit_amount === "0" ? "" : form.additional_debit_amount })); }} type="button">- Add debit to farmer</button></div>{showCreditAdjustment || Number(tradeForm.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={tradeForm.additional_credit_amount} onChange={(event) => setTradeForm((form) => ({ ...form, additional_credit_amount: event.target.value }))} /></label><label>Why is this being credited? <span className="required-note">Required when amount is entered</span><input value={tradeForm.additional_credit_reason} onChange={(event) => setTradeForm((form) => ({ ...form, additional_credit_reason: event.target.value }))} placeholder="Reason for additional payment" /></label></div> : null}{showDebitAdjustment || Number(tradeForm.additional_debit_amount) > 0 ? <div className="adjustment-fields debit-fields"><label>Debit amount (INR)<input type="number" min="0" step="0.01" value={tradeForm.additional_debit_amount} onChange={(event) => setTradeForm((form) => ({ ...form, additional_debit_amount: event.target.value }))} /></label><label>Why is this being deducted? <span className="required-note">Required when amount is entered</span><input value={tradeForm.additional_debit_reason} onChange={(event) => setTradeForm((form) => ({ ...form, additional_debit_reason: event.target.value }))} placeholder="Reason for deduction" /></label></div> : null}</section> : null}

@@ -57,6 +57,7 @@ Database rules:
 
 - **Stock remaining** = purchase pieces − pieces allocated to sales.
   Remaining kg (weight purchases) = payable kg × remaining ÷ pieces.
+- **Husk credit on a purchase** = pieces × husk price per nut (weight-based purchases only).
 - **Coconut cost per piece** = (farmer net payable − husk credit) ÷ pieces.
 - **Cost of a load** = Σ pieces from each purchase × that purchase's coconut cost per piece.
 - **Sale total** = quantity × rate + transport charged − deduction.

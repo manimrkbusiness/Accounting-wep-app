@@ -74,7 +74,7 @@ export type Purchase = {
   husk_removal_cost: number;
   tree_collection_cost: number;
   labor_cost_total: number;
-  husk_price_per_1000: number;
+  husk_price_per_piece: number;
   husk_price_total: number;
   average_weight_kg: number;
   average_price_per_piece: number;
@@ -97,7 +97,7 @@ export type TraderSettings = {
   purchase_mode: PurchaseMode;
   husk_removal_rate_per_1000: number;
   tree_collection_rate_per_1000: number;
-  husk_price_per_1000: number;
+  husk_price_per_piece: number;
   kudume_wastage_percent: number;
 };
 

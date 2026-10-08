@@ -15,7 +15,7 @@ export type PurchaseCalcInput = {
   rate_per_piece: string;
   husk_removal_rate_per_1000: string;
   tree_collection_rate_per_1000: string;
-  husk_price_per_1000: string;
+  husk_price_per_piece: string;
   deduct_dehusking: boolean;
   deduct_harvesting: boolean;
   advance_amount: string;
@@ -33,7 +33,7 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const coconutTotal = purchaseMode === "quantity" ? quantity * toNumber(form.rate_per_piece) : payable * toNumber(form.rate_per_kg);
   const huskRemovalCost = form.deduct_dehusking ? quantity / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
   const treeCollectionCost = form.deduct_harvesting ? quantity / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
-  const huskPriceIncome = purchaseMode === "weight" ? quantity / 1000 * toNumber(form.husk_price_per_1000) : 0;
+  const huskPriceIncome = purchaseMode === "weight" ? quantity * toNumber(form.husk_price_per_piece) : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
   const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
   const advance = toNumber(form.advance_amount);
