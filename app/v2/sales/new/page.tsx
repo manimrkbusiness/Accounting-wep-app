@@ -6,7 +6,7 @@ import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
 import { allocationCost, calculateSale } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
-import { saleColors, saleProcessingTypes, type PaymentStatus, type Sale, type SaleColor, type SaleKind, type SaleProcessing, type SaleUnit } from "../../lib/types";
+import { saleProcessingTypes, type PaymentStatus, type Sale, type SaleColor, type SaleKind, type SaleProcessing, type SaleUnit } from "../../lib/types";
 
 type SaleForm = {
   id?: number;
@@ -254,10 +254,7 @@ export default function NewSalePage() {
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>
-            {kind === "coconut" ? <>
-              <label>Coconut colour<select value={form.coconut_color} onChange={(event) => { setAutoType(false); setField("coconut_color", event.target.value as SaleColor); }}>{saleColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label>Coconut condition<select value={form.processing_type} onChange={(event) => { setAutoType(false); setField("processing_type", event.target.value as SaleProcessing); }}>{saleProcessingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-            </> : null}
+            {kind === "coconut" ? <label>Coconut condition<select value={form.processing_type} onChange={(event) => { setAutoType(false); setField("processing_type", event.target.value as SaleProcessing); }}>{saleProcessingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label> : null}
             <label>Sold by<select value={form.unit} onChange={(event) => setField("unit", event.target.value as SaleUnit)}>{kind === "coconut" ? <><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></> : <><option value="load">Load</option><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></>}</select></label>
             <label>Rate (INR per {form.unit === "kg" ? "kg" : form.unit === "piece" ? "nut" : "load"})<input type="number" min="0" step="0.01" value={form.rate} onChange={(event) => setField("rate", event.target.value)} required /></label>
           </div>
