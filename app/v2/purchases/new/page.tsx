@@ -7,6 +7,7 @@ import { useWorkspace } from "../../lib/workspace";
 import { calculatePurchase } from "../../lib/calc";
 import { formatCurrency, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
 import { coconutColors, processingTypes, type CoconutColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
+import { CostSettingsPanel, defaultSettings } from "../../components/CostSettingsPanel";
 
 type PurchaseForm = {
   id?: number;
@@ -33,8 +34,6 @@ type PurchaseForm = {
   additional_debit_reason: string;
   notes: string;
 };
-
-const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, kudume_wastage_percent: 3 };
 
 function blankForm(settings: TraderSettings): PurchaseForm {
   return {
@@ -101,8 +100,6 @@ export default function NewPurchasePage() {
   const settings = ws.settings ?? defaultSettings;
   const [form, setForm] = useState<PurchaseForm>(() => blankForm(settings));
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
-  const [editingSettings, setEditingSettings] = useState(false);
-  const [settingsForm, setSettingsForm] = useState({ purchaseMode: settings.purchase_mode, huskRemoval: String(settings.husk_removal_rate_per_1000), treeCollection: String(settings.tree_collection_rate_per_1000), huskPrice: String(settings.husk_price_per_piece), kudumeWastage: String(settings.kudume_wastage_percent) });
   const [showCredit, setShowCredit] = useState(false);
   const [showDebit, setShowDebit] = useState(false);
 
@@ -121,30 +118,9 @@ export default function NewPurchasePage() {
     }
   }, [ws.purchaseById, ws.settings, loadedEdit, form.id]);
 
-  useEffect(() => {
-    if (ws.settings) setSettingsForm({ purchaseMode: ws.settings.purchase_mode, huskRemoval: String(ws.settings.husk_removal_rate_per_1000), treeCollection: String(ws.settings.tree_collection_rate_per_1000), huskPrice: String(ws.settings.husk_price_per_piece), kudumeWastage: String(ws.settings.kudume_wastage_percent) });
-  }, [ws.settings]);
-
   const calculation = useMemo(() => calculatePurchase(form), [form]);
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   const allocated = form.id ? ws.stock.get(form.id)?.soldPieces ?? 0 : 0;
-
-  async function saveSettings() {
-    if (!ws.session) return;
-    const huskRemoval = toNumber(settingsForm.huskRemoval);
-    const treeCollection = toNumber(settingsForm.treeCollection);
-    const huskPrice = toNumber(settingsForm.huskPrice);
-    const kudumeWastage = toNumber(settingsForm.kudumeWastage);
-    if ([huskRemoval, treeCollection, huskPrice, kudumeWastage].some((value) => value < 0) || kudumeWastage > 100) { ws.fail("Enter valid non-negative rates and a wastage percentage from 0 to 100."); return; }
-    ws.setSaving(true);
-    const { error } = await supabase.from("trader_settings").upsert({ trader_id: ws.session.user.id, purchase_mode: settingsForm.purchaseMode, husk_removal_rate_per_1000: huskRemoval, tree_collection_rate_per_1000: treeCollection, husk_price_per_piece: huskPrice, kudume_wastage_percent: kudumeWastage });
-    ws.setSaving(false);
-    if (error) { ws.fail(error.message); return; }
-    setEditingSettings(false);
-    if (!form.id) setForm((current) => ({ ...current, purchase_mode: settingsForm.purchaseMode, wastage_percent: current.processing_type === "kudume" ? String(kudumeWastage) : "0", husk_removal_rate_per_1000: String(huskRemoval), tree_collection_rate_per_1000: String(treeCollection), husk_price_per_piece: String(huskPrice), deduct_dehusking: huskRemoval > 0, deduct_harvesting: treeCollection > 0 }));
-    ws.notify("Purchase settings saved for future records.");
-    await ws.refresh();
-  }
 
   async function savePurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -243,13 +219,7 @@ export default function NewPurchasePage() {
           {calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}
           <div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
         </dl><p className="field-hint">{calculation.purchaseMode === "weight" ? `Husk / Mattai credit is calculated at ${formatCurrency(toNumber(form.husk_price_per_piece))} per nut from your purchase cost settings. ` : ""}Green credits increase the farmer amount; red deductions reduce it.</p></section>
-        <section className="tool-panel settings-panel"><div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Purchase cost settings</h2></div>{editingSettings ? <button className="link-button" onClick={() => setEditingSettings(false)} type="button">Cancel</button> : <button className="secondary-button" onClick={() => setEditingSettings(true)} type="button">Edit</button>}</div><p className="muted-text">These defaults are used for new purchases and saved with each invoice.</p><div className="settings-grid">
-          <label>Default purchase method<select value={settingsForm.purchaseMode} disabled={!editingSettings} onChange={(event) => setSettingsForm((current) => ({ ...current, purchaseMode: event.target.value as PurchaseMode }))}><option value="weight">Weight-based / weighbridge</option><option value="quantity">Quantity-based / per nut</option></select></label>
-          <label>Dehusking deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.huskRemoval} disabled={!editingSettings} onChange={(event) => setSettingsForm((current) => ({ ...current, huskRemoval: event.target.value }))} /></label>
-          <label>Coconut harvesting deduction / 1,000<input type="number" min="0" step="0.01" value={settingsForm.treeCollection} disabled={!editingSettings} onChange={(event) => setSettingsForm((current) => ({ ...current, treeCollection: event.target.value }))} /></label>
-          <label>Husk / Mattai price per nut (weight-based)<input type="number" min="0" step="0.01" value={settingsForm.huskPrice} disabled={!editingSettings} onChange={(event) => setSettingsForm((current) => ({ ...current, huskPrice: event.target.value }))} /></label>
-          <label>Kudume wastage % (weight-based)<input type="number" min="0" max="100" step="0.01" value={settingsForm.kudumeWastage} disabled={!editingSettings} onChange={(event) => setSettingsForm((current) => ({ ...current, kudumeWastage: event.target.value }))} /></label>
-        </div>{editingSettings ? <button className="primary-button" disabled={ws.saving} onClick={saveSettings} type="button">Save settings</button> : null}</section>
+        <CostSettingsPanel onSaved={(saved) => { if (!form.id) setForm((current) => ({ ...current, purchase_mode: saved.purchase_mode, wastage_percent: current.processing_type === "kudume" ? String(saved.kudume_wastage_percent) : "0", husk_removal_rate_per_1000: String(saved.husk_removal_rate_per_1000), tree_collection_rate_per_1000: String(saved.tree_collection_rate_per_1000), husk_price_per_piece: String(saved.husk_price_per_piece), deduct_dehusking: Number(saved.husk_removal_rate_per_1000) > 0, deduct_harvesting: Number(saved.tree_collection_rate_per_1000) > 0 })); }} />
       </aside>
     </section>
   );

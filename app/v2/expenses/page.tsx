@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { inRange, sumBy } from "../lib/calc";
-import { formatCurrency, formatDate, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
+import Link from "next/link";
+import { formatCurrency, formatDate, formatPurchaseId, formatSaleId, formatStockId, today, toNumber } from "../lib/format";
 import { expenseCategories, expenseScopes, type Expense, type ExpenseCategory, type ExpenseScope } from "../lib/types";
 import { EmptyState, KeyValueList, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "../components/ui";
 
@@ -112,7 +113,7 @@ export default function ExpensesPage() {
               expense.purchase_id ? formatPurchaseId(expense.purchase_id) : null,
               expense.sale_id ? formatSaleId(expense.sale_id) : null
             ].filter(Boolean);
-            return <tr key={expense.id}><td>{formatDate(expense.expense_date)}</td><td>{categoryLabel(expense.category)}</td><td>{expenseScopes.find((item) => item.value === expense.scope)?.label}</td><td>{links.length ? <div className="chip-row">{links.map((link) => <span className="chip" key={String(link)}>{link}</span>)}</div> : <span className="muted-text">-</span>}</td><td>{expense.description || "-"}</td><td className="balance-cell">{formatCurrency(Number(expense.amount))}</td><td><div className="row-actions"><button className="secondary-button" onClick={() => edit(expense)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => remove(expense)} type="button">Delete</button></div></td></tr>;
+            return <tr key={expense.id}><td>{formatDate(expense.expense_date)}</td><td>{categoryLabel(expense.category)}{expense.stock_entry_id ? <span className="muted-text">Booked automatically by the stock entry</span> : null}</td><td>{expenseScopes.find((item) => item.value === expense.scope)?.label}</td><td>{links.length || expense.stock_entry_id ? <div className="chip-row">{expense.stock_entry_id ? <Link className="chip" href={`/v2/stock?edit=${expense.stock_entry_id}`}>{formatStockId(expense.stock_entry_id)}</Link> : null}{links.map((link) => <span className="chip" key={String(link)}>{link}</span>)}</div> : <span className="muted-text">-</span>}</td><td>{expense.description || "-"}</td><td className="balance-cell">{formatCurrency(Number(expense.amount))}</td><td><div className="row-actions"><button className="secondary-button" onClick={() => edit(expense)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => remove(expense)} type="button">Delete</button></div></td></tr>;
           })}
         </tbody></table>{rows.length === 0 ? <EmptyState>No expenses match these filters.</EmptyState> : null}</div>
       </section>

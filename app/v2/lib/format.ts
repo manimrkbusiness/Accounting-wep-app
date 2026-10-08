@@ -21,6 +21,10 @@ export function formatSaleId(id: number) {
   return `SAL-${String(id).padStart(6, "0")}`;
 }
 
+export function formatStockId(id: number) {
+  return `STK-${String(id).padStart(6, "0")}`;
+}
+
 export function pdfMoney(value: number) {
   return formatCurrency(value).replace("₹", "INR ");
 }

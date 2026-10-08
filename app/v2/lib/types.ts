@@ -181,6 +181,8 @@ export type StockEntry = {
   net_weight_kg: number;
   wastage_percent: number;
   coconut_quantity: number;
+  dehusking_rate_per_1000: number;
+  dehusking_cost: number;
   notes: string | null;
   wastage_weight_kg: number;
   payable_weight_kg: number;
@@ -206,6 +208,7 @@ export type Expense = {
   vehicle_id: number | null;
   purchase_id: number | null;
   sale_id: number | null;
+  stock_entry_id: number | null;
   description: string | null;
   created_at: string;
 };

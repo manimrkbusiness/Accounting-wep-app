@@ -128,6 +128,8 @@ export default function NewSalePage() {
   const costBasis = kind === "coconut" ? allocationCost(allocations, ws.stock) : 0;
   /** Full farmer payable for the pieces in this load, including husk credit. */
   const farmerCost = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0) : 0;
+  /** Dehusking already booked on stock entries for the per-nut pieces in this load. */
+  const stockDehusking = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.dehuskingCostPerPiece ?? 0), 0) : 0;
   const calculation = useMemo(() => calculateSale(form, allocatedPieces, costBasis), [form, allocatedPieces, costBasis]);
   const estimatedQuantity = form.unit === "kg" ? Math.round(allocatedKg * 1000) / 1000 : allocatedPieces;
 
@@ -314,7 +316,7 @@ export default function NewSalePage() {
             <div className="calculation-total"><dt>Buyer pays</dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
-            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div><div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div><div className={calculation.margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin before expenses</dt><dd>{formatCurrency(calculation.margin)}</dd></div></> : null}
+            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div>{stockDehusking > 0 ? <div className="calculation-deduction"><dt>Dehusking booked at stock</dt><dd>{formatCurrency(stockDehusking)}</dd></div> : null}<div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div><div className={calculation.margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin before expenses</dt><dd>{formatCurrency(calculation.margin)}</dd></div></> : null}
           </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Paid to farmers is the farmer payable for the selected pieces, including any husk credit. Margin compares the sale with the coconut cost alone, because husk is sold separately. Loading, transport and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">{kind === "coconut" ? "Tick the purchases in this lorry, enter the buyer, net weight and rate, then save. Each purchase keeps its own record and remaining stock." : "Choose the husk buyer, enter how much was sold and the rate, and record the loading wages under Expenses."}</p></section>
         </aside>
