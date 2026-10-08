@@ -10,13 +10,13 @@ import { processingTypes, type ProcessingType, type StockEntry } from "../lib/ty
 import { EmptyState, Panel } from "../components/ui";
 import { CostSettingsPanel, defaultSettings } from "../components/CostSettingsPanel";
 
-type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; notes: string };
+type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; notes: string };
 
 export default function StockPage() {
   const ws = useWorkspace();
   const router = useRouter();
   const settings = ws.settings ?? defaultSettings;
-  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), notes: "" });
+  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", notes: "" });
   const [form, setForm] = useState<StockForm>(blankForm);
   const [selection, setSelection] = useState<Map<number, string>>(new Map());
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
@@ -39,7 +39,7 @@ export default function StockPage() {
       const entry = ws.stockEntries.find((item) => item.id === editId);
       if (entry) {
         const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
-        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), notes: entry.notes ?? "" });
+        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", notes: entry.notes ?? "" });
         setSelection(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === editId).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
         setLoadedEdit(editId);
       }
@@ -67,6 +67,9 @@ export default function StockPage() {
   const dehuskingRate = form.apply_dehusking ? Math.max(toNumber(form.dehusking_rate_per_1000), 0) : 0;
   const dehuskingCost = pieces / 1000 * dehuskingRate;
   const totalCost = farmerPaid + dehuskingCost;
+  const saleRate = Math.max(toNumber(form.sale_rate_per_kg), 0);
+  const expectedValue = payable * saleRate;
+  const expectedMargin = expectedValue - totalCost;
 
   function toggle(purchaseId: number, checked: boolean) {
     setSelection((current) => {
@@ -100,7 +103,7 @@ export default function StockPage() {
     if (wastagePercent < 0 || wastagePercent > 100) { ws.fail("Wastage must be between 0 and 100 percent."); return; }
     ws.setSaving(true);
     const { data, error } = await supabase.rpc("save_stock_entry", {
-      entry_input: { id: form.id ?? null, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, notes: form.notes.trim() || null },
+      entry_input: { id: form.id ?? null, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, notes: form.notes.trim() || null },
       items_input: allocations
     });
     ws.setSaving(false);
@@ -111,15 +114,20 @@ export default function StockPage() {
     router.push("/v2/stock");
   }
 
-  async function deleteEntry(entry: StockEntry) {
+  async function removeEntry(entry: StockEntry, mode: "undo" | "delete") {
     if (!ws.session) return;
-    if (!window.confirm(`Delete ${formatStockId(entry.id)} (${formatNumber(Number(entry.coconut_quantity), 0)} pieces)? The pieces go back to waiting for weighing and its dehusking expense is removed.`)) return;
+    const pieces = formatNumber(Number(entry.coconut_quantity), 0);
+    const question = mode === "undo"
+      ? `Undo ${formatStockId(entry.id)}? Its ${pieces} pieces go back to the purchase and wait to be weighed again, and the dehusking expense booked for it is removed.`
+      : `Delete ${formatStockId(entry.id)} (${pieces} pieces)? The pieces go back to waiting for weighing and its dehusking expense is removed.`;
+    if (!window.confirm(question)) return;
     ws.clearFeedback();
     ws.setSaving(true);
     const { error } = await supabase.from("stock_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify("Stock entry deleted.");
+    ws.notify(mode === "undo" ? `${formatStockId(entry.id)} undone. ${pieces} pieces are back in the purchase, waiting to be weighed.` : "Stock entry deleted.");
+    if (form.id === entry.id) resetForm();
     await ws.refresh();
   }
 
@@ -180,6 +188,7 @@ export default function StockPage() {
           <fieldset className="deduction-options"><legend>Dehusking cost</legend>
             <label className="checkbox-field"><input type="checkbox" checked={form.apply_dehusking} onChange={(event) => setForm((current) => ({ ...current, apply_dehusking: event.target.checked, dehusking_rate_per_1000: event.target.checked ? String(settings.husk_removal_rate_per_1000) : current.dehusking_rate_per_1000 }))} /><span><strong>Add dehusking cost for these pieces</strong><small>Calculated at {formatCurrency(form.apply_dehusking ? toNumber(form.dehusking_rate_per_1000) : Number(settings.husk_removal_rate_per_1000))} per 1,000 pieces from Purchase cost settings and booked automatically under Expenses, so do not add it there again. Untick when the farmer bore the dehusking.</small></span></label>
           </fieldset>
+          <label>Expected sale price per kg (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.sale_rate_per_kg} onChange={(event) => setForm((current) => ({ ...current, sale_rate_per_kg: event.target.value }))} placeholder="Rate you expect from the buyer" /><span className="field-hint">Becomes the default Rate when this stock goes into New sale. The margin there takes off the farmer cost and the dehusking booked here.</span></label>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Weighbridge slip number, lorry, quality note" /></label>
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update stock entry" : "Add to stock"}</button>
         </form>
@@ -195,6 +204,7 @@ export default function StockPage() {
             <div className="calculation-total"><dt>Total cost of this stock</dt><dd>{formatCurrency(totalCost)}</dd></div>
             <div><dt>Cost per nut</dt><dd>{pieces > 0 ? `${formatCurrency(totalCost / pieces)} / nut` : "-"}</dd></div>
             <div><dt>Cost per kg</dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
+            {saleRate > 0 ? <><div className="calculation-credit"><dt>Expected sale value</dt><dd>{formatCurrency(expectedValue)}</dd></div><div className={expectedMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Expected margin at {formatCurrency(saleRate)} / kg</dt><dd>{formatCurrency(expectedMargin)}</dd></div></> : null}
           </dl><p className="field-hint">Paid to farmers is taken from the purchase entries, after any deductions made there. Dehusking is what you pay at stock time. Together they are the cost of this stock before transport and other expenses.</p></section>
           <CostSettingsPanel description="These defaults are used for new purchases and stock entries. Dehusking here uses the same rate as the purchase deduction." onSaved={(saved) => { if (!form.id) setForm((current) => ({ ...current, dehusking_rate_per_1000: String(saved.husk_removal_rate_per_1000), apply_dehusking: Number(saved.husk_removal_rate_per_1000) > 0 })); }} />
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/v2/sales/new">Go to New sale</Link></section>
@@ -203,7 +213,7 @@ export default function StockPage() {
 
       <section className="ledger-panel">
         <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Stock entries</h2></div></div>
-        <div className="table-wrap"><table><thead><tr><th>Entry</th><th>Weighed on</th><th>Condition</th><th>Pieces</th><th>Net weight</th><th>Sellable weight</th><th>Avg weight per nut</th><th>Paid to farmers</th><th>Dehusking</th><th>Total cost</th><th>From purchases</th><th>Actions</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th>Entry</th><th>Weighed on</th><th>Condition</th><th>Pieces</th><th>Net weight</th><th>Sellable weight</th><th>Avg weight per nut</th><th>Paid to farmers</th><th>Dehusking</th><th>Total cost</th><th>Sale price</th><th>From purchases</th><th>Actions</th></tr></thead><tbody>
           {ws.stockEntries.map((entry) => {
             const items = itemsByEntry.get(entry.id) ?? [];
             const entryPieces = Number(entry.coconut_quantity) || 0;
@@ -220,8 +230,9 @@ export default function StockPage() {
               <td className="balance-cell">{formatCurrency(paid)}</td>
               <td className="balance-cell">{formatCurrency(dehusking)}{dehusking > 0 ? <span className="muted-text">{formatCurrency(Number(entry.dehusking_rate_per_1000))} / 1,000</span> : null}</td>
               <td className="amount-cell">{formatCurrency(paid + dehusking)}{Number(entry.payable_weight_kg) > 0 ? <span className="muted-text">{formatCurrency((paid + dehusking) / Number(entry.payable_weight_kg))} / kg</span> : null}</td>
+              <td>{Number(entry.sale_rate_per_kg) > 0 ? `${formatCurrency(Number(entry.sale_rate_per_kg))} / kg` : <span className="muted-text">-</span>}</td>
               <td><div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div></td>
-              <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => deleteEntry(entry)} type="button">Delete</button></div></td>
+              <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="secondary-button" disabled={ws.saving} onClick={() => removeEntry(entry, "undo")} type="button">Undo</button><button className="danger-button" disabled={ws.saving} onClick={() => removeEntry(entry, "delete")} type="button">Delete</button></div></td>
             </tr>;
           })}
         </tbody></table>{ws.stockEntries.length === 0 ? <EmptyState>No stock entries yet.</EmptyState> : null}</div>

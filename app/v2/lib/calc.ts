@@ -67,6 +67,8 @@ export type StockInfo = {
   stockCondition: ProcessingType;
   /** Dehusking cost booked on stock entries, per stocked piece (per-nut purchases only). */
   dehuskingCostPerPiece: number;
+  /** Expected sale price per kg from the stock entries, weighted by weight (0 when none set). */
+  stockSaleRatePerKg: number;
   /** Cost of the coconut only (farmer payable minus the husk credit). */
   coconutCostPerPiece: number;
   /** Full farmer payable per piece, including husk credit. */
@@ -78,7 +80,7 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
   const soldByPurchase = new Map<number, number>();
   saleItems.forEach((item) => soldByPurchase.set(item.purchase_id, (soldByPurchase.get(item.purchase_id) ?? 0) + Number(item.quantity_pieces)));
   const entryById = new Map(stockEntries.map((entry) => [entry.id, entry]));
-  const stockedByPurchase = new Map<number, { pieces: number; kg: number; kudumePieces: number; dehusking: number }>();
+  const stockedByPurchase = new Map<number, { pieces: number; kg: number; kudumePieces: number; dehusking: number; ratedKg: number; rateKg: number }>();
   stockEntryItems.forEach((item) => {
     const entry = entryById.get(item.stock_entry_id);
     if (!entry) return;
@@ -87,8 +89,16 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     const share = entryPieces > 0 ? pieces / entryPieces : 0;
     const kg = Number(entry.payable_weight_kg) * share;
     const dehusking = Number(entry.dehusking_cost ?? 0) * share;
-    const current = stockedByPurchase.get(item.purchase_id) ?? { pieces: 0, kg: 0, kudumePieces: 0, dehusking: 0 };
-    stockedByPurchase.set(item.purchase_id, { pieces: current.pieces + pieces, kg: current.kg + kg, kudumePieces: current.kudumePieces + (entry.processing_type === "kudume" ? pieces : 0), dehusking: current.dehusking + dehusking });
+    const saleRate = Number(entry.sale_rate_per_kg ?? 0);
+    const current = stockedByPurchase.get(item.purchase_id) ?? { pieces: 0, kg: 0, kudumePieces: 0, dehusking: 0, ratedKg: 0, rateKg: 0 };
+    stockedByPurchase.set(item.purchase_id, {
+      pieces: current.pieces + pieces,
+      kg: current.kg + kg,
+      kudumePieces: current.kudumePieces + (entry.processing_type === "kudume" ? pieces : 0),
+      dehusking: current.dehusking + dehusking,
+      ratedKg: current.ratedKg + (saleRate > 0 ? kg : 0),
+      rateKg: current.rateKg + kg * saleRate
+    });
   });
   const stock = new Map<number, StockInfo>();
   purchases.forEach((purchase) => {
@@ -96,8 +106,9 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     const soldPieces = soldByPurchase.get(purchase.id) ?? 0;
     const remainingPieces = Math.max(pieces - soldPieces, 0);
     const perNut = purchase.purchase_mode === "quantity";
-    const stocked = stockedByPurchase.get(purchase.id) ?? { pieces: 0, kg: 0, kudumePieces: 0, dehusking: 0 };
+    const stocked = stockedByPurchase.get(purchase.id) ?? { pieces: 0, kg: 0, kudumePieces: 0, dehusking: 0, ratedKg: 0, rateKg: 0 };
     const dehuskingCostPerPiece = perNut && stocked.pieces > 0 ? stocked.dehusking / stocked.pieces : 0;
+    const stockSaleRatePerKg = perNut && stocked.ratedKg > 0 ? stocked.rateKg / stocked.ratedKg : 0;
     const stockedPieces = perNut ? Math.min(stocked.pieces, pieces) : pieces;
     const awaitingStockPieces = perNut ? Math.max(pieces - stocked.pieces, 0) : 0;
     const sellablePieces = Math.max(stockedPieces - soldPieces, 0);
@@ -109,7 +120,7 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     const coconutCost = Number(purchase.total_amount) - Number(purchase.husk_price_total);
     const coconutCostPerPiece = pieces > 0 ? coconutCost / pieces : 0;
     const costPerPiece = pieces > 0 ? Number(purchase.total_amount) / pieces : 0;
-    stock.set(purchase.id, { purchase, soldPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
+    stock.set(purchase.id, { purchase, soldPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, stockSaleRatePerKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
   });
   return stock;
 }

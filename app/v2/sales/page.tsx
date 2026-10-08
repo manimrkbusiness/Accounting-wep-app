@@ -111,7 +111,8 @@ export default function SalesPage() {
           const status = statusForBalance(due, received > 0);
           const unit = sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "pieces" : "loads";
           const farmerCost = items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0);
-          const margin = Number(sale.sale_amount) - allocationCost(items, ws.stock);
+          const stockDehusking = items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.stock.get(item.purchase_id)?.dehuskingCostPerPiece ?? 0), 0);
+          const margin = Number(sale.sale_amount) - allocationCost(items, ws.stock) - stockDehusking;
           return <tr key={sale.id}>
             <td><strong>{formatSaleId(sale.id)}</strong><span className="muted-text">{sale.sale_kind === "husk" ? "Husk" : "Coconut load"}{sale.vehicle_number ? ` · ${sale.vehicle_number}` : ""}</span></td>
             <td>{formatDate(sale.sale_date)}</td>

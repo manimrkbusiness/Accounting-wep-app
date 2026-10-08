@@ -79,6 +79,7 @@ export default function NewSalePage() {
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
   const [useGrossTare, setUseGrossTare] = useState(false);
   const [weightEdited, setWeightEdited] = useState(false);
+  const [rateEdited, setRateEdited] = useState(false);
   const [filters, setFilters] = useState({ from: addDays(today(), -60), to: today(), farmer: "", onlyStock: true });
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function NewSalePage() {
         setForm(formFromSale(sale));
         setUseGrossTare(sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0);
         setWeightEdited(true);
+        setRateEdited(true);
         const items = ws.saleItems.filter((item) => item.sale_id === editId);
         setSelection(new Map(items.map((item) => [item.purchase_id, String(item.quantity_pieces)])));
         if (items.length) {
@@ -130,6 +132,16 @@ export default function NewSalePage() {
   const farmerCost = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0) : 0;
   /** Dehusking already booked on stock entries for the per-nut pieces in this load. */
   const stockDehusking = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.dehuskingCostPerPiece ?? 0), 0) : 0;
+  /** Expected sale price from the stock entries in this load, weighted by weight. */
+  const ratedKg = allocations.reduce((sum, item) => { const info = ws.stock.get(item.purchase_id); return sum + (info && info.stockSaleRatePerKg > 0 ? item.quantity_pieces * info.kgPerPiece : 0); }, 0);
+  const estimatedRate = ratedKg > 0 ? Math.round(allocations.reduce((sum, item) => { const info = ws.stock.get(item.purchase_id); return sum + (info && info.stockSaleRatePerKg > 0 ? item.quantity_pieces * info.kgPerPiece * info.stockSaleRatePerKg : 0); }, 0) / ratedKg * 100) / 100 : 0;
+
+  // Pre-fill the rate from the stock entry price until the trader types the agreed rate.
+  useEffect(() => {
+    if (kind !== "coconut" || form.unit !== "kg" || rateEdited || estimatedRate <= 0) return;
+    const next = String(estimatedRate);
+    setForm((current) => current.rate === next ? current : { ...current, rate: next });
+  }, [kind, form.unit, rateEdited, estimatedRate]);
   const calculation = useMemo(() => calculateSale(form, allocatedPieces, costBasis), [form, allocatedPieces, costBasis]);
   const estimatedQuantity = form.unit === "kg" ? Math.round(allocatedKg * 1000) / 1000 : allocatedPieces;
 
@@ -238,7 +250,7 @@ export default function NewSalePage() {
 
   return (
     <div className="stack">
-      {!form.id ? <div className="segmented sale-kind"><button className={kind === "coconut" ? "active" : ""} onClick={() => { setKind("coconut"); setWeightEdited(false); setForm((current) => ({ ...current, unit: "kg", buyer_id: "" })); }} type="button"><strong>Coconut load</strong><span>Sell coconut from purchases in stock</span></button><button className={kind === "husk" ? "active" : ""} onClick={() => { setKind("husk"); setWeightEdited(true); setForm((current) => ({ ...current, unit: "load", buyer_id: "", quantity: "" })); setSelection(new Map()); }} type="button"><strong>Husk sale</strong><span>Sell husk kept from your purchases</span></button></div> : null}
+      {!form.id ? <div className="segmented sale-kind"><button className={kind === "coconut" ? "active" : ""} onClick={() => { setKind("coconut"); setWeightEdited(false); setRateEdited(false); setForm((current) => ({ ...current, unit: "kg", buyer_id: "" })); }} type="button"><strong>Coconut load</strong><span>Sell coconut from purchases in stock</span></button><button className={kind === "husk" ? "active" : ""} onClick={() => { setKind("husk"); setWeightEdited(true); setRateEdited(true); setForm((current) => ({ ...current, unit: "load", buyer_id: "", quantity: "", rate: "" })); setSelection(new Map()); }} type="button"><strong>Husk sale</strong><span>Sell husk kept from your purchases</span></button></div> : null}
 
       {kind === "coconut" ? <section className="ledger-panel select-table">
         <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{allocatedPieces > 0 ? <span className="chip">{loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)}` : loadMix.condition === "kudume" ? "Kudume" : "Mottai"}</span> : null}{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
@@ -278,12 +290,12 @@ export default function NewSalePage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveSale}>
-          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { setForm(blankForm()); setSelection(new Map()); setLoadedEdit(null); setWeightEdited(false); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { setForm(blankForm()); setSelection(new Map()); setLoadedEdit(null); setWeightEdited(false); setRateEdited(false); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}</div>
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>
             <label>Sold by<select value={form.unit} onChange={(event) => setField("unit", event.target.value as SaleUnit)}>{kind === "coconut" ? <><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></> : <><option value="load">Load</option><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></>}</select></label>
-            <label>Rate (INR per {form.unit === "kg" ? "kg" : form.unit === "piece" ? "nut" : "load"})<input type="number" min="0" step="0.01" value={form.rate} onChange={(event) => setField("rate", event.target.value)} required /></label>
+            <label>Rate (INR per {form.unit === "kg" ? "kg" : form.unit === "piece" ? "nut" : "load"})<input type="number" min="0" step="0.01" value={form.rate} onChange={(event) => { setRateEdited(true); setField("rate", event.target.value); }} required />{kind === "coconut" && form.unit === "kg" && estimatedRate > 0 ? (!rateEdited ? <span className="field-hint">Pre-filled from the stock entry price ({formatCurrency(estimatedRate)} / kg). Change it to the rate agreed with the buyer.</span> : toNumber(form.rate) !== estimatedRate ? <button className="link-button" onClick={() => { setRateEdited(false); setField("rate", String(estimatedRate)); }} type="button">Use stock entry price ({formatCurrency(estimatedRate)} / kg)</button> : null) : null}</label>
           </div>
           {form.unit === "kg" ? <fieldset className="deduction-options"><legend>Weighbridge weight</legend>
             <div className="form-grid">
@@ -316,8 +328,8 @@ export default function NewSalePage() {
             <div className="calculation-total"><dt>Buyer pays</dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
-            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div>{stockDehusking > 0 ? <div className="calculation-deduction"><dt>Dehusking booked at stock</dt><dd>{formatCurrency(stockDehusking)}</dd></div> : null}<div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div><div className={calculation.margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin before expenses</dt><dd>{formatCurrency(calculation.margin)}</dd></div></> : null}
-          </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Paid to farmers is the farmer payable for the selected pieces, including any husk credit. Margin compares the sale with the coconut cost alone, because husk is sold separately. Loading, transport and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
+            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div><div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div>{stockDehusking > 0 ? <div className="calculation-deduction"><dt>Dehusking booked at stock</dt><dd>{formatCurrency(stockDehusking)}</dd></div> : null}<div className={calculation.margin - stockDehusking >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{stockDehusking > 0 ? "Margin after coconut cost and dehusking" : "Margin after coconut cost"}</dt><dd>{formatCurrency(calculation.margin - stockDehusking)}</dd></div></> : null}
+          </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Paid to farmers is the farmer payable for the selected pieces, including any husk credit. Margin takes off the coconut cost and any dehusking booked at stock; husk is sold separately. Transport, loading and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">{kind === "coconut" ? "Tick the purchases in this lorry, enter the buyer, net weight and rate, then save. Each purchase keeps its own record and remaining stock." : "Choose the husk buyer, enter how much was sold and the rate, and record the loading wages under Expenses."}</p></section>
         </aside>
       </section>

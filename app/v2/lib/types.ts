@@ -183,6 +183,7 @@ export type StockEntry = {
   coconut_quantity: number;
   dehusking_rate_per_1000: number;
   dehusking_cost: number;
+  sale_rate_per_kg: number;
   notes: string | null;
   wastage_weight_kg: number;
   payable_weight_kg: number;
