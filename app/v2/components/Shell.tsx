@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, HardHat, LayoutDashboard, LogOut, Receipt, ShoppingCart, Sprout, Store, Truck, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, HardHat, LayoutDashboard, LogOut, Receipt, ShoppingCart, Sprout, Store, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; description: string };
@@ -15,6 +15,7 @@ export const navItems: NavItem[] = [
   { href: "/v2/farmers", label: "Farmers", short: "Farmers", icon: UsersRound, description: "Farmer contacts and their farming locations." },
   { href: "/v2/buyers", label: "Buyers", short: "Buyers", icon: Store, description: "Coconut and husk buyers you sell to." },
   { href: "/v2/expenses", label: "Expenses", short: "Spend", icon: Receipt, description: "Labor, transport, diesel, food and other costs." },
+  { href: "/v2/transactions", label: "Transactions", short: "Money", icon: ArrowLeftRight, description: "Every rupee in and out, day by day, across purchases, sales, expenses and the cash book." },
   { href: "/v2/cash", label: "Cash book", short: "Cash", icon: Wallet, description: "Capital, payments to farmers and receipts from buyers." },
   { href: "/v2/team", label: "Team & vehicles", short: "Team", icon: HardHat, description: "Workers you pay and vehicles you run." }
 ];

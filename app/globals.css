@@ -1799,3 +1799,90 @@ td > .muted-text {
   color: #8f2721;
   text-decoration: underline;
 }
+
+.flow-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.flow-chart-bars {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 6px;
+  height: 170px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.flow-slot {
+  display: grid;
+  flex: 1 0 30px;
+  gap: 6px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  justify-items: center;
+}
+
+.flow-pair {
+  align-items: end;
+  display: flex;
+  gap: 3px;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+
+.flow-bar {
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: height 220ms ease;
+  width: min(14px, 45%);
+}
+
+.flow-bar.in {
+  background: var(--green);
+}
+
+.flow-bar.out {
+  background: var(--danger);
+}
+
+.flow-slot small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.flow-legend {
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 14px;
+}
+
+.flow-legend i {
+  border-radius: 2px;
+  display: inline-block;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+  width: 10px;
+}
+
+.flow-legend i.in {
+  background: var(--green);
+}
+
+.flow-legend i.out {
+  background: var(--danger);
+}
+
+tr.day-row td {
+  background: var(--surface-muted);
+  color: #34483f;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding-bottom: 8px;
+  padding-top: 8px;
+}
