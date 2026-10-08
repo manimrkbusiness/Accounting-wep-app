@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { CirclePlus } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { receivedFromBuyer, saleOutstanding, saleStatusWithout, statusForBalance } from "../lib/calc";
+import { allocationCost, receivedFromBuyer, saleOutstanding, saleStatusWithout, statusForBalance } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
 import { cashMethods, type CashEntry, type CashMethod, type Sale } from "../lib/types";
 import { downloadSalePdf } from "../lib/pdf";
@@ -101,7 +101,7 @@ export default function SalesPage() {
         <label>Buyer<select value={buyerFilter} onChange={(event) => setBuyerFilter(event.target.value)}><option value="">All buyers</option>{ws.buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label>
         <label>Payment<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">All</option><option value="due">Balance due</option><option value="paid">Fully received</option></select></label>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Sale</th><th>Date</th><th>Buyer</th><th>Details</th><th>Quantity</th><th>Rate</th><th>Total</th><th>Received / due</th><th>From purchases</th><th>Actions</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Sale</th><th>Date</th><th>Buyer</th><th>Details</th><th>Quantity</th><th>Rate</th><th>Total</th><th>Farmer side</th><th>Received / due</th><th>From purchases</th><th>Actions</th></tr></thead><tbody>
         {rows.map((sale) => {
           const buyer = ws.buyerById.get(sale.buyer_id);
           const items = itemsBySale.get(sale.id) ?? [];
@@ -110,6 +110,8 @@ export default function SalesPage() {
           const due = saleOutstanding(sale, ws.cashEntries);
           const status = statusForBalance(due, received > 0);
           const unit = sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "pieces" : "loads";
+          const farmerCost = items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0);
+          const margin = Number(sale.sale_amount) - allocationCost(items, ws.stock);
           return <tr key={sale.id}>
             <td><strong>{formatSaleId(sale.id)}</strong><span className="muted-text">{sale.sale_kind === "husk" ? "Husk" : "Coconut load"}{sale.vehicle_number ? ` · ${sale.vehicle_number}` : ""}</span></td>
             <td>{formatDate(sale.sale_date)}</td>
@@ -118,6 +120,7 @@ export default function SalesPage() {
             <td>{formatNumber(Number(sale.quantity))} {unit}{sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0 ? <span className="muted-text">Gross {formatNumber(Number(sale.gross_weight_kg))} kg</span> : null}</td>
             <td>{formatCurrency(Number(sale.rate))} / {sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "nut" : "load"}</td>
             <td className="amount-cell">{formatCurrency(Number(sale.total_amount))}{Number(sale.transport_charge) > 0 ? <span className="muted-text">incl. transport {formatCurrency(Number(sale.transport_charge))}</span> : null}{Number(sale.deduction_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(sale.deduction_amount))}</span> : null}</td>
+            <td>{sale.sale_kind === "coconut" && items.length ? <div className="cell-stack"><span className="muted-text">Paid to farmers</span><span className="balance-cell">{formatCurrency(farmerCost)}</span><span className="muted-text">Margin</span><span className={margin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(margin)}</span></div> : <span className="muted-text">-</span>}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoReceipt(sale, entry)} type="button">Undo</button></span>)}</div> : null}</td>
             <td>{items.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div> : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">

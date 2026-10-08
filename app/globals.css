@@ -1886,3 +1886,8 @@ tr.day-row td {
   padding-bottom: 8px;
   padding-top: 8px;
 }
+
+.cell-stack {
+  display: grid;
+  gap: 3px;
+}
