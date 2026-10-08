@@ -6,14 +6,14 @@ import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
 import { allocationCost, calculateSale } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
-import { saleProcessingTypes, type PaymentStatus, type Sale, type SaleColor, type SaleKind, type SaleProcessing, type SaleUnit } from "../../lib/types";
+import { processingTypes, type PaymentStatus, type ProcessingType, type Purchase, type Sale, type SaleColor, type SaleKind, type SaleUnit } from "../../lib/types";
 
 type SaleForm = {
   id?: number;
   buyer_id: string;
   sale_date: string;
   coconut_color: SaleColor;
-  processing_type: SaleProcessing;
+  processing_type: ProcessingType;
   unit: SaleUnit;
   quantity: string;
   rate: string;
@@ -53,7 +53,7 @@ function formFromSale(sale: Sale): SaleForm {
     buyer_id: String(sale.buyer_id),
     sale_date: sale.sale_date,
     coconut_color: sale.coconut_color,
-    processing_type: sale.processing_type,
+    processing_type: sale.processing_type === "mixed" ? "mottai" : sale.processing_type,
     unit: sale.unit,
     quantity: String(sale.quantity),
     rate: String(sale.rate),
@@ -133,11 +133,14 @@ export default function NewSalePage() {
 
   useEffect(() => {
     if (kind !== "coconut" || !autoType) return;
-    const purchases = allocations.map((item) => ws.purchaseById.get(item.purchase_id)).filter((purchase): purchase is NonNullable<typeof purchase> => Boolean(purchase));
-    if (!purchases.length) return;
-    const colors = new Set(purchases.map((purchase) => purchase.coconut_color));
-    const types = new Set(purchases.map((purchase) => purchase.processing_type));
-    setForm((current) => ({ ...current, coconut_color: colors.size === 1 ? purchases[0].coconut_color : "mixed", processing_type: types.size === 1 ? purchases[0].processing_type : "mixed" }));
+    const included = allocations
+      .map((item) => ({ purchase: ws.purchaseById.get(item.purchase_id), pieces: item.quantity_pieces }))
+      .filter((entry): entry is { purchase: Purchase; pieces: number } => Boolean(entry.purchase));
+    if (!included.length) return;
+    const colors = new Set(included.map((entry) => entry.purchase.coconut_color));
+    const piecesOf = (type: ProcessingType) => included.filter((entry) => entry.purchase.purchase_mode === "weight" && entry.purchase.processing_type === type).reduce((sum, entry) => sum + entry.pieces, 0);
+    const condition: ProcessingType = piecesOf("kudume") > piecesOf("mottai") ? "kudume" : "mottai";
+    setForm((current) => ({ ...current, coconut_color: colors.size === 1 ? included[0].purchase.coconut_color : "mixed", processing_type: condition }));
   }, [allocations, autoType, kind, ws.purchaseById]);
 
   useEffect(() => {
@@ -254,7 +257,7 @@ export default function NewSalePage() {
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>
-            {kind === "coconut" ? <label>Coconut condition<select value={form.processing_type} onChange={(event) => { setAutoType(false); setField("processing_type", event.target.value as SaleProcessing); }}>{saleProcessingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label> : null}
+            {kind === "coconut" ? <label>Coconut condition<select value={form.processing_type} onChange={(event) => { setAutoType(false); setField("processing_type", event.target.value as ProcessingType); }}>{processingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><span className="field-hint">Filled from the purchases in this load. Change it only if the load differs.</span></label> : null}
             <label>Sold by<select value={form.unit} onChange={(event) => setField("unit", event.target.value as SaleUnit)}>{kind === "coconut" ? <><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></> : <><option value="load">Load</option><option value="kg">Weight (kg)</option><option value="piece">Pieces</option></>}</select></label>
             <label>Rate (INR per {form.unit === "kg" ? "kg" : form.unit === "piece" ? "nut" : "load"})<input type="number" min="0" step="0.01" value={form.rate} onChange={(event) => setField("rate", event.target.value)} required /></label>
           </div>
