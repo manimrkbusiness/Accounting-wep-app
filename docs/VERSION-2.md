@@ -10,7 +10,11 @@ data migration because nothing in Version 1 was changed or duplicated.
 
 1. **Buy** from farmers (`/v2/purchases/new`). Weight-based or per-nut, same as
    Version 1. Every purchase goes into **stock** in pieces.
-2. **Build a load** (`/v2/sales/new`). Pick the purchase date range and farmer,
+2. **Weigh per-nut purchases into stock** (`/v2/stock`). Purchases bought per nut
+   have no weight, so they are dehusked and weighed first: tick the purchases,
+   enter the net weight and Mottai or Kudume, and save the stock entry. Only
+   then do they appear in a sale. Weight-based purchases skip this step.
+3. **Build a load** (`/v2/sales/new`). Pick the purchase date range and farmer,
    tick the purchases going in the lorry, adjust pieces if only part of a
    purchase is loaded, then enter the buyer, net weight (or gross and tare),
    rate per kg, transport charged, advance received and lorry number. The margin

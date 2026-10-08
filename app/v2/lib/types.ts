@@ -173,6 +173,28 @@ export type SaleItem = {
   quantity_pieces: number;
 };
 
+export type StockEntry = {
+  id: number;
+  trader_id: string;
+  entry_date: string;
+  processing_type: ProcessingType;
+  net_weight_kg: number;
+  wastage_percent: number;
+  coconut_quantity: number;
+  notes: string | null;
+  wastage_weight_kg: number;
+  payable_weight_kg: number;
+  created_at: string;
+};
+
+export type StockEntryItem = {
+  id: number;
+  trader_id: string;
+  stock_entry_id: number;
+  purchase_id: number;
+  quantity_pieces: number;
+};
+
 export type Expense = {
   id: number;
   trader_id: string;

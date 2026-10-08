@@ -1,4 +1,4 @@
-import type { CashEntry, Expense, ExpenseCategory, Purchase, PurchaseMode, Sale, SaleItem } from "./types";
+import type { CashEntry, Expense, ExpenseCategory, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem } from "./types";
 import { cashKinds, expenseCategories } from "./types";
 import { toNumber } from "./format";
 
@@ -52,8 +52,19 @@ export function calculatePurchase(form: PurchaseCalcInput) {
 export type StockInfo = {
   purchase: Purchase;
   soldPieces: number;
+  /** Pieces bought but not yet sold, whether or not they have been weighed into stock. */
   remainingPieces: number;
   remainingKg: number;
+  /** Per-nut purchases: pieces weighed into stock entries. Weight purchases: all pieces. */
+  stockedPieces: number;
+  /** Per-nut purchases: pieces bought but not yet weighed into stock. */
+  awaitingStockPieces: number;
+  /** Pieces that can go into a sale right now. */
+  sellablePieces: number;
+  /** Payable kilograms per piece, from the weighbridge (purchase or stock entry). */
+  kgPerPiece: number;
+  /** Condition from the purchase, or from the stock entries for per-nut purchases. */
+  stockCondition: ProcessingType;
   /** Cost of the coconut only (farmer payable minus the husk credit). */
   coconutCostPerPiece: number;
   /** Full farmer payable per piece, including husk credit. */
@@ -61,20 +72,39 @@ export type StockInfo = {
   remainingValue: number;
 };
 
-export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[]) {
+export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stockEntries: StockEntry[] = [], stockEntryItems: StockEntryItem[] = []) {
   const soldByPurchase = new Map<number, number>();
   saleItems.forEach((item) => soldByPurchase.set(item.purchase_id, (soldByPurchase.get(item.purchase_id) ?? 0) + Number(item.quantity_pieces)));
+  const entryById = new Map(stockEntries.map((entry) => [entry.id, entry]));
+  const stockedByPurchase = new Map<number, { pieces: number; kg: number; kudumePieces: number }>();
+  stockEntryItems.forEach((item) => {
+    const entry = entryById.get(item.stock_entry_id);
+    if (!entry) return;
+    const entryPieces = Number(entry.coconut_quantity) || 0;
+    const pieces = Number(item.quantity_pieces);
+    const kg = entryPieces > 0 ? Number(entry.payable_weight_kg) * pieces / entryPieces : 0;
+    const current = stockedByPurchase.get(item.purchase_id) ?? { pieces: 0, kg: 0, kudumePieces: 0 };
+    stockedByPurchase.set(item.purchase_id, { pieces: current.pieces + pieces, kg: current.kg + kg, kudumePieces: current.kudumePieces + (entry.processing_type === "kudume" ? pieces : 0) });
+  });
   const stock = new Map<number, StockInfo>();
   purchases.forEach((purchase) => {
     const pieces = Number(purchase.coconut_quantity) || 0;
     const soldPieces = soldByPurchase.get(purchase.id) ?? 0;
     const remainingPieces = Math.max(pieces - soldPieces, 0);
-    const fraction = pieces > 0 ? remainingPieces / pieces : 0;
-    const remainingKg = purchase.purchase_mode === "weight" ? Number(purchase.payable_weight_kg) * fraction : 0;
+    const perNut = purchase.purchase_mode === "quantity";
+    const stocked = stockedByPurchase.get(purchase.id) ?? { pieces: 0, kg: 0, kudumePieces: 0 };
+    const stockedPieces = perNut ? Math.min(stocked.pieces, pieces) : pieces;
+    const awaitingStockPieces = perNut ? Math.max(pieces - stocked.pieces, 0) : 0;
+    const sellablePieces = Math.max(stockedPieces - soldPieces, 0);
+    const kgPerPiece = perNut
+      ? (stocked.pieces > 0 ? stocked.kg / stocked.pieces : 0)
+      : (pieces > 0 ? Number(purchase.payable_weight_kg) / pieces : 0);
+    const remainingKg = perNut ? sellablePieces * kgPerPiece : remainingPieces * kgPerPiece;
+    const stockCondition: ProcessingType = perNut ? (stocked.kudumePieces > stocked.pieces / 2 ? "kudume" : "mottai") : purchase.processing_type;
     const coconutCost = Number(purchase.total_amount) - Number(purchase.husk_price_total);
     const coconutCostPerPiece = pieces > 0 ? coconutCost / pieces : 0;
     const costPerPiece = pieces > 0 ? Number(purchase.total_amount) / pieces : 0;
-    stock.set(purchase.id, { purchase, soldPieces, remainingPieces, remainingKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
+    stock.set(purchase.id, { purchase, soldPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
   });
   return stock;
 }

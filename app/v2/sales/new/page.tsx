@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
@@ -109,10 +110,11 @@ export default function NewSalePage() {
     return map;
   }, [ws.saleItems, form.id]);
 
-  const availableFor = (purchaseId: number) => (ws.stock.get(purchaseId)?.remainingPieces ?? 0) + (ownAllocation.get(purchaseId) ?? 0);
+  const availableFor = (purchaseId: number) => (ws.stock.get(purchaseId)?.sellablePieces ?? 0) + (ownAllocation.get(purchaseId) ?? 0);
 
   const candidates = useMemo(() => ws.purchases.filter((purchase) => {
     if (selection.has(purchase.id)) return true;
+    if (purchase.purchase_mode === "quantity" && (ws.stock.get(purchase.id)?.stockedPieces ?? 0) <= 0.5) return false;
     if (filters.farmer && String(purchase.farmer_id) !== filters.farmer) return false;
     if (filters.from && purchase.trade_date < filters.from) return false;
     if (filters.to && purchase.trade_date > filters.to) return false;
@@ -122,12 +124,7 @@ export default function NewSalePage() {
 
   const allocations = useMemo(() => Array.from(selection.entries()).map(([purchase_id, pieces]) => ({ purchase_id, quantity_pieces: toNumber(pieces) })).filter((item) => item.quantity_pieces > 0), [selection]);
   const allocatedPieces = allocations.reduce((sum, item) => sum + item.quantity_pieces, 0);
-  const allocatedKg = allocations.reduce((sum, item) => {
-    const info = ws.stock.get(item.purchase_id);
-    if (!info || info.purchase.purchase_mode !== "weight") return sum;
-    const pieces = Number(info.purchase.coconut_quantity) || 0;
-    return sum + (pieces > 0 ? Number(info.purchase.payable_weight_kg) * item.quantity_pieces / pieces : 0);
-  }, 0);
+  const allocatedKg = allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.kgPerPiece ?? 0), 0);
   const costBasis = kind === "coconut" ? allocationCost(allocations, ws.stock) : 0;
   const calculation = useMemo(() => calculateSale(form, allocatedPieces, costBasis), [form, allocatedPieces, costBasis]);
 
@@ -138,10 +135,10 @@ export default function NewSalePage() {
       .filter((entry): entry is { purchase: Purchase; pieces: number } => Boolean(entry.purchase));
     if (!included.length) return;
     const colors = new Set(included.map((entry) => entry.purchase.coconut_color));
-    const piecesOf = (type: ProcessingType) => included.filter((entry) => entry.purchase.purchase_mode === "weight" && entry.purchase.processing_type === type).reduce((sum, entry) => sum + entry.pieces, 0);
+    const piecesOf = (type: ProcessingType) => included.filter((entry) => (ws.stock.get(entry.purchase.id)?.stockCondition ?? entry.purchase.processing_type) === type).reduce((sum, entry) => sum + entry.pieces, 0);
     const condition: ProcessingType = piecesOf("kudume") > piecesOf("mottai") ? "kudume" : "mottai";
     setForm((current) => ({ ...current, coconut_color: colors.size === 1 ? included[0].purchase.coconut_color : "mixed", processing_type: condition }));
-  }, [allocations, autoType, kind, ws.purchaseById]);
+  }, [allocations, autoType, kind, ws.purchaseById, ws.stock]);
 
   useEffect(() => {
     if (!useGrossTare) return;
@@ -225,7 +222,7 @@ export default function NewSalePage() {
 
       {kind === "coconut" ? <section className="ledger-panel select-table">
         <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
-        <p className="muted-text">Tick each purchase that is being loaded. Reduce the pieces if only part of a purchase goes in this load; the rest stays in stock.</p>
+        <p className="muted-text">Tick each purchase that is being loaded. Reduce the pieces if only part of a purchase goes in this load; the rest stays in stock. Per-nut purchases appear here only after they are weighed on the <Link href="/v2/stock">Stock</Link> page.</p>
         <div className="filter-bar">
           <label>Purchased from<input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></label>
           <label>To<input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></label>
@@ -242,8 +239,8 @@ export default function NewSalePage() {
               <td><strong>{formatPurchaseId(purchase.id)}</strong></td>
               <td>{formatDate(purchase.trade_date)}</td>
               <td>{ws.farmerById.get(purchase.farmer_id)?.name ?? "Farmer"}</td>
-              <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">{purchase.purchase_mode === "quantity" ? "Per nut" : purchase.processing_type}</span></td>
-              <td>{formatNumber(available, 0)} of {formatNumber(Number(purchase.coconut_quantity), 0)}</td>
+              <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">{purchase.purchase_mode === "quantity" ? `${info?.stockCondition ?? "mottai"} · weighed into stock` : purchase.processing_type}</span></td>
+              <td>{formatNumber(available, 0)} of {formatNumber(purchase.purchase_mode === "quantity" ? info?.stockedPieces ?? 0 : Number(purchase.coconut_quantity), 0)}{purchase.purchase_mode === "quantity" ? <span className="muted-text">in stock</span> : null}</td>
               <td>{selected ? <input type="number" min="1" max={Math.floor(available)} step="1" value={selection.get(purchase.id) ?? ""} onChange={(event) => setPieces(purchase.id, event.target.value)} /> : <span className="muted-text">-</span>}</td>
               <td>{formatCurrency(info?.coconutCostPerPiece ?? 0)}</td>
             </tr>;
