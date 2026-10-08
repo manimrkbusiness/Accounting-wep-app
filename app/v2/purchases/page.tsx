@@ -115,7 +115,7 @@ export default function PurchasesPage() {
             <td>{formatNumber(Number(purchase.coconut_quantity), 0)}<span className="muted-text">{formatCurrency(Number(purchase.average_price_per_piece))} / nut</span></td>
             <td>{info && info.remainingPieces > 0.5 ? <span className="chip good">{formatNumber(info.remainingPieces, 0)} left</span> : <span className="chip">Sold out</span>}{info && info.soldPieces > 0 ? <span className="muted-text">{formatNumber(info.soldPieces, 0)} sold</span> : null}</td>
             <td>{purchase.purchase_mode === "quantity" ? "Per nut" : `${formatNumber(Number(purchase.payable_weight_kg))} kg`}{purchase.purchase_mode === "weight" ? <span className="muted-text">Net {formatNumber(Number(purchase.net_weight_kg))} kg</span> : null}</td>
-            <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}{purchase.purchase_mode === "weight" || Number(purchase.husk_price_total) > 0 ? <span className="positive">Husk {formatCurrency(Number(purchase.husk_price_total))}</span> : null}</td>
+            <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName)} type="button">PDF</button>
