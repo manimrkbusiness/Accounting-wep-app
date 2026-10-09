@@ -59,7 +59,9 @@ Database rules:
 
 ## Formulas
 
-- **Stock remaining** = purchase pieces − pieces allocated to sales.
+- **Stock remaining** = purchase pieces − pieces allocated to sales − pieces marked wasted.
+  Wasted pieces are entered while building a load and are never sold; their coconut
+  cost is shown as a wastage loss in the sale summary and the profit and loss.
   Remaining kg (weight purchases) = payable kg × remaining ÷ pieces.
 - **Husk credit on a purchase** = pieces × husk price per nut (weight-based purchases only).
 - **Coconut cost per piece** = (farmer net payable − husk credit) ÷ pieces.

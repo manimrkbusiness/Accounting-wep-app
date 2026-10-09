@@ -112,7 +112,9 @@ export default function SalesPage() {
           const unit = sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "pieces" : "loads";
           const farmerCost = items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0);
           const stockDehusking = items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.stock.get(item.purchase_id)?.dehuskingCostPerPiece ?? 0), 0);
-          const margin = Number(sale.sale_amount) - allocationCost(items, ws.stock) - stockDehusking;
+          const wasted = ws.stockWastage.filter((row) => row.sale_id === sale.id);
+          const wastageLoss = wasted.reduce((sum, row) => sum + Number(row.quantity_pieces) * (ws.stock.get(row.purchase_id)?.coconutCostPerPiece ?? 0), 0);
+          const margin = Number(sale.sale_amount) - allocationCost(items, ws.stock) - stockDehusking - wastageLoss;
           return <tr key={sale.id}>
             <td><strong>{formatSaleId(sale.id)}</strong><span className="muted-text">{sale.sale_kind === "husk" ? "Husk" : "Coconut load"}{sale.vehicle_number ? ` · ${sale.vehicle_number}` : ""}</span></td>
             <td>{formatDate(sale.sale_date)}</td>
@@ -123,7 +125,7 @@ export default function SalesPage() {
             <td className="amount-cell">{formatCurrency(Number(sale.total_amount))}{Number(sale.transport_charge) > 0 ? <span className="muted-text">incl. transport {formatCurrency(Number(sale.transport_charge))}</span> : null}{Number(sale.deduction_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(sale.deduction_amount))}</span> : null}</td>
             <td>{sale.sale_kind === "coconut" && items.length ? <div className="cell-stack"><span className="muted-text">Paid to farmers</span><span className="balance-cell">{formatCurrency(farmerCost)}</span><span className="muted-text">Margin</span><span className={margin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(margin)}</span></div> : <span className="muted-text">-</span>}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoReceipt(sale, entry)} type="button">Undo</button></span>)}</div> : null}</td>
-            <td>{items.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div> : <span className="muted-text">-</span>}</td>
+            <td>{items.length || wasted.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}{wasted.map((row) => <span className="chip warn" key={`wasted-${row.id}`}>{formatPurchaseId(row.purchase_id)} · {formatNumber(Number(row.quantity_pieces), 0)} wasted</span>)}</div> : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName)} type="button">PDF</button>
               <button className="secondary-button" onClick={() => router.push(`/v2/sales/new?edit=${sale.id}`)} type="button">Edit</button>

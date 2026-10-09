@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../../supabaseClient";
-import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, TraderSettings, Vehicle } from "./types";
+import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle } from "./types";
 import { buildStockMap, type StockInfo } from "./calc";
 
 export type WorkspaceStatus = "loading" | "signed-out" | "no-profile" | "not-trader" | "ready";
@@ -20,6 +20,7 @@ type WorkspaceData = {
   saleItems: SaleItem[];
   stockEntries: StockEntry[];
   stockEntryItems: StockEntryItem[];
+  stockWastage: StockWastage[];
   expenses: Expense[];
   cashEntries: CashEntry[];
 };
@@ -36,6 +37,7 @@ const emptyData: WorkspaceData = {
   saleItems: [],
   stockEntries: [],
   stockEntryItems: [],
+  stockWastage: [],
   expenses: [],
   cashEntries: []
 };
@@ -98,7 +100,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setStatus("not-trader");
       return;
     }
-    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, expenses, cashEntries] = await Promise.all([
+    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, stockWastage, expenses, cashEntries] = await Promise.all([
       supabase.from("trader_farmers").select("*").order("name"),
       supabase.from("farmer_locations").select("*").order("location_name"),
       supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false }),
@@ -110,10 +112,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       supabase.from("sale_items").select("*"),
       supabase.from("stock_entries").select("*").order("entry_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("stock_entry_items").select("*"),
+      supabase.from("stock_wastage").select("*").order("wastage_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("cash_entries").select("*").order("entry_date", { ascending: false }).order("id", { ascending: false })
     ]);
-    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, expenses, cashEntries].find((result) => result.error);
+    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, stockWastage, expenses, cashEntries].find((result) => result.error);
     if (failed?.error) {
       setError(failed.error.message);
     } else {
@@ -129,6 +132,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         saleItems: (saleItems.data ?? []) as SaleItem[],
         stockEntries: (stockEntries.data ?? []) as StockEntry[],
         stockEntryItems: (stockEntryItems.data ?? []) as StockEntryItem[],
+        stockWastage: (stockWastage.data ?? []) as StockWastage[],
         expenses: (expenses.data ?? []) as Expense[],
         cashEntries: (cashEntries.data ?? []) as CashEntry[]
       });
@@ -201,7 +205,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       saleById,
       employeeById,
       vehicleById,
-      stock: buildStockMap(data.purchases, data.saleItems, data.stockEntries, data.stockEntryItems),
+      stock: buildStockMap(data.purchases, data.saleItems, data.stockEntries, data.stockEntryItems, data.stockWastage),
       traderName: profile?.business_name || profile?.full_name || "Trader"
     };
   }, [data, session, profile, status, message, error, saving, refresh, signOut]);

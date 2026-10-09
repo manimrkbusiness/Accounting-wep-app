@@ -198,6 +198,16 @@ export type StockEntryItem = {
   quantity_pieces: number;
 };
 
+export type StockWastage = {
+  id: number;
+  trader_id: string;
+  purchase_id: number;
+  sale_id: number | null;
+  wastage_date: string;
+  quantity_pieces: number;
+  reason: string | null;
+};
+
 export type Expense = {
   id: number;
   trader_id: string;

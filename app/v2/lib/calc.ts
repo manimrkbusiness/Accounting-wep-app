@@ -1,4 +1,4 @@
-import type { CashEntry, Expense, ExpenseCategory, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem } from "./types";
+import type { CashEntry, Expense, ExpenseCategory, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage } from "./types";
 import { cashKinds, expenseCategories } from "./types";
 import { toNumber } from "./format";
 
@@ -52,6 +52,8 @@ export function calculatePurchase(form: PurchaseCalcInput) {
 export type StockInfo = {
   purchase: Purchase;
   soldPieces: number;
+  /** Pieces marked wasted (rotten or damaged); removed from stock, never sold. */
+  wastedPieces: number;
   /** Pieces bought but not yet sold, whether or not they have been weighed into stock. */
   remainingPieces: number;
   remainingKg: number;
@@ -76,9 +78,11 @@ export type StockInfo = {
   remainingValue: number;
 };
 
-export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stockEntries: StockEntry[] = [], stockEntryItems: StockEntryItem[] = []) {
+export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stockEntries: StockEntry[] = [], stockEntryItems: StockEntryItem[] = [], stockWastage: StockWastage[] = []) {
   const soldByPurchase = new Map<number, number>();
   saleItems.forEach((item) => soldByPurchase.set(item.purchase_id, (soldByPurchase.get(item.purchase_id) ?? 0) + Number(item.quantity_pieces)));
+  const wastedByPurchase = new Map<number, number>();
+  stockWastage.forEach((row) => wastedByPurchase.set(row.purchase_id, (wastedByPurchase.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces)));
   const entryById = new Map(stockEntries.map((entry) => [entry.id, entry]));
   const stockedByPurchase = new Map<number, { pieces: number; kg: number; kudumePieces: number; dehusking: number; ratedKg: number; rateKg: number }>();
   stockEntryItems.forEach((item) => {
@@ -104,14 +108,15 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
   purchases.forEach((purchase) => {
     const pieces = Number(purchase.coconut_quantity) || 0;
     const soldPieces = soldByPurchase.get(purchase.id) ?? 0;
-    const remainingPieces = Math.max(pieces - soldPieces, 0);
+    const wastedPieces = wastedByPurchase.get(purchase.id) ?? 0;
+    const remainingPieces = Math.max(pieces - soldPieces - wastedPieces, 0);
     const perNut = purchase.purchase_mode === "quantity";
     const stocked = stockedByPurchase.get(purchase.id) ?? { pieces: 0, kg: 0, kudumePieces: 0, dehusking: 0, ratedKg: 0, rateKg: 0 };
     const dehuskingCostPerPiece = perNut && stocked.pieces > 0 ? stocked.dehusking / stocked.pieces : 0;
     const stockSaleRatePerKg = perNut && stocked.ratedKg > 0 ? stocked.rateKg / stocked.ratedKg : 0;
     const stockedPieces = perNut ? Math.min(stocked.pieces, pieces) : pieces;
     const awaitingStockPieces = perNut ? Math.max(pieces - stocked.pieces, 0) : 0;
-    const sellablePieces = Math.max(stockedPieces - soldPieces, 0);
+    const sellablePieces = Math.max(stockedPieces - soldPieces - wastedPieces, 0);
     const kgPerPiece = perNut
       ? (stocked.pieces > 0 ? stocked.kg / stocked.pieces : 0)
       : (pieces > 0 ? Number(purchase.payable_weight_kg) / pieces : 0);
@@ -120,7 +125,7 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     const coconutCost = Number(purchase.total_amount) - Number(purchase.husk_price_total);
     const coconutCostPerPiece = pieces > 0 ? coconutCost / pieces : 0;
     const costPerPiece = pieces > 0 ? Number(purchase.total_amount) / pieces : 0;
-    stock.set(purchase.id, { purchase, soldPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, stockSaleRatePerKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
+    stock.set(purchase.id, { purchase, soldPieces, wastedPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, stockSaleRatePerKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
   });
   return stock;
 }
@@ -231,6 +236,8 @@ export type FinancialSummary = {
   purchasesKg: number;
   soldPieces: number;
   soldKg: number;
+  wastedPieces: number;
+  wastageLoss: number;
   laborDeductedFromFarmers: number;
   expensesTotal: number;
   expensesByCategory: Array<{ category: ExpenseCategory; label: string; amount: number }>;
@@ -250,9 +257,15 @@ export function summarizeFinancials(args: {
   expenses: Expense[];
   cashEntries: CashEntry[];
   range: DateRange;
+  stockEntries?: StockEntry[];
+  stockEntryItems?: StockEntryItem[];
+  stockWastage?: StockWastage[];
 }): FinancialSummary {
-  const { purchases, sales, saleItems, expenses, cashEntries, range } = args;
-  const stock = buildStockMap(purchases, saleItems);
+  const { purchases, sales, saleItems, expenses, cashEntries, range, stockEntries = [], stockEntryItems = [], stockWastage = [] } = args;
+  const stock = buildStockMap(purchases, saleItems, stockEntries, stockEntryItems, stockWastage);
+  const periodWastage = stockWastage.filter((row) => inRange(row.wastage_date, range));
+  const wastedPieces = sumBy(periodWastage, (row) => row.quantity_pieces);
+  const wastageLoss = periodWastage.reduce((sum, row) => sum + Number(row.quantity_pieces) * (stock.get(row.purchase_id)?.coconutCostPerPiece ?? 0), 0);
   const periodPurchases = purchases.filter((purchase) => inRange(purchase.trade_date, range));
   const periodSales = sales.filter((sale) => inRange(sale.sale_date, range));
   const periodSaleIds = new Set(periodSales.map((sale) => sale.id));
@@ -288,11 +301,13 @@ export function summarizeFinancials(args: {
     purchasesKg: sumBy(periodPurchases, (purchase) => purchase.payable_weight_kg),
     soldPieces,
     soldKg,
+    wastedPieces,
+    wastageLoss,
     laborDeductedFromFarmers: sumBy(periodPurchases, (purchase) => purchase.labor_cost_total),
     expensesTotal: operatingExpenses + huskExpenses,
     expensesByCategory,
     operatingExpenses,
-    netProfit: coconutRevenue - coconutCostOfSold + huskRevenue - huskCreditPaid - huskExpenses - operatingExpenses,
+    netProfit: coconutRevenue - coconutCostOfSold - wastageLoss + huskRevenue - huskCreditPaid - huskExpenses - operatingExpenses,
     stockPieces: sumBy(stockValues, (info) => info.remainingPieces),
     stockValue: sumBy(stockValues, (info) => info.remainingValue),
     stockKg: sumBy(stockValues, (info) => info.remainingKg),

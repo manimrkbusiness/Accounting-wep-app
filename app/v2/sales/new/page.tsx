@@ -75,7 +75,7 @@ export default function NewSalePage() {
   const router = useRouter();
   const [kind, setKind] = useState<SaleKind>("coconut");
   const [form, setForm] = useState<SaleForm>(blankForm);
-  const [selection, setSelection] = useState<Map<number, string>>(new Map());
+  const [selection, setSelection] = useState<Map<number, { pieces: string; wasted: string }>>(new Map());
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
   const [useGrossTare, setUseGrossTare] = useState(false);
   const [weightEdited, setWeightEdited] = useState(false);
@@ -94,7 +94,9 @@ export default function NewSalePage() {
         setWeightEdited(true);
         setRateEdited(true);
         const items = ws.saleItems.filter((item) => item.sale_id === editId);
-        setSelection(new Map(items.map((item) => [item.purchase_id, String(item.quantity_pieces)])));
+        const wastage = ws.stockWastage.filter((row) => row.sale_id === editId);
+        const purchaseIds = Array.from(new Set([...items.map((item) => item.purchase_id), ...wastage.map((row) => row.purchase_id)]));
+        setSelection(new Map(purchaseIds.map((purchaseId) => [purchaseId, { pieces: String(items.find((item) => item.purchase_id === purchaseId)?.quantity_pieces ?? 0), wasted: String(wastage.find((row) => row.purchase_id === purchaseId)?.quantity_pieces ?? "") }])));
         if (items.length) {
           const dates = items.map((item) => ws.purchaseById.get(item.purchase_id)?.trade_date).filter((value): value is string => Boolean(value)).sort();
           if (dates.length) setFilters((current) => ({ ...current, from: dates[0] < current.from ? dates[0] : current.from, onlyStock: false }));
@@ -104,13 +106,17 @@ export default function NewSalePage() {
     } else if (!editId && params.get("kind") === "husk" && !form.id) {
       setKind("husk");
     }
-  }, [ws.saleById, ws.saleItems, ws.purchaseById, loadedEdit, form.id]);
+  }, [ws.saleById, ws.saleItems, ws.stockWastage, ws.purchaseById, loadedEdit, form.id]);
 
+  // Pieces this sale already holds (sold plus wasted), so editing can re-use them.
   const ownAllocation = useMemo(() => {
     const map = new Map<number, number>();
-    if (form.id) ws.saleItems.filter((item) => item.sale_id === form.id).forEach((item) => map.set(item.purchase_id, Number(item.quantity_pieces)));
+    if (form.id) {
+      ws.saleItems.filter((item) => item.sale_id === form.id).forEach((item) => map.set(item.purchase_id, (map.get(item.purchase_id) ?? 0) + Number(item.quantity_pieces)));
+      ws.stockWastage.filter((row) => row.sale_id === form.id).forEach((row) => map.set(row.purchase_id, (map.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces)));
+    }
     return map;
-  }, [ws.saleItems, form.id]);
+  }, [ws.saleItems, ws.stockWastage, form.id]);
 
   const availableFor = (purchaseId: number) => (ws.stock.get(purchaseId)?.sellablePieces ?? 0) + (ownAllocation.get(purchaseId) ?? 0);
 
@@ -124,7 +130,9 @@ export default function NewSalePage() {
     return true;
   }), [ws.purchases, selection, filters, ws.stock, ownAllocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const allocations = useMemo(() => Array.from(selection.entries()).map(([purchase_id, pieces]) => ({ purchase_id, quantity_pieces: toNumber(pieces) })).filter((item) => item.quantity_pieces > 0), [selection]);
+  const allocations = useMemo(() => Array.from(selection.entries()).map(([purchase_id, entry]) => ({ purchase_id, quantity_pieces: Math.max(toNumber(entry.pieces), 0), wastage_pieces: Math.max(toNumber(entry.wasted), 0) })).filter((item) => item.quantity_pieces > 0 || item.wastage_pieces > 0), [selection]);
+  const wastedPieces = allocations.reduce((sum, item) => sum + item.wastage_pieces, 0);
+  const wastageLoss = allocations.reduce((sum, item) => sum + item.wastage_pieces * (ws.stock.get(item.purchase_id)?.coconutCostPerPiece ?? 0), 0);
   const allocatedPieces = allocations.reduce((sum, item) => sum + item.quantity_pieces, 0);
   const allocatedKg = allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.kgPerPiece ?? 0), 0);
   const costBasis = kind === "coconut" ? allocationCost(allocations, ws.stock) : 0;
@@ -183,14 +191,17 @@ export default function NewSalePage() {
   function toggle(purchaseId: number, checked: boolean) {
     setSelection((current) => {
       const next = new Map(current);
-      if (checked) next.set(purchaseId, String(Math.round(availableFor(purchaseId))));
+      if (checked) next.set(purchaseId, { pieces: String(Math.round(availableFor(purchaseId))), wasted: "" });
       else next.delete(purchaseId);
       return next;
     });
   }
 
-  function setPieces(purchaseId: number, value: string) {
-    setSelection((current) => new Map(current).set(purchaseId, value));
+  function setPart(purchaseId: number, key: "pieces" | "wasted", value: string) {
+    setSelection((current) => {
+      const entry = current.get(purchaseId) ?? { pieces: "", wasted: "" };
+      return new Map(current).set(purchaseId, { ...entry, [key]: value });
+    });
   }
 
   const setField = <K extends keyof SaleForm>(key: K, value: SaleForm[K]) => setForm((current) => ({ ...current, [key]: value }));
@@ -201,10 +212,10 @@ export default function NewSalePage() {
     if (!ws.session) return;
     if (!form.buyer_id) { ws.fail("Choose the buyer for this sale."); return; }
     if (kind === "coconut") {
-      if (allocations.length === 0) { ws.fail("Tick at least one purchase to include in this load."); return; }
+      if (allocatedPieces <= 0) { ws.fail("Tick at least one purchase and enter the pieces going in this load."); return; }
       for (const item of allocations) {
         const available = availableFor(item.purchase_id);
-        if (item.quantity_pieces > available + 0.001) { ws.fail(`${formatPurchaseId(item.purchase_id)} only has ${formatNumber(available, 0)} pieces available.`); return; }
+        if (item.quantity_pieces + item.wastage_pieces > available + 0.001) { ws.fail(`${formatPurchaseId(item.purchase_id)} only has ${formatNumber(available, 0)} pieces available for loading and wastage together.`); return; }
       }
     }
     if (calculation.quantity <= 0) { ws.fail(form.unit === "kg" ? "Enter the net weight sold in kilograms." : "Enter the quantity sold."); return; }
@@ -253,15 +264,15 @@ export default function NewSalePage() {
       {!form.id ? <div className="segmented sale-kind"><button className={kind === "coconut" ? "active" : ""} onClick={() => { setKind("coconut"); setWeightEdited(false); setRateEdited(false); setForm((current) => ({ ...current, unit: "kg", buyer_id: "" })); }} type="button"><strong>Coconut load</strong><span>Sell coconut from purchases in stock</span></button><button className={kind === "husk" ? "active" : ""} onClick={() => { setKind("husk"); setWeightEdited(true); setRateEdited(true); setForm((current) => ({ ...current, unit: "load", buyer_id: "", quantity: "", rate: "" })); setSelection(new Map()); }} type="button"><strong>Husk sale</strong><span>Sell husk kept from your purchases</span></button></div> : null}
 
       {kind === "coconut" ? <section className="ledger-panel select-table">
-        <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{allocatedPieces > 0 ? <span className="chip">{loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)}` : loadMix.condition === "kudume" ? "Kudume" : "Mottai"}</span> : null}{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
-        <p className="muted-text">Tick each purchase that is being loaded. Reduce the pieces if only part of a purchase goes in this load; the rest stays in stock. Per-nut purchases appear here only after they are weighed on the <Link href="/v2/stock">Stock</Link> page.</p>
+        <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">Build the load</span><h2>Select purchases going to the buyer</h2></div></div><div className="chip-row"><span className="chip good">{formatNumber(allocatedPieces, 0)} pieces selected</span>{wastedPieces > 0 ? <span className="chip warn">{formatNumber(wastedPieces, 0)} wasted</span> : null}{allocatedPieces > 0 ? <span className="chip">{loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)}` : loadMix.condition === "kudume" ? "Kudume" : "Mottai"}</span> : null}{allocatedKg > 0 ? <span className="chip">about {formatNumber(allocatedKg, 0)} kg from weighbridge purchases</span> : null}<span className="chip">Cost {formatCurrency(costBasis)}</span></div></div>
+        <p className="muted-text">Tick each purchase that is being loaded. Reduce the pieces if only part of a purchase goes in this load; the rest stays in stock. Per-nut purchases appear here only after they are weighed on the <Link href="/v2/stock">Stock</Link> page. Enter wasted pieces for coconut found rotten or damaged while loading: they are taken off the stock for good and are not sold.</p>
         <div className="filter-bar">
           <label>Purchased from<input type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></label>
           <label>To<input type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></label>
           <label>Farmer<select value={filters.farmer} onChange={(event) => setFilters((current) => ({ ...current, farmer: event.target.value }))}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
           <label className="checkbox-field"><input type="checkbox" checked={filters.onlyStock} onChange={(event) => setFilters((current) => ({ ...current, onlyStock: event.target.checked }))} /><span><strong>Only purchases with stock</strong></span></label>
         </div>
-        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Available</th><th>Pieces in this load</th><th>Cost / nut</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Available</th><th>Pieces in this load</th><th>Wasted pieces</th><th>Cost / nut</th></tr></thead><tbody>
           {candidates.map((purchase) => {
             const available = availableFor(purchase.id);
             const selected = selection.has(purchase.id);
@@ -273,18 +284,19 @@ export default function NewSalePage() {
               <td>{ws.farmerById.get(purchase.farmer_id)?.name ?? "Farmer"}</td>
               <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">{purchase.purchase_mode === "quantity" ? `${info?.stockCondition ?? "mottai"} · weighed into stock` : purchase.processing_type}</span></td>
               <td>{formatNumber(available, 0)} of {formatNumber(purchase.purchase_mode === "quantity" ? info?.stockedPieces ?? 0 : Number(purchase.coconut_quantity), 0)}{purchase.purchase_mode === "quantity" ? <span className="muted-text">in stock</span> : null}</td>
-              <td>{selected ? <input type="number" min="1" max={Math.floor(available)} step="1" value={selection.get(purchase.id) ?? ""} onChange={(event) => setPieces(purchase.id, event.target.value)} /> : <span className="muted-text">-</span>}</td>
+              <td>{selected ? <input type="number" min="0" max={Math.floor(available)} step="1" value={selection.get(purchase.id)?.pieces ?? ""} onChange={(event) => setPart(purchase.id, "pieces", event.target.value)} aria-label={`Pieces from ${formatPurchaseId(purchase.id)} in this load`} /> : <span className="muted-text">-</span>}</td>
+              <td>{selected ? <input type="number" min="0" max={Math.floor(available)} step="1" value={selection.get(purchase.id)?.wasted ?? ""} onChange={(event) => setPart(purchase.id, "wasted", event.target.value)} placeholder="0" aria-label={`Wasted pieces from ${formatPurchaseId(purchase.id)}`} /> : <span className="muted-text">-</span>}</td>
               <td>{formatCurrency(info?.coconutCostPerPiece ?? 0)}</td>
             </tr>;
           })}
         </tbody></table>{candidates.length === 0 ? <p className="empty-state">No purchases with stock match these filters. Widen the dates or record a purchase first.</p> : null}</div>
-        {allocations.length ? <div className="table-wrap"><table><thead><tr><th>Farmer side of this load</th><th>Farmer</th><th>Pieces in load</th><th>Weight from purchase</th><th>Paid to farmer</th><th>Coconut cost</th></tr></thead><tbody>
+        {allocations.length ? <div className="table-wrap"><table><thead><tr><th>Farmer side of this load</th><th>Farmer</th><th>Pieces in load</th><th>Wasted</th><th>Weight from purchase</th><th>Paid to farmer</th><th>Coconut cost</th></tr></thead><tbody>
           {allocations.map((item) => {
             const info = ws.stock.get(item.purchase_id);
             if (!info) return null;
-            return <tr key={item.purchase_id}><td><strong>{formatPurchaseId(item.purchase_id)}</strong><span className="muted-text">{info.stockCondition}{info.purchase.purchase_mode === "quantity" ? " · from stock" : ""}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(item.quantity_pieces, 0)}</td><td>{info.kgPerPiece > 0 ? `${formatNumber(item.quantity_pieces * info.kgPerPiece, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(item.quantity_pieces * info.costPerPiece)}</td><td>{formatCurrency(item.quantity_pieces * info.coconutCostPerPiece)}</td></tr>;
+            return <tr key={item.purchase_id}><td><strong>{formatPurchaseId(item.purchase_id)}</strong><span className="muted-text">{info.stockCondition}{info.purchase.purchase_mode === "quantity" ? " · from stock" : ""}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(item.quantity_pieces, 0)}</td><td>{item.wastage_pieces > 0 ? <span className="balance-cell">{formatNumber(item.wastage_pieces, 0)}</span> : "-"}</td><td>{info.kgPerPiece > 0 ? `${formatNumber(item.quantity_pieces * info.kgPerPiece, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(item.quantity_pieces * info.costPerPiece)}</td><td>{formatCurrency(item.quantity_pieces * info.coconutCostPerPiece)}</td></tr>;
           })}
-          <tr className="day-row"><td colSpan={2}>Total for this load</td><td>{formatNumber(allocatedPieces, 0)}</td><td>{allocatedKg > 0 ? `${formatNumber(allocatedKg, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(farmerCost)}</td><td>{formatCurrency(costBasis)}</td></tr>
+          <tr className="day-row"><td colSpan={2}>Total for this load</td><td>{formatNumber(allocatedPieces, 0)}</td><td>{wastedPieces > 0 ? formatNumber(wastedPieces, 0) : "-"}</td><td>{allocatedKg > 0 ? `${formatNumber(allocatedKg, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(farmerCost)}</td><td>{formatCurrency(costBasis)}</td></tr>
         </tbody></table></div> : null}
       </section> : null}
 
@@ -320,7 +332,7 @@ export default function NewSalePage() {
         </form>
         <aside className="side-stack">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>{kind === "coconut" ? "Load summary" : "Husk sale summary"}</h2><dl className="calculation-list">
-            {kind === "coconut" ? <><div><dt>Pieces in load</dt><dd>{formatNumber(allocatedPieces, 0)} pieces</dd></div><div><dt>Coconut condition</dt><dd>{allocatedPieces > 0 ? (loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `${loadMix.condition === "kudume" ? "Kudume" : "Mottai"} (Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)})` : loadMix.condition === "kudume" ? "Kudume" : "Mottai") : "-"}</dd></div>{form.unit === "kg" ? <div><dt>Average weight per nut</dt><dd>{allocatedPieces > 0 && calculation.quantity > 0 ? `${formatNumber(calculation.averageKgPerNut * 1000, 1)} g / nut` : "-"}</dd></div> : null}<div><dt>Sale price per nut</dt><dd>{allocatedPieces > 0 ? `${formatCurrency(calculation.pricePerPiece)} / nut` : "-"}</dd></div></> : null}
+            {kind === "coconut" ? <><div><dt>Pieces in load</dt><dd>{formatNumber(allocatedPieces, 0)} pieces</dd></div>{wastedPieces > 0 ? <div className="calculation-deduction"><dt>Wasted pieces removed from stock</dt><dd>{formatNumber(wastedPieces, 0)} pieces</dd></div> : null}<div><dt>Coconut condition</dt><dd>{allocatedPieces > 0 ? (loadMix.mottaiPieces > 0 && loadMix.kudumePieces > 0 ? `${loadMix.condition === "kudume" ? "Kudume" : "Mottai"} (Mottai ${formatNumber(loadMix.mottaiPieces, 0)} · Kudume ${formatNumber(loadMix.kudumePieces, 0)})` : loadMix.condition === "kudume" ? "Kudume" : "Mottai") : "-"}</dd></div>{form.unit === "kg" ? <div><dt>Average weight per nut</dt><dd>{allocatedPieces > 0 && calculation.quantity > 0 ? `${formatNumber(calculation.averageKgPerNut * 1000, 1)} g / nut` : "-"}</dd></div> : null}<div><dt>Sale price per nut</dt><dd>{allocatedPieces > 0 ? `${formatCurrency(calculation.pricePerPiece)} / nut` : "-"}</dd></div></> : null}
             <div><dt>{form.unit === "kg" ? "Net weight" : "Quantity"}</dt><dd>{formatNumber(calculation.quantity)} {unitLabel}</dd></div>
             <div className="calculation-credit"><dt>Sale amount</dt><dd>{formatCurrency(calculation.saleAmount)}</dd></div>
             {calculation.transport > 0 ? <div className="calculation-credit"><dt>Transport charged</dt><dd>{formatCurrency(calculation.transport)}</dd></div> : null}
@@ -328,7 +340,7 @@ export default function NewSalePage() {
             <div className="calculation-total"><dt>Buyer pays</dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
-            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div><div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div>{stockDehusking > 0 ? <div className="calculation-deduction"><dt>Dehusking booked at stock</dt><dd>{formatCurrency(stockDehusking)}</dd></div> : null}<div className={calculation.margin - stockDehusking >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{stockDehusking > 0 ? "Margin after coconut cost and dehusking" : "Margin after coconut cost"}</dt><dd>{formatCurrency(calculation.margin - stockDehusking)}</dd></div></> : null}
+            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div><div className="calculation-deduction"><dt>Coconut cost (husk credit excluded)</dt><dd>{formatCurrency(costBasis)}</dd></div>{stockDehusking > 0 ? <div className="calculation-deduction"><dt>Dehusking booked at stock</dt><dd>{formatCurrency(stockDehusking)}</dd></div> : null}{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss</dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}<div className={calculation.margin - stockDehusking - wastageLoss >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin after coconut cost${stockDehusking > 0 ? ", dehusking" : ""}${wastageLoss > 0 ? " and wastage" : ""}`}</dt><dd>{formatCurrency(calculation.margin - stockDehusking - wastageLoss)}</dd></div></> : null}
           </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Paid to farmers is the farmer payable for the selected pieces, including any husk credit. Margin takes off the coconut cost and any dehusking booked at stock; husk is sold separately. Transport, loading and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">{kind === "coconut" ? "Tick the purchases in this lorry, enter the buyer, net weight and rate, then save. Each purchase keeps its own record and remaining stock." : "Choose the husk buyer, enter how much was sold and the rate, and record the loading wages under Expenses."}</p></section>
         </aside>

@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState<{ preset: PeriodPreset; from: string; to: string }>({ preset: "all", from: "", to: today() });
   const range = periodToRange(period.preset, period.from, period.to);
 
-  const summary = useMemo(() => summarizeFinancials({ purchases: ws.purchases, sales: ws.sales, saleItems: ws.saleItems, expenses: ws.expenses, cashEntries: ws.cashEntries, range }), [ws.purchases, ws.sales, ws.saleItems, ws.expenses, ws.cashEntries, range]);
+  const summary = useMemo(() => summarizeFinancials({ purchases: ws.purchases, sales: ws.sales, saleItems: ws.saleItems, expenses: ws.expenses, cashEntries: ws.cashEntries, range, stockEntries: ws.stockEntries, stockEntryItems: ws.stockEntryItems, stockWastage: ws.stockWastage }), [ws.purchases, ws.sales, ws.saleItems, ws.expenses, ws.cashEntries, range, ws.stockEntries, ws.stockEntryItems, ws.stockWastage]);
   const cash = useMemo(() => summarizeCash({ purchases: ws.purchases, sales: ws.sales, expenses: ws.expenses, cashEntries: ws.cashEntries, range: null }), [ws.purchases, ws.sales, ws.expenses, ws.cashEntries]);
 
   const stockRows = useMemo(() => Array.from(ws.stock.values()).filter((info) => info.remainingPieces > 0.5).sort((a, b) => a.purchase.trade_date.localeCompare(b.purchase.trade_date)), [ws.stock]);
@@ -65,7 +65,8 @@ export default function DashboardPage() {
           <KeyValueList rows={[
             { label: "Coconut sales to buyers", value: formatCurrency(summary.coconutRevenue), tone: "credit" },
             { label: "Cost of coconut sold", value: formatCurrency(summary.coconutCostOfSold), tone: "debit", hint: "Farmer payable for the pieces in sold loads, excluding husk credit" },
-            { label: "Coconut margin", value: formatCurrency(summary.coconutMargin), tone: "total" },
+            { label: "Wastage loss", value: formatCurrency(summary.wastageLoss), tone: "debit", hint: `${formatNumber(summary.wastedPieces, 0)} pieces marked wasted, at their coconut cost` },
+            { label: "Coconut margin", value: formatCurrency(summary.coconutMargin - summary.wastageLoss), tone: "total" },
             { label: "Husk sales", value: formatCurrency(summary.huskRevenue), tone: "credit" },
             { label: "Husk credit paid to farmers", value: formatCurrency(summary.huskCreditPaid), tone: "debit", hint: "Weight-based purchases only" },
             { label: "Husk expenses", value: formatCurrency(summary.huskExpenses), tone: "debit" },
