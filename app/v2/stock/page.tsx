@@ -207,15 +207,15 @@ export default function StockPage() {
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Stock summary</h2><dl className="calculation-list">
             <div><dt>Pieces weighed</dt><dd>{formatNumber(pieces, 0)} pieces</dd></div>
             <div><dt>Net weight</dt><dd>{formatNumber(net)} kg</dd></div>
-            <div><dt>Average weight per nut</dt><dd>{pieces > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
-            {form.processing_type === "kudume" ? <div className="calculation-deduction"><dt>Kudume wastage</dt><dd>{formatNumber(wastage)} kg ({formatNumber(wastagePercent, 2)}%)</dd></div> : null}
-            <div className="calculation-total"><dt>Sellable weight</dt><dd>{formatNumber(payable)} kg</dd></div>
-            <div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerPaid)}</dd></div>
-            <div className="calculation-deduction"><dt>Dehusking cost</dt><dd>{formatCurrency(dehuskingCost)}</dd></div>
-            <div className="calculation-total"><dt>Total cost of this stock</dt><dd>{formatCurrency(totalCost)}</dd></div>
-            <div><dt>Cost per nut</dt><dd>{pieces > 0 ? `${formatCurrency(totalCost / pieces)} / nut` : "-"}</dd></div>
-            <div><dt>Cost per kg</dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
-            {saleRate > 0 ? <><div className="calculation-credit"><dt>Expected sale value</dt><dd>{formatCurrency(expectedValue)}</dd></div><div className={expectedMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Expected margin at {formatCurrency(saleRate)} / kg</dt><dd>{formatCurrency(expectedMargin)}</dd></div></> : null}
+            <div><dt>Average weight per nut<small className="formula">{formatNumber(net)} kg ÷ {formatNumber(pieces, 0)} pieces</small></dt><dd>{pieces > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
+            {form.processing_type === "kudume" ? <div className="calculation-deduction"><dt>Kudume wastage<small className="formula">{formatNumber(net)} kg × {formatNumber(wastagePercent, 2)}%</small></dt><dd>{formatNumber(wastage)} kg</dd></div> : null}
+            <div className="calculation-total"><dt>Sellable weight<small className="formula">{formatNumber(net)} kg − {formatNumber(wastage)} kg</small></dt><dd>{formatNumber(payable)} kg</dd></div>
+            <div className="calculation-deduction"><dt>Paid to farmers for these pieces<small className="formula">From the purchase entries, pieces × farmer payable per nut</small></dt><dd>{formatCurrency(farmerPaid)}</dd></div>
+            <div className="calculation-deduction"><dt>Dehusking cost<small className="formula">{form.apply_dehusking ? `${formatNumber(pieces, 0)} pieces ÷ 1,000 × ${formatCurrency(dehuskingRate)}` : "Not added"}</small></dt><dd>{formatCurrency(dehuskingCost)}</dd></div>
+            <div className="calculation-total"><dt>Total cost of this stock<small className="formula">{formatCurrency(farmerPaid)} + {formatCurrency(dehuskingCost)}</small></dt><dd>{formatCurrency(totalCost)}</dd></div>
+            <div><dt>Cost per nut<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(pieces, 0)} pieces</small></dt><dd>{pieces > 0 ? `${formatCurrency(totalCost / pieces)} / nut` : "-"}</dd></div>
+            <div><dt>Cost per kg<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(payable)} kg</small></dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
+            {saleRate > 0 ? <><div className="calculation-credit"><dt>Expected sale value<small className="formula">{formatNumber(payable)} kg × {formatCurrency(saleRate)}</small></dt><dd>{formatCurrency(expectedValue)}</dd></div><div className={expectedMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Expected margin<small className="formula">{formatCurrency(expectedValue)} − {formatCurrency(totalCost)}</small></dt><dd>{formatCurrency(expectedMargin)}</dd></div></> : null}
           </dl><p className="field-hint">Paid to farmers is taken from the purchase entries, after any deductions made there. Dehusking is what you pay at stock time. Together they are the cost of this stock before transport and other expenses.</p></section>
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/v2/sales/new">Go to New sale</Link></section>
         </aside>

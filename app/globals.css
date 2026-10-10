@@ -1935,3 +1935,17 @@ tr.day-row td {
   font-size: 0.86rem;
   text-decoration: underline;
 }
+
+.calculation-list dt .formula {
+  color: #bed0c6;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.calculation-list dt {
+  display: grid;
+  gap: 0;
+}
