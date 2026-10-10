@@ -304,7 +304,7 @@ export default function NewSalePage() {
           <label>Farmer<select value={filters.farmer} onChange={(event) => setFilters((current) => ({ ...current, farmer: event.target.value }))}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
           <label className="checkbox-field"><input type="checkbox" checked={filters.onlyStock} onChange={(event) => setFilters((current) => ({ ...current, onlyStock: event.target.checked }))} /><span><strong>Only purchases with stock</strong></span></label>
         </div>
-        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Available</th><th>Pieces in this load</th><th>Wasted pieces</th><th>Cost / nut</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Available</th><th>Pieces in this load</th><th>Wasted pieces</th><th>Stays in stock</th><th>Cost / nut</th></tr></thead><tbody>
           {candidates.map((purchase) => {
             const available = availableFor(purchase.id);
             const selected = selection.has(purchase.id);
@@ -318,6 +318,7 @@ export default function NewSalePage() {
               <td>{formatNumber(available, 0)} of {formatNumber(purchase.purchase_mode === "quantity" ? info?.stockedPieces ?? 0 : Number(purchase.coconut_quantity), 0)}{purchase.purchase_mode === "quantity" ? <span className="muted-text">in stock</span> : null}</td>
               <td>{selected ? <input type="number" min="0" max={Math.floor(available)} step="1" value={selection.get(purchase.id)?.pieces ?? ""} onChange={(event) => setPart(purchase.id, "pieces", event.target.value)} aria-label={`Pieces from ${formatPurchaseId(purchase.id)} in this load`} /> : <span className="muted-text">-</span>}</td>
               <td>{selected ? <input type="number" min="0" max={Math.floor(available)} step="1" value={selection.get(purchase.id)?.wasted ?? ""} onChange={(event) => setPart(purchase.id, "wasted", event.target.value)} placeholder="0" aria-label={`Wasted pieces from ${formatPurchaseId(purchase.id)}`} /> : <span className="muted-text">-</span>}</td>
+              <td>{selected ? (() => { const entry = selection.get(purchase.id); const staying = Math.max(available - toNumber(entry?.pieces) - toNumber(entry?.wasted), 0); return staying > 0.5 ? <span className="chip good">{formatNumber(staying, 0)} stays in stock</span> : <span className="muted-text">Nothing left</span>; })() : <span className="muted-text">-</span>}</td>
               <td>{formatCurrency(info?.coconutCostPerPiece ?? 0)}</td>
             </tr>;
           })}

@@ -168,7 +168,7 @@ export default function StockPage() {
         <div className="filter-bar">
           <label>Farmer<select value={farmerFilter} onChange={(event) => setFarmerFilter(event.target.value)}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
         </div>
-        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Waiting</th><th>Pieces to weigh</th><th>Paid to farmer / nut</th><th>Paid for these pieces</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th></th><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Waiting</th><th>Pieces to weigh</th><th>Stays waiting</th><th>Paid to farmer / nut</th><th>Paid for these pieces</th></tr></thead><tbody>
           {candidates.map((purchase) => {
             const available = availableFor(purchase.id);
             const selected = selection.has(purchase.id);
@@ -182,6 +182,7 @@ export default function StockPage() {
               <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">Per nut · {Number(purchase.husk_removal_rate_per_1000) > 0 ? "dehusking deducted from farmer" : "dehusking not deducted"}</span></td>
               <td>{formatNumber(available, 0)} of {formatNumber(Number(purchase.coconut_quantity), 0)}</td>
               <td>{selected ? <input type="number" min="1" max={Math.floor(available)} step="1" value={selection.get(purchase.id) ?? ""} onChange={(event) => setSelection((current) => new Map(current).set(purchase.id, event.target.value))} /> : <span className="muted-text">-</span>}</td>
+              <td>{selected ? (Math.max(available - selectedPieces, 0) > 0.5 ? <span className="chip warn">{formatNumber(Math.max(available - selectedPieces, 0), 0)} left to weigh</span> : <span className="muted-text">All weighed</span>) : <span className="muted-text">-</span>}</td>
               <td>{formatCurrency(info?.costPerPiece ?? 0)}</td>
               <td className="balance-cell">{selected ? formatCurrency(selectedPieces * (info?.costPerPiece ?? 0)) : "-"}</td>
             </tr>;
