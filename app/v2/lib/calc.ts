@@ -39,7 +39,8 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const harvestingPieces = form.harvesting_pieces?.trim() ? Math.max(toNumber(form.harvesting_pieces), 0) : quantity;
   const huskRemovalCost = form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
   const treeCollectionCost = form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
-  const huskPriceIncome = purchaseMode === "weight" ? quantity * toNumber(form.husk_price_per_piece) : 0;
+  // Husk comes from the dehusked pieces, so the credit follows that count.
+  const huskPriceIncome = purchaseMode === "weight" ? dehuskingPieces * toNumber(form.husk_price_per_piece) : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
   const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
   const advance = toNumber(form.advance_amount);
@@ -134,6 +135,13 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     stock.set(purchase.id, { purchase, soldPieces, wastedPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, stockSaleRatePerKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
   });
   return stock;
+}
+
+/** Husk pieces still with the trader: every dehusked coconut leaves its husk, minus husk already sold by the piece. */
+export function huskPiecesInHand(purchases: Purchase[], sales: Sale[]) {
+  const dehusked = sumBy(purchases, (purchase) => purchase.dehusking_pieces != null ? Number(purchase.dehusking_pieces) : Number(purchase.coconut_quantity));
+  const soldPieces = sumBy(sales.filter((sale) => sale.sale_kind === "husk" && sale.unit === "piece"), (sale) => sale.quantity);
+  return Math.max(dehusked - soldPieces, 0);
 }
 
 export function allocationCost(items: Array<{ purchase_id: number; quantity_pieces: number }>, stock: Map<number, StockInfo>) {

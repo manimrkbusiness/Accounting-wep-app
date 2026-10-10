@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
-import { allocationCost, calculateSale } from "../../lib/calc";
+import { allocationCost, calculateSale, huskPiecesInHand } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
 import { type PaymentStatus, type ProcessingType, type Purchase, type Sale, type SaleColor, type SaleKind, type SaleUnit } from "../../lib/types";
 
@@ -187,6 +187,8 @@ export default function NewSalePage() {
   }, [form.gross_weight_kg, form.empty_weight_kg, useGrossTare]);
 
   const buyers = ws.buyers.filter((buyer) => buyer.active && (kind === "husk" ? buyer.buys_husk : buyer.buys_coconut));
+  /** Husk still in hand, from dehusked coconut, excluding the sale being edited. */
+  const huskInHand = useMemo(() => huskPiecesInHand(ws.purchases, ws.sales.filter((sale) => sale.id !== form.id)), [ws.purchases, ws.sales, form.id]);
 
   function toggle(purchaseId: number, checked: boolean) {
     setSelection((current) => {
@@ -303,6 +305,7 @@ export default function NewSalePage() {
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveSale}>
           <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { setForm(blankForm()); setSelection(new Map()); setLoadedEdit(null); setWeightEdited(false); setRateEdited(false); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}</div>
+          {kind === "husk" ? <div className="chip-row"><span className={huskInHand > 0 ? "chip good" : "chip"}>Husk in hand: {formatNumber(huskInHand, 0)} pieces, from dehusked coconut</span></div> : null}
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>
@@ -318,7 +321,7 @@ export default function NewSalePage() {
               </> : null}
             </div>
             <button className="link-button" onClick={() => setUseGrossTare((value) => !value)} type="button">{useGrossTare ? "Enter net weight directly instead" : "Calculate from gross and empty weight"}</button>
-          </fieldset> : <label>Quantity ({unitLabel})<input type="number" min="0.01" step={form.unit === "piece" ? "1" : "0.01"} value={form.quantity} onChange={(event) => { setWeightEdited(true); setField("quantity", event.target.value); }} required />{kind === "coconut" && form.unit === "piece" && allocatedPieces > 0 && toNumber(form.quantity) !== allocatedPieces ? <button className="link-button" onClick={() => { setWeightEdited(false); setField("quantity", String(allocatedPieces)); }} type="button">Use {formatNumber(allocatedPieces, 0)} allocated pieces</button> : null}</label>}
+          </fieldset> : <label>Quantity ({unitLabel})<input type="number" min="0.01" step={form.unit === "piece" ? "1" : "0.01"} value={form.quantity} onChange={(event) => { setWeightEdited(true); setField("quantity", event.target.value); }} required />{kind === "coconut" && form.unit === "piece" && allocatedPieces > 0 && toNumber(form.quantity) !== allocatedPieces ? <button className="link-button" onClick={() => { setWeightEdited(false); setField("quantity", String(allocatedPieces)); }} type="button">Use {formatNumber(allocatedPieces, 0)} allocated pieces</button> : null}{kind === "husk" && form.unit === "piece" ? <span className="field-hint">{huskInHand > 0 ? `Husk from ${formatNumber(huskInHand, 0)} dehusked pieces is in hand.` : "No husk in hand from dehusked coconut yet."}</span> : null}{kind === "husk" && form.unit === "piece" && huskInHand > 0 && toNumber(form.quantity) !== huskInHand ? <button className="link-button" onClick={() => { setWeightEdited(true); setField("quantity", String(huskInHand)); }} type="button">Sell all {formatNumber(huskInHand, 0)} pieces</button> : null}</label>}
           <div className="form-grid">
             <label>Transport charged to buyer (INR)<input type="number" min="0" step="0.01" value={form.transport_charge} onChange={(event) => setField("transport_charge", event.target.value)} /><span className="field-hint">Added to the buyer bill when the buyer pays for delivery.</span></label>
             <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>

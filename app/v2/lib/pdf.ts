@@ -86,7 +86,7 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
   w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Dehusking (${formatNumber(dehuskedPieces, 0)} pcs)` : "Dehusking", pdfMoney(Number(trade.husk_removal_cost)), "debit");
   w.line(harvestedPieces !== Number(trade.coconut_quantity) ? `Coconut harvesting (${formatNumber(harvestedPieces, 0)} pcs)` : "Coconut harvesting", pdfMoney(Number(trade.tree_collection_cost)), "debit");
   if (trade.purchase_mode === "weight" || Number(trade.husk_price_total) > 0) {
-    w.line("Husk / Mattai credit", pdfMoney(Number(trade.husk_price_total)), "credit");
+    w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Husk / Mattai credit (${formatNumber(dehuskedPieces, 0)} pcs)` : "Husk / Mattai credit", pdfMoney(Number(trade.husk_price_total)), "credit");
   }
   w.line("Net payable to farmer", pdfMoney(Number(trade.total_amount)), "credit");
   w.line("Advance paid", pdfMoney(Number(trade.advance_amount)), "credit");

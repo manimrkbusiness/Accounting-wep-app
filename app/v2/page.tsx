@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Banknote, Boxes, CirclePlus, IndianRupee, Receipt, Store, TrendingUp, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "./lib/workspace";
-import { purchaseOutstanding, saleOutstanding, summarizeCash, summarizeFinancials } from "./lib/calc";
+import { huskPiecesInHand, purchaseOutstanding, saleOutstanding, summarizeCash, summarizeFinancials } from "./lib/calc";
 import { daysBetween, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today } from "./lib/format";
 import { EmptyState, KeyValueList, Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "./components/ui";
 
@@ -50,7 +50,7 @@ export default function DashboardPage() {
         <Metric icon={Truck} label="Coconut sales" value={formatCurrency(summary.coconutRevenue)} hint={`${formatNumber(summary.soldPieces, 0)} pieces sold`} />
         <Metric icon={IndianRupee} label="Cost of sold coconut" value={formatCurrency(summary.coconutCostOfSold)} hint={`Margin ${formatCurrency(summary.coconutMargin)}`} />
         <Metric icon={Receipt} label="Expenses" value={formatCurrency(summary.expensesTotal)} hint="Labor, transport, diesel, food and more" />
-        <Metric icon={Store} label="Husk profit" value={formatCurrency(summary.huskProfit)} hint={`Husk sales ${formatCurrency(summary.huskRevenue)}`} tone={summary.huskProfit >= 0 ? "positive" : "negative"} />
+        <Metric icon={Store} label="Husk profit" value={formatCurrency(summary.huskProfit)} hint={`Husk sales ${formatCurrency(summary.huskRevenue)} · husk from ${formatNumber(huskPiecesInHand(ws.purchases, ws.sales), 0)} pieces in hand`} tone={summary.huskProfit >= 0 ? "positive" : "negative"} />
       </section>
 
       <section className="metrics-grid wide">
