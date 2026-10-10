@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
+import { draftKey, queryNumber, useDraft } from "../../lib/useDraft";
+import { DraftNotice } from "../../components/DraftNotice";
 import { calculatePurchase } from "../../lib/calc";
 import { formatCurrency, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
 import { coconutColors, processingTypes, type CoconutColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
@@ -105,27 +107,48 @@ export default function NewPurchasePage() {
   const ws = useWorkspace();
   const router = useRouter();
   const settings = ws.settings ?? defaultSettings;
-  const [form, setForm] = useState<PurchaseForm>(() => blankForm(settings));
+  // The form is kept as a draft until saved, so moving to another page does not lose it.
+  const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, "purchase", queryNumber("edit")));
+  const draft = useDraft<PurchaseForm>(draftScope, () => blankForm(settings));
+  const form = draft.value;
+  const setForm = draft.setValue;
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
-  const [showCredit, setShowCredit] = useState(false);
-  const [showDebit, setShowDebit] = useState(false);
+  const [showCredit, setShowCredit] = useState(() => toNumber(draft.value.additional_credit_amount) > 0);
+  const [showDebit, setShowDebit] = useState(() => toNumber(draft.value.additional_debit_amount) > 0);
   const [rateEditor, setRateEditor] = useState<"dehusking" | "harvesting" | null>(null);
   const [rateDraft, setRateDraft] = useState("");
+  const farmerParamApplied = useRef(false);
 
   useEffect(() => {
-    const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+    const params = new URLSearchParams(window.location.search);
+    const editId = Number(params.get("edit"));
+    const farmerParam = Number(params.get("farmer"));
     if (editId && editId !== loadedEdit) {
       const purchase = ws.purchaseById.get(editId);
       if (purchase) {
-        setForm(formFromPurchase(purchase, ws.settings ?? defaultSettings));
-        setShowCredit(Number(purchase.additional_credit_amount) > 0);
-        setShowDebit(Number(purchase.additional_debit_amount) > 0);
+        if (!draft.wasRestored) {
+          setForm(formFromPurchase(purchase, ws.settings ?? defaultSettings));
+          setShowCredit(Number(purchase.additional_credit_amount) > 0);
+          setShowDebit(Number(purchase.additional_debit_amount) > 0);
+        }
         setLoadedEdit(editId);
       }
-    } else if (!editId && !form.id && ws.settings) {
+    } else if (!editId && !form.id && ws.settings && !draft.wasRestored) {
       setForm((current) => current.coconut_quantity || current.farmer_id ? current : blankForm(ws.settings ?? defaultSettings));
     }
-  }, [ws.purchaseById, ws.settings, loadedEdit, form.id]);
+    // Coming back from "+ Add farmer": select the farmer that was just added.
+    if (farmerParam && !farmerParamApplied.current && ws.farmerById.has(farmerParam)) {
+      farmerParamApplied.current = true;
+      setForm((current) => current.farmer_id === String(farmerParam) ? current : { ...current, farmer_id: String(farmerParam), location_id: "" });
+    }
+  }, [ws.purchaseById, ws.farmerById, ws.settings, loadedEdit, form.id, draft.wasRestored, setForm]);
+
+  function discardDraft() {
+    draft.clear(blankForm(settings));
+    setShowCredit(false);
+    setShowDebit(false);
+    setLoadedEdit(null);
+  }
 
   const calculation = useMemo(() => calculatePurchase(form), [form]);
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
@@ -181,6 +204,7 @@ export default function NewPurchasePage() {
       : await supabase.from("coconut_trades").insert(payload);
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.message); return; }
+    draft.clear(blankForm(settings));
     ws.notify(form.id ? "Purchase updated." : "Purchase recorded. It is now in stock and ready to be added to a sale.");
     await ws.refresh();
     router.push("/v2/purchases");
@@ -221,9 +245,11 @@ export default function NewPurchasePage() {
   };
 
   return (
+    <>
+    <DraftNotice show={draft.restored} what="purchase" onDiscard={discardDraft} />
     <section className="workspace-grid">
       <form className="tool-panel purchase-form" onSubmit={savePurchase}>
-        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{form.id ? <button className="link-button" onClick={() => { setForm(blankForm(settings)); setLoadedEdit(null); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : null}</div>
+        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : null}</div>
         {form.id && allocated > 0 ? <p className="mode-note">{formatNumber(allocated, 0)} pieces of this purchase are already allocated to sales. Those sales are not changed when you edit this record.</p> : null}
         <div className="form-grid">
           <label>Farmer<select value={form.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/farmers?returnTo=purchase"); return; } setForm((current) => ({ ...current, farmer_id: value, location_id: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label>
@@ -264,5 +290,6 @@ export default function NewPurchasePage() {
         </dl><p className="field-hint">{calculation.purchaseMode === "weight" ? `Husk / Mattai credit is ${formatCurrency(toNumber(form.husk_price_per_piece))} per nut (from Settings) on the ${formatNumber(calculation.dehuskingPieces, 0)} dehusked pieces. ` : ""}Green credits increase the farmer amount; red deductions reduce it.</p></section>
       </aside>
     </section>
+    </>
   );
 }

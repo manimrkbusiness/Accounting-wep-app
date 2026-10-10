@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
+import { draftKey, queryNumber, useDraft } from "../../lib/useDraft";
+import { DraftNotice } from "../../components/DraftNotice";
 import { allocationCost, calculateSale, huskPiecesInHand } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
 import { type PaymentStatus, type ProcessingType, type Purchase, type Sale, type SaleColor, type SaleKind, type SaleUnit } from "../../lib/types";
@@ -48,6 +50,9 @@ const blankForm = (): SaleForm => ({
   notes: ""
 });
 
+type SaleMeta = { kind: SaleKind; useGrossTare: boolean; weightEdited: boolean; rateEdited: boolean };
+const blankMeta = (): SaleMeta => ({ kind: "coconut", useGrossTare: false, weightEdited: false, rateEdited: false });
+
 function formFromSale(sale: Sale): SaleForm {
   return {
     id: sale.id,
@@ -73,13 +78,24 @@ function formFromSale(sale: Sale): SaleForm {
 export default function NewSalePage() {
   const ws = useWorkspace();
   const router = useRouter();
-  const [kind, setKind] = useState<SaleKind>("coconut");
-  const [form, setForm] = useState<SaleForm>(blankForm);
-  const [selection, setSelection] = useState<Map<number, { pieces: string; wasted: string }>>(new Map());
+  // Everything typed here is kept as a draft until the sale is saved or discarded.
+  const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, "sale", queryNumber("edit")));
+  const formDraft = useDraft<SaleForm>(`${draftScope}:form`, blankForm);
+  const selectionDraft = useDraft<Map<number, { pieces: string; wasted: string }>, Array<[number, { pieces: string; wasted: string }]>>(`${draftScope}:selection`, () => new Map(), { serialize: (map) => Array.from(map.entries()), deserialize: (entries) => new Map(entries) });
+  const metaDraft = useDraft<SaleMeta>(`${draftScope}:meta`, blankMeta);
+  const form = formDraft.value;
+  const setForm = formDraft.setValue;
+  const selection = selectionDraft.value;
+  const setSelection = selectionDraft.setValue;
+  const { kind, useGrossTare, weightEdited, rateEdited } = metaDraft.value;
+  const setMeta = metaDraft.setValue;
+  const setKind = (value: SaleKind) => setMeta((current) => ({ ...current, kind: value }));
+  const setUseGrossTare = (next: boolean | ((value: boolean) => boolean)) => setMeta((current) => ({ ...current, useGrossTare: typeof next === "function" ? next(current.useGrossTare) : next }));
+  const setWeightEdited = (next: boolean) => setMeta((current) => ({ ...current, weightEdited: next }));
+  const setRateEdited = (next: boolean) => setMeta((current) => ({ ...current, rateEdited: next }));
+  const draftWasRestored = formDraft.wasRestored || selectionDraft.wasRestored;
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
-  const [useGrossTare, setUseGrossTare] = useState(false);
-  const [weightEdited, setWeightEdited] = useState(false);
-  const [rateEdited, setRateEdited] = useState(false);
+  const buyerParamApplied = useRef(false);
   const [filters, setFilters] = useState({ from: addDays(today(), -60), to: today(), farmer: "", onlyStock: true });
 
   useEffect(() => {
@@ -88,25 +104,37 @@ export default function NewSalePage() {
     if (editId && editId !== loadedEdit) {
       const sale = ws.saleById.get(editId);
       if (sale) {
-        setKind(sale.sale_kind);
-        setForm(formFromSale(sale));
-        setUseGrossTare(sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0);
-        setWeightEdited(true);
-        setRateEdited(true);
+        if (!draftWasRestored) {
+          setMeta({ kind: sale.sale_kind, useGrossTare: sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0, weightEdited: true, rateEdited: true });
+          setForm(formFromSale(sale));
+        }
         const items = ws.saleItems.filter((item) => item.sale_id === editId);
         const wastage = ws.stockWastage.filter((row) => row.sale_id === editId);
         const purchaseIds = Array.from(new Set([...items.map((item) => item.purchase_id), ...wastage.map((row) => row.purchase_id)]));
-        setSelection(new Map(purchaseIds.map((purchaseId) => [purchaseId, { pieces: String(items.find((item) => item.purchase_id === purchaseId)?.quantity_pieces ?? 0), wasted: String(wastage.find((row) => row.purchase_id === purchaseId)?.quantity_pieces ?? "") }])));
+        if (!draftWasRestored) setSelection(new Map(purchaseIds.map((purchaseId) => [purchaseId, { pieces: String(items.find((item) => item.purchase_id === purchaseId)?.quantity_pieces ?? 0), wasted: String(wastage.find((row) => row.purchase_id === purchaseId)?.quantity_pieces ?? "") }])));
         if (items.length) {
           const dates = items.map((item) => ws.purchaseById.get(item.purchase_id)?.trade_date).filter((value): value is string => Boolean(value)).sort();
           if (dates.length) setFilters((current) => ({ ...current, from: dates[0] < current.from ? dates[0] : current.from, onlyStock: false }));
         }
         setLoadedEdit(editId);
       }
-    } else if (!editId && params.get("kind") === "husk" && !form.id) {
-      setKind("husk");
+    } else if (!editId && params.get("kind") === "husk" && !form.id && !draftWasRestored) {
+      setMeta((current) => ({ ...current, kind: "husk" }));
     }
-  }, [ws.saleById, ws.saleItems, ws.stockWastage, ws.purchaseById, loadedEdit, form.id]);
+    // Coming back from "+ Add buyer": select the buyer that was just added.
+    const buyerParam = Number(params.get("buyer"));
+    if (buyerParam && !buyerParamApplied.current && ws.buyerById.has(buyerParam)) {
+      buyerParamApplied.current = true;
+      setForm((current) => current.buyer_id === String(buyerParam) ? current : { ...current, buyer_id: String(buyerParam) });
+    }
+  }, [ws.saleById, ws.saleItems, ws.stockWastage, ws.purchaseById, ws.buyerById, loadedEdit, form.id, draftWasRestored, setForm, setSelection, setMeta]);
+
+  function discardDraft() {
+    formDraft.clear(blankForm());
+    selectionDraft.clear(new Map());
+    metaDraft.clear(blankMeta());
+    setLoadedEdit(null);
+  }
 
   // Pieces this sale already holds (sold plus wasted), so editing can re-use them.
   const ownAllocation = useMemo(() => {
@@ -254,6 +282,7 @@ export default function NewSalePage() {
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
+    discardDraft();
     ws.notify(form.id ? `${formatSaleId(Number(data))} updated.` : `${formatSaleId(Number(data))} saved. Stock has been reduced for the included purchases.`);
     await ws.refresh();
     router.push("/v2/sales");
@@ -263,6 +292,7 @@ export default function NewSalePage() {
 
   return (
     <div className="stack">
+      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="sale" onDiscard={discardDraft} />
       {!form.id ? <div className="segmented sale-kind"><button className={kind === "coconut" ? "active" : ""} onClick={() => { setKind("coconut"); setWeightEdited(false); setRateEdited(false); setForm((current) => ({ ...current, unit: "kg", buyer_id: "" })); }} type="button"><strong>Coconut load</strong><span>Sell coconut from purchases in stock</span></button><button className={kind === "husk" ? "active" : ""} onClick={() => { setKind("husk"); setWeightEdited(true); setRateEdited(true); setForm((current) => ({ ...current, unit: "load", buyer_id: "", quantity: "", rate: "" })); setSelection(new Map()); }} type="button"><strong>Husk sale</strong><span>Sell husk kept from your purchases</span></button></div> : null}
 
       {kind === "coconut" ? <section className="ledger-panel select-table">
@@ -304,7 +334,7 @@ export default function NewSalePage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveSale}>
-          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { setForm(blankForm()); setSelection(new Map()); setLoadedEdit(null); setWeightEdited(false); setRateEdited(false); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "sale", null)); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}</div>
           {kind === "husk" ? <div className="chip-row"><span className={huskInHand > 0 ? "chip good" : "chip"}>Husk in hand: {formatNumber(huskInHand, 0)} pieces, from dehusked coconut</span></div> : null}
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>

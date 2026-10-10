@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { Banknote, IndianRupee, Receipt, TrendingUp, Wallet } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { cashDirection, inRange, purchaseOutstanding, purchaseStatusWithout, saleOutstanding, saleStatusWithout, statusForBalance, summarizeCash } from "../lib/calc";
 import { formatCurrency, formatDate, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
 import { cashKinds, cashMethods, type CashEntry, type CashKind, type CashMethod } from "../lib/types";
@@ -17,7 +19,9 @@ const kindLabel = (value: CashKind) => cashKinds.find((item) => item.value === v
 
 export default function CashPage() {
   const ws = useWorkspace();
-  const [form, setForm] = useState<CashForm>(() => blank());
+  const draft = useDraft<CashForm>(draftKey(ws.session?.user.id, "cash"), () => blank());
+  const form = draft.value;
+  const setForm = draft.setValue;
   const [period, setPeriod] = useState<{ preset: PeriodPreset; from: string; to: string }>({ preset: "all", from: "", to: today() });
   const range = periodToRange(period.preset, period.from, period.to);
 
@@ -59,7 +63,7 @@ export default function CashPage() {
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
     ws.notify(`${kindLabel(form.kind)} recorded.`);
-    setForm(blank(form.kind));
+    draft.clear(blank(form.kind));
     await ws.refresh();
   }
 
@@ -85,6 +89,7 @@ export default function CashPage() {
 
   return (
     <div className="stack">
+      <DraftNotice show={draft.restored} what="cash entry" onDiscard={() => draft.clear(blank())} />
       {!position.tracked ? <section className="mode-note">Cash in hand is not being tracked yet. Add an <strong>Opening cash</strong> entry with the money you have in hand today, and the cash book will follow every payment and receipt from there. You can skip this and still see purchases, sales, expenses and profit.</section> : null}
       <section className="metrics-grid wide">
         <Metric icon={Wallet} label={position.tracked ? "Cash in hand" : "Net cash movement"} value={formatCurrency(position.cashInHand)} hint="All time" tone={position.cashInHand >= 0 ? undefined : "negative"} />

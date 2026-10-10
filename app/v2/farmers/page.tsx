@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { purchaseOutstanding, sumBy } from "../lib/calc";
 import { formatCurrency, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
 import type { Farmer } from "../lib/types";
@@ -17,7 +19,9 @@ const blank: FarmerForm = { name: "", phone: "", locations: [{ name: "" }] };
 export default function FarmersPage() {
   const ws = useWorkspace();
   const router = useRouter();
-  const [form, setForm] = useState<FarmerForm>(blank);
+  const draft = useDraft<FarmerForm>(draftKey(ws.session?.user.id, "farmer"), () => blank);
+  const form = draft.value;
+  const setForm = draft.setValue;
   const [search, setSearch] = useState("");
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
@@ -44,8 +48,10 @@ export default function FarmersPage() {
     if (cleanLocations.length === 0) { ws.fail("Add at least one farming location."); return; }
     ws.setSaving(true);
     const traderId = ws.session.user.id;
+    let savedFarmerId: number | null = null;
     if (form.id) {
       const farmerId = form.id;
+      savedFarmerId = farmerId;
       const { error } = await supabase.from("trader_farmers").update({ name: form.name.trim(), phone: getStoredIndianPhone(form.phone) }).eq("id", farmerId).eq("trader_id", traderId);
       if (error) { ws.setSaving(false); ws.fail(error.code === "23505" ? "This farmer phone number is already in your portfolio." : error.message); return; }
       const original = ws.locations.filter((location) => location.farmer_id === farmerId);
@@ -67,20 +73,23 @@ export default function FarmersPage() {
     } else {
       const { data: farmer, error } = await supabase.from("trader_farmers").insert({ trader_id: traderId, name: form.name.trim(), phone: getStoredIndianPhone(form.phone), notes: null }).select("*").single();
       if (error || !farmer) { ws.setSaving(false); ws.fail(error?.code === "23505" ? "This farmer phone number is already in your portfolio." : error?.message || "Unable to add farmer."); return; }
+      savedFarmerId = farmer.id;
       const { error: locationError } = await supabase.from("farmer_locations").insert(cleanLocations.map((location) => ({ farmer_id: farmer.id, location_name: location.name, city: null })));
       ws.setSaving(false);
       if (locationError) { ws.fail(locationError.message); return; }
       ws.notify("Farmer added to your portfolio.");
     }
-    setForm(blank);
+    draft.clear(blank);
     await ws.refresh();
-    if (returnTo === "purchase") router.push("/v2/purchases/new");
+    if (returnTo === "purchase") router.push(savedFarmerId ? `/v2/purchases/new?farmer=${savedFarmerId}` : "/v2/purchases/new");
   }
 
   return (
+    <>
+    <DraftNotice show={draft.restored} what="farmer entry" onDiscard={() => draft.clear(blank)} />
     <section className="workspace-grid">
       <form className="tool-panel" onSubmit={save}>
-        <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit farmer" : "Portfolio"}</span><h2>{form.id ? "Update farmer details" : "Add a farmer"}</h2></div>{form.id ? <button className="link-button" onClick={() => setForm(blank)} type="button">Cancel edit</button> : null}</div>
+        <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit farmer" : "Portfolio"}</span><h2>{form.id ? "Update farmer details" : "Add a farmer"}</h2></div>{form.id ? <button className="link-button" onClick={() => draft.clear(blank)} type="button">Cancel edit</button> : null}</div>
         <p className="muted-text">Use the farmer phone number to identify the contact. Add every farming land as its own location.</p>
         <label>Farmer name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></label>
         <label>Phone number<div className="phone-input"><span>{"🇮🇳 +91"}</span><input inputMode="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: getIndianPhoneValue(event.target.value) }))} placeholder="10-digit mobile number" required /></div></label>
@@ -105,5 +114,6 @@ export default function FarmersPage() {
         </div>
       </Panel>
     </section>
+    </>
   );
 }

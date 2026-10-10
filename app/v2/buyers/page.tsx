@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { saleOutstanding, sumBy } from "../lib/calc";
 import { formatCurrency, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
 import type { Buyer } from "../lib/types";
@@ -16,7 +18,9 @@ const blank: BuyerForm = { name: "", phone: "", business_name: "", city: "", buy
 export default function BuyersPage() {
   const ws = useWorkspace();
   const router = useRouter();
-  const [form, setForm] = useState<BuyerForm>(blank);
+  const draft = useDraft<BuyerForm>(draftKey(ws.session?.user.id, "buyer"), () => blank);
+  const form = draft.value;
+  const setForm = draft.setValue;
   const [search, setSearch] = useState("");
   const [returnTo, setReturnTo] = useState<string | null>(null);
 
@@ -43,19 +47,24 @@ export default function BuyersPage() {
     if (!form.buys_coconut && !form.buys_husk) { ws.fail("Tick what this buyer purchases: coconut, husk, or both."); return; }
     ws.setSaving(true);
     const payload = { trader_id: ws.session.user.id, name: form.name.trim(), phone: form.phone ? getStoredIndianPhone(form.phone) : null, business_name: form.business_name.trim() || null, city: form.city.trim() || null, buys_coconut: form.buys_coconut, buys_husk: form.buys_husk, notes: form.notes.trim() || null, active: form.active };
-    const result = form.id ? await supabase.from("buyers").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id) : await supabase.from("buyers").insert(payload);
+    const result = form.id
+      ? await supabase.from("buyers").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id).select("id").single()
+      : await supabase.from("buyers").insert(payload).select("id").single();
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.message); return; }
+    const savedBuyerId = (result.data as { id: number } | null)?.id ?? form.id ?? null;
     ws.notify(form.id ? "Buyer updated." : "Buyer added.");
-    setForm(blank);
+    draft.clear(blank);
     await ws.refresh();
-    if (returnTo === "sale") router.push("/v2/sales/new");
+    if (returnTo === "sale") router.push(savedBuyerId ? `/v2/sales/new?buyer=${savedBuyerId}` : "/v2/sales/new");
   }
 
   return (
+    <>
+    <DraftNotice show={draft.restored} what="buyer entry" onDiscard={() => draft.clear(blank)} />
     <section className="workspace-grid">
       <form className="tool-panel" onSubmit={save}>
-        <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit buyer" : "Buyer directory"}</span><h2>{form.id ? "Update buyer" : "Add a buyer"}</h2></div>{form.id ? <button className="link-button" onClick={() => setForm(blank)} type="button">Cancel edit</button> : null}</div>
+        <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit buyer" : "Buyer directory"}</span><h2>{form.id ? "Update buyer" : "Add a buyer"}</h2></div>{form.id ? <button className="link-button" onClick={() => draft.clear(blank)} type="button">Cancel edit</button> : null}</div>
         <p className="muted-text">Buyers are the traders, mills or merchants you sell coconut loads or husk to.</p>
         <label>Buyer name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></label>
         <div className="form-grid">
@@ -84,5 +93,6 @@ export default function BuyersPage() {
         </div>
       </Panel>
     </section>
+    </>
   );
 }

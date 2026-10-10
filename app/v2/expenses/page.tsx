@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { inRange, sumBy } from "../lib/calc";
 import Link from "next/link";
 import { formatCurrency, formatDate, formatPurchaseId, formatSaleId, formatStockId, today, toNumber } from "../lib/format";
@@ -17,7 +19,9 @@ const categoryLabel = (value: ExpenseCategory) => expenseCategories.find((item) 
 
 export default function ExpensesPage() {
   const ws = useWorkspace();
-  const [form, setForm] = useState<ExpenseForm>(blank);
+  const draft = useDraft<ExpenseForm>(draftKey(ws.session?.user.id, "expense"), blank);
+  const form = draft.value;
+  const setForm = draft.setValue;
   const [period, setPeriod] = useState<{ preset: PeriodPreset; from: string; to: string }>({ preset: "month", from: "", to: today() });
   const [categoryFilter, setCategoryFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -57,7 +61,7 @@ export default function ExpensesPage() {
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.message); return; }
     ws.notify(form.id ? "Expense updated." : "Expense recorded.");
-    setForm(blank());
+    draft.clear(blank());
     await ws.refresh();
   }
 
@@ -76,9 +80,10 @@ export default function ExpensesPage() {
 
   return (
     <div className="stack">
+      <DraftNotice show={draft.restored} what="expense entry" onDiscard={() => draft.clear(blank())} />
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={save}>
-          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit expense" : "New expense"}</span><h2>{form.id ? "Update expense" : "Record an expense"}</h2></div>{form.id ? <button className="link-button" onClick={() => setForm(blank())} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit expense" : "New expense"}</span><h2>{form.id ? "Update expense" : "Record an expense"}</h2></div>{form.id ? <button className="link-button" onClick={() => draft.clear(blank())} type="button">Cancel edit</button> : null}</div>
           <p className="muted-text">Wages, transport, diesel, maintenance, food and anything else you pay for. Link it to a worker, vehicle, purchase or sale when it helps you track it.</p>
           <div className="form-grid">
             <label>Date<input type="date" value={form.expense_date} onChange={(event) => setForm((current) => ({ ...current, expense_date: event.target.value }))} required /></label>

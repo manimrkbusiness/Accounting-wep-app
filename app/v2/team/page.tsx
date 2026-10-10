@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { sumBy } from "../lib/calc";
 import { formatCurrency, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
 import { employeeRoles, vehicleTypes, type Employee, type EmployeeRole, type Ownership, type Vehicle, type VehicleType } from "../lib/types";
@@ -16,8 +18,12 @@ const blankVehicle: VehicleForm = { vehicle_number: "", vehicle_type: "lorry", o
 
 export default function TeamPage() {
   const ws = useWorkspace();
-  const [employeeForm, setEmployeeForm] = useState<EmployeeForm>(blankEmployee);
-  const [vehicleForm, setVehicleForm] = useState<VehicleForm>(blankVehicle);
+  const employeeDraft = useDraft<EmployeeForm>(draftKey(ws.session?.user.id, "employee"), () => blankEmployee);
+  const vehicleDraft = useDraft<VehicleForm>(draftKey(ws.session?.user.id, "vehicle"), () => blankVehicle);
+  const employeeForm = employeeDraft.value;
+  const setEmployeeForm = employeeDraft.setValue;
+  const vehicleForm = vehicleDraft.value;
+  const setVehicleForm = vehicleDraft.setValue;
 
   async function saveEmployee(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,7 +37,7 @@ export default function TeamPage() {
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.message); return; }
     ws.notify(employeeForm.id ? "Worker updated." : "Worker added.");
-    setEmployeeForm(blankEmployee);
+    employeeDraft.clear(blankEmployee);
     await ws.refresh();
   }
 
@@ -46,7 +52,7 @@ export default function TeamPage() {
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.code === "23505" ? "This vehicle number is already added." : result.error.message); return; }
     ws.notify(vehicleForm.id ? "Vehicle updated." : "Vehicle added.");
-    setVehicleForm(blankVehicle);
+    vehicleDraft.clear(blankVehicle);
     await ws.refresh();
   }
 
@@ -60,9 +66,11 @@ export default function TeamPage() {
 
   return (
     <div className="stack">
+      <DraftNotice show={employeeDraft.restored} what="worker entry" onDiscard={() => employeeDraft.clear(blankEmployee)} />
+      <DraftNotice show={vehicleDraft.restored} what="vehicle entry" onDiscard={() => vehicleDraft.clear(blankVehicle)} />
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEmployee}>
-          <div className="panel-heading"><div><span className="eyebrow">{employeeForm.id ? "Edit worker" : "Workers"}</span><h2>{employeeForm.id ? "Update worker" : "Add a worker"}</h2></div>{employeeForm.id ? <button className="link-button" onClick={() => setEmployeeForm(blankEmployee)} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div><span className="eyebrow">{employeeForm.id ? "Edit worker" : "Workers"}</span><h2>{employeeForm.id ? "Update worker" : "Add a worker"}</h2></div>{employeeForm.id ? <button className="link-button" onClick={() => employeeDraft.clear(blankEmployee)} type="button">Cancel edit</button> : null}</div>
           <p className="muted-text">Harvesters, dehusking and loading workers, drivers. Wages you pay them are recorded under Expenses and totalled here.</p>
           <div className="form-grid">
             <label>Name<input value={employeeForm.name} onChange={(event) => setEmployeeForm((current) => ({ ...current, name: event.target.value }))} required /></label>
@@ -87,7 +95,7 @@ export default function TeamPage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveVehicle}>
-          <div className="panel-heading"><div><span className="eyebrow">{vehicleForm.id ? "Edit vehicle" : "Vehicles"}</span><h2>{vehicleForm.id ? "Update vehicle" : "Add a vehicle"}</h2></div>{vehicleForm.id ? <button className="link-button" onClick={() => setVehicleForm(blankVehicle)} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div><span className="eyebrow">{vehicleForm.id ? "Edit vehicle" : "Vehicles"}</span><h2>{vehicleForm.id ? "Update vehicle" : "Add a vehicle"}</h2></div>{vehicleForm.id ? <button className="link-button" onClick={() => vehicleDraft.clear(blankVehicle)} type="button">Cancel edit</button> : null}</div>
           <p className="muted-text">Own or hired vehicles used for loads. Diesel and maintenance expenses can be linked to each vehicle.</p>
           <div className="form-grid">
             <label>Vehicle number<input value={vehicleForm.vehicle_number} onChange={(event) => setVehicleForm((current) => ({ ...current, vehicle_number: event.target.value }))} placeholder="TN 00 AB 0000" required /></label>

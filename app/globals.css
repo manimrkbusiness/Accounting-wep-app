@@ -1921,3 +1921,17 @@ tr.day-row td {
   min-height: 32px;
   padding: 6px 10px;
 }
+
+.draft-notice {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.draft-notice .link-button {
+  color: var(--green-dark);
+  font-size: 0.86rem;
+  text-decoration: underline;
+}

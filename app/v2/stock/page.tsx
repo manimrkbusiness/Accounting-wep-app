@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
+import { draftKey, queryNumber, useDraft } from "../lib/useDraft";
+import { DraftNotice } from "../components/DraftNotice";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatStockId, today, toNumber } from "../lib/format";
 import { processingTypes, type ProcessingType, type StockEntry } from "../lib/types";
 import { EmptyState, Panel } from "../components/ui";
@@ -17,8 +19,15 @@ export default function StockPage() {
   const router = useRouter();
   const settings = ws.settings ?? defaultSettings;
   const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", notes: "" });
-  const [form, setForm] = useState<StockForm>(blankForm);
-  const [selection, setSelection] = useState<Map<number, string>>(new Map());
+  // Drafts keep the entry across page changes until it is saved or discarded.
+  const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, "stock", queryNumber("edit")));
+  const formDraft = useDraft<StockForm>(`${draftScope}:form`, blankForm);
+  const selectionDraft = useDraft<Map<number, string>, Array<[number, string]>>(`${draftScope}:selection`, () => new Map(), { serialize: (map) => Array.from(map.entries()), deserialize: (entries) => new Map(entries) });
+  const form = formDraft.value;
+  const setForm = formDraft.setValue;
+  const selection = selectionDraft.value;
+  const setSelection = selectionDraft.setValue;
+  const draftWasRestored = formDraft.wasRestored || selectionDraft.wasRestored;
   const [loadedEdit, setLoadedEdit] = useState<number | null>(null);
   const [farmerFilter, setFarmerFilter] = useState("");
   const kudumeDefault = String(settings.kudume_wastage_percent);
@@ -37,7 +46,7 @@ export default function StockPage() {
     const preselect = Number(params.get("purchase"));
     if (editId && editId !== loadedEdit) {
       const entry = ws.stockEntries.find((item) => item.id === editId);
-      if (entry) {
+      if (entry && !draftWasRestored) {
         const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
         setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", notes: entry.notes ?? "" });
         setSelection(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === editId).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
@@ -85,9 +94,10 @@ export default function StockPage() {
   }
 
   function resetForm() {
-    setForm(blankForm());
-    setSelection(new Map());
+    formDraft.clear(blankForm());
+    selectionDraft.clear(new Map());
     setLoadedEdit(null);
+    setDraftScope(draftKey(ws.session?.user.id, "stock", null));
   }
 
   async function saveEntry(event: React.FormEvent<HTMLFormElement>) {
@@ -149,6 +159,7 @@ export default function StockPage() {
 
   return (
     <div className="stack">
+      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="stock entry" onDiscard={resetForm} />
       <section className="ledger-panel select-table">
         <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">{form.id ? `Editing ${formatStockId(form.id)}` : "Waiting to be weighed"}</span><h2>Select per-nut purchases</h2></div></div><div className="chip-row"><span className={awaitingTotal > 0 ? "chip warn" : "chip good"}>{formatNumber(awaitingTotal, 0)} pieces waiting</span><span className="chip good">{formatNumber(pieces, 0)} pieces selected</span><span className="chip">Paid to farmers {formatCurrency(farmerPaid)}</span></div></div>
         <p className="muted-text">Per-nut purchases are bought by count, so they are dehusked and weighed here before going into a sale. Weight-based purchases skip this step and can be sold straight away.</p>
