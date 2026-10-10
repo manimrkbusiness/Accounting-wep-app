@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { NumberInputGuard } from "./NumberInputGuard";
 
 export const metadata: Metadata = {
   title: "Coconut Trade Desk",
@@ -13,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><NumberInputGuard />{children}</body>
     </html>
   );
 }

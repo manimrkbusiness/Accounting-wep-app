@@ -1986,3 +1986,15 @@ tr.day-row td {
 .resume-banner .eyebrow {
   color: var(--orange);
 }
+
+/* Numbers change only by typing: no spinner arrows, no wheel changes. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
