@@ -1998,3 +1998,11 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+.calculation-list .calculation-spent {
+  border-top: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.calculation-list .calculation-spent dd {
+  font-size: 1.05rem;
+}
