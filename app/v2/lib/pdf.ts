@@ -81,8 +81,10 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
   w.line("Rate", trade.purchase_mode === "quantity" ? `INR ${formatNumber(Number(trade.rate_per_piece), 2)} / nut` : `INR ${formatNumber(Number(trade.rate_per_kg), 2)} / kg`);
   w.rule();
   w.line("Coconut purchase", pdfMoney(Number(trade.total_amount) - Number(trade.husk_price_total) + Number(trade.labor_cost_total)), "credit");
-  w.line("Dehusking", pdfMoney(Number(trade.husk_removal_cost)), "debit");
-  w.line("Coconut harvesting", pdfMoney(Number(trade.tree_collection_cost)), "debit");
+  const dehuskedPieces = trade.dehusking_pieces != null ? Number(trade.dehusking_pieces) : Number(trade.coconut_quantity);
+  const harvestedPieces = trade.harvesting_pieces != null ? Number(trade.harvesting_pieces) : Number(trade.coconut_quantity);
+  w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Dehusking (${formatNumber(dehuskedPieces, 0)} pcs)` : "Dehusking", pdfMoney(Number(trade.husk_removal_cost)), "debit");
+  w.line(harvestedPieces !== Number(trade.coconut_quantity) ? `Coconut harvesting (${formatNumber(harvestedPieces, 0)} pcs)` : "Coconut harvesting", pdfMoney(Number(trade.tree_collection_cost)), "debit");
   if (trade.purchase_mode === "weight" || Number(trade.husk_price_total) > 0) {
     w.line("Husk / Mattai credit", pdfMoney(Number(trade.husk_price_total)), "credit");
   }

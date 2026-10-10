@@ -69,6 +69,10 @@ export type Purchase = {
   rate_per_kg: number;
   rate_per_piece: number;
   coconut_quantity: number;
+  /** Pieces the dehusking team handled; null means same as coconut_quantity. */
+  dehusking_pieces: number | null;
+  /** Pieces the harvesting team handled; null means same as coconut_quantity. */
+  harvesting_pieces: number | null;
   husk_removal_rate_per_1000: number;
   tree_collection_rate_per_1000: number;
   husk_removal_cost: number;

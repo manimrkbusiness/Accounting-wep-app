@@ -7,7 +7,7 @@ import { useWorkspace } from "../../lib/workspace";
 import { calculatePurchase } from "../../lib/calc";
 import { formatCurrency, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
 import { coconutColors, processingTypes, type CoconutColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
-import { DefaultsSummary, defaultSettings } from "../../components/CostSettingsPanel";
+import { defaultSettings } from "../../components/CostSettingsPanel";
 
 type PurchaseForm = {
   id?: number;
@@ -18,6 +18,8 @@ type PurchaseForm = {
   purchase_mode: PurchaseMode;
   processing_type: "mottai" | "kudume";
   coconut_quantity: string;
+  dehusking_pieces: string;
+  harvesting_pieces: string;
   net_weight_kg: string;
   wastage_percent: string;
   rate_per_kg: string;
@@ -44,6 +46,8 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     purchase_mode: settings.purchase_mode,
     processing_type: "mottai",
     coconut_quantity: "",
+    dehusking_pieces: "",
+    harvesting_pieces: "",
     net_weight_kg: "",
     wastage_percent: "0",
     rate_per_kg: "",
@@ -76,6 +80,8 @@ function formFromPurchase(purchase: Purchase, settings: TraderSettings): Purchas
     purchase_mode: purchase.purchase_mode,
     processing_type: purchase.processing_type,
     coconut_quantity: String(purchase.coconut_quantity),
+    dehusking_pieces: purchase.dehusking_pieces != null ? String(purchase.dehusking_pieces) : "",
+    harvesting_pieces: purchase.harvesting_pieces != null ? String(purchase.harvesting_pieces) : "",
     net_weight_kg: String(purchase.net_weight_kg),
     wastage_percent: String(purchase.wastage_percent),
     rate_per_kg: String(purchase.rate_per_kg),
@@ -152,6 +158,8 @@ export default function NewPurchasePage() {
       purchase_mode: calculation.purchaseMode,
       processing_type: calculation.purchaseMode === "quantity" ? "mottai" : form.processing_type,
       coconut_quantity: calculation.quantity,
+      dehusking_pieces: form.deduct_dehusking && form.dehusking_pieces.trim() ? calculation.dehuskingPieces : null,
+      harvesting_pieces: form.deduct_harvesting && form.harvesting_pieces.trim() ? calculation.harvestingPieces : null,
       net_weight_kg: calculation.purchaseMode === "weight" ? calculation.net : 0,
       wastage_percent: calculation.purchaseMode === "weight" && form.processing_type === "kudume" ? calculation.wastagePercent : 0,
       rate_per_kg: calculation.purchaseMode === "weight" ? toNumber(form.rate_per_kg) : 0,
@@ -198,10 +206,14 @@ export default function NewPurchasePage() {
     const checked = kind === "dehusking" ? form.deduct_dehusking : form.deduct_harvesting;
     const rate = toNumber(kind === "dehusking" ? form.husk_removal_rate_per_1000 : form.tree_collection_rate_per_1000);
     const label = kind === "dehusking" ? "Deduct dehusking" : "Deduct coconut harvesting";
+    const piecesField = kind === "dehusking" ? "dehusking_pieces" : "harvesting_pieces";
+    const laborPieces = kind === "dehusking" ? calculation.dehuskingPieces : calculation.harvestingPieces;
+    const cost = kind === "dehusking" ? calculation.huskRemovalCost : calculation.treeCollectionCost;
     return (
       <div className="deduction-card" key={kind}>
         <label className="checkbox-field"><input type="checkbox" checked={checked} onChange={(event) => setField(kind === "dehusking" ? "deduct_dehusking" : "deduct_harvesting", event.target.checked)} /><span><strong>{label}</strong><small>Trader pays this labor and subtracts it from the farmer amount.</small></span></label>
-        <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && calculation.quantity > 0 ? ` · ${formatCurrency(calculation.quantity / 1000 * rate)} on this purchase` : ""}</span>{rateEditor === kind ? null : <button className="link-button" onClick={() => openRateEditor(kind)} type="button">Edit rate</button>}</div>
+        {checked ? <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /><span className="field-hint">{kind === "dehusking" ? "Pieces the dehusking team handled, including any dropped coconuts the farmer added." : "Only the pieces the harvesting team took from the trees. Naturally dropped coconuts are not counted here."}</span></label> : null}
+        <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(cost)} deducted` : ""}</span>{rateEditor === kind ? null : <button className="link-button" onClick={() => openRateEditor(kind)} type="button">Edit rate</button>}</div>
         {rateEditor === kind ? <div className="inline-form"><label>{label} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only, for example a special rate for this farmer. The default in Settings stays as it is.</span></div> : null}
       </div>
     );
@@ -226,7 +238,7 @@ export default function NewPurchasePage() {
           {form.purchase_mode === "weight" ? <label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={form.rate_per_kg} onChange={(event) => setField("rate_per_kg", event.target.value)} required /></label> : <label>Price per coconut (INR)<input type="number" min="0" step="0.01" value={form.rate_per_piece} onChange={(event) => setField("rate_per_piece", event.target.value)} required /><span className="field-hint">The purchase total is pieces multiplied by this price.</span></label>}
           <label>Advance paid (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later settlements are recorded from Purchase history.</span></label>
         </div>
-        <fieldset className="deduction-options"><legend>Farmer deductions</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">Leave a deduction unchecked when the trader bears that cost. Record the wages you actually pay under Expenses. Rates come from Settings; Edit rate changes them for this purchase only.</span></fieldset>
+        <fieldset className="deduction-options"><legend>Farmer deductions</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">Leave a deduction unchecked when the trader bears that cost. Each deduction is worked out on its own piece count; the main coconut quantity above is what goes into stock and the lorry. Rates come from Settings; Edit rate changes them for this purchase only.</span></fieldset>
         <div className="adjustment-actions"><button className="adjustment-toggle credit" onClick={() => { setShowCredit(true); setField("additional_credit_amount", form.additional_credit_amount === "0" ? "" : form.additional_credit_amount); }} type="button">+ Add credit to farmer</button><button className="adjustment-toggle debit" onClick={() => { setShowDebit(true); setField("additional_debit_amount", form.additional_debit_amount === "0" ? "" : form.additional_debit_amount); }} type="button">- Add debit to farmer</button></div>
         {showCredit || toNumber(form.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_credit_amount} onChange={(event) => setField("additional_credit_amount", event.target.value)} /></label><label>Why is this being credited?<input value={form.additional_credit_reason} onChange={(event) => setField("additional_credit_reason", event.target.value)} placeholder="Reason for additional payment" /></label></div> : null}
         {showDebit || toNumber(form.additional_debit_amount) > 0 ? <div className="adjustment-fields debit-fields"><label>Debit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_debit_amount} onChange={(event) => setField("additional_debit_amount", event.target.value)} /></label><label>Why is this being deducted?<input value={form.additional_debit_reason} onChange={(event) => setField("additional_debit_reason", event.target.value)} placeholder="Reason for deduction" /></label></div> : null}
@@ -240,8 +252,8 @@ export default function NewPurchasePage() {
           <div><dt>Average weight per nut</dt><dd>{calculation.purchaseMode === "weight" ? `${formatNumber(calculation.averageWeightGrams, 1)} g / nut` : "Not used"}</dd></div>
           <div><dt>Average price per nut</dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / nut</dd></div>
           <div className="calculation-credit"><dt>Coconut purchase</dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div>
-          <div className="calculation-deduction"><dt>Dehusking</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div>
-          <div className="calculation-deduction"><dt>Coconut harvesting</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div>
+          <div className="calculation-deduction"><dt>Dehusking{form.deduct_dehusking && calculation.dehuskingPieces !== calculation.quantity ? ` (${formatNumber(calculation.dehuskingPieces, 0)} pieces)` : ""}</dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div>
+          <div className="calculation-deduction"><dt>Coconut harvesting{form.deduct_harvesting && calculation.harvestingPieces !== calculation.quantity ? ` (${formatNumber(calculation.harvestingPieces, 0)} pieces)` : ""}</dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div>
           {calculation.purchaseMode === "weight" ? <div className="calculation-credit"><dt>Husk / Mattai credit</dt><dd>{formatCurrency(calculation.huskPriceIncome)}</dd></div> : null}
           <div className="calculation-total"><dt>Net payable to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div>
           <div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
@@ -249,7 +261,6 @@ export default function NewPurchasePage() {
           {calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}
           <div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
         </dl><p className="field-hint">{calculation.purchaseMode === "weight" ? `Husk / Mattai credit is calculated at ${formatCurrency(toNumber(form.husk_price_per_piece))} per nut from your purchase cost settings. ` : ""}Green credits increase the farmer amount; red deductions reduce it.</p></section>
-        <DefaultsSummary note="New purchases start from these defaults. Edit rate on a deduction changes that purchase only; change the defaults on the Settings page." />
       </aside>
     </section>
   );

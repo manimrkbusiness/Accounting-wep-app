@@ -75,6 +75,10 @@ Database rules:
 - **Cash in hand** = opening + capital in + receipts + sale advances + other income
   − capital out − farmer payments − purchase advances − expenses − other payments.
 
+Each farmer deduction can carry its own piece count (pieces dehusked, pieces
+harvested); blank means the full coconut quantity. The main coconut quantity is
+what enters stock and the lorry load.
+
 Labor deducted from a farmer on a purchase is shown as a memo figure. The wages
 actually paid to workers are recorded under Expenses, so profit stays correct
 whether or not a deduction was ticked on the purchase.

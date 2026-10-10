@@ -9,6 +9,10 @@ import { toNumber } from "./format";
 export type PurchaseCalcInput = {
   purchase_mode: PurchaseMode;
   coconut_quantity: string;
+  /** Pieces dehusked; blank means the full coconut quantity. */
+  dehusking_pieces?: string;
+  /** Pieces harvested by the team; blank means the full coconut quantity. */
+  harvesting_pieces?: string;
   net_weight_kg: string;
   wastage_percent: string;
   rate_per_kg: string;
@@ -31,8 +35,10 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const wastage = net * wastagePercent / 100;
   const payable = Math.max(net - wastage, 0);
   const coconutTotal = purchaseMode === "quantity" ? quantity * toNumber(form.rate_per_piece) : payable * toNumber(form.rate_per_kg);
-  const huskRemovalCost = form.deduct_dehusking ? quantity / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
-  const treeCollectionCost = form.deduct_harvesting ? quantity / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
+  const dehuskingPieces = form.dehusking_pieces?.trim() ? Math.max(toNumber(form.dehusking_pieces), 0) : quantity;
+  const harvestingPieces = form.harvesting_pieces?.trim() ? Math.max(toNumber(form.harvesting_pieces), 0) : quantity;
+  const huskRemovalCost = form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
+  const treeCollectionCost = form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
   const huskPriceIncome = purchaseMode === "weight" ? quantity * toNumber(form.husk_price_per_piece) : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
   const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
@@ -42,7 +48,7 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const averageWeightGrams = purchaseMode === "weight" && quantity > 0 ? net / quantity * 1000 : 0;
   const averagePricePerPiece = quantity > 0 ? total / quantity : 0;
   const balance = total - advance + additionalCredit - additionalDebit;
-  return { purchaseMode, quantity, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
+  return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
 }
 
 // ---------------------------------------------------------------------------
