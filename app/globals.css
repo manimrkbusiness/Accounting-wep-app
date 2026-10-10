@@ -1912,3 +1912,12 @@ tr.day-row td {
   flex: 0 0 auto;
   font-size: 0.78rem;
 }
+
+.rate-line .rate-edit-button {
+  border: 1px solid var(--line-strong);
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+}

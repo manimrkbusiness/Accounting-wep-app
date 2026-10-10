@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
 import { calculatePurchase } from "../../lib/calc";
@@ -213,7 +214,7 @@ export default function NewPurchasePage() {
       <div className="deduction-card" key={kind}>
         <label className="checkbox-field"><input type="checkbox" checked={checked} onChange={(event) => setField(kind === "dehusking" ? "deduct_dehusking" : "deduct_harvesting", event.target.checked)} /><span><strong>{label}</strong><small>Trader pays this labor and subtracts it from the farmer amount.</small></span></label>
         {checked ? <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /><span className="field-hint">{kind === "dehusking" ? "Pieces the dehusking team handled, including any dropped coconuts the farmer added." : "Only the pieces the harvesting team took from the trees. Naturally dropped coconuts are not counted here."}</span></label> : null}
-        <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(cost)} deducted` : ""}</span>{rateEditor === kind ? null : <button className="link-button" onClick={() => openRateEditor(kind)} type="button">Edit rate</button>}</div>
+        <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(cost)} deducted` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
         {rateEditor === kind ? <div className="inline-form"><label>{label} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only, for example a special rate for this farmer. The default in Settings stays as it is.</span></div> : null}
       </div>
     );
