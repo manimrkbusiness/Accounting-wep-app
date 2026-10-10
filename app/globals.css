@@ -1891,3 +1891,24 @@ tr.day-row td {
   display: grid;
   gap: 3px;
 }
+
+.deduction-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rate-line {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.rate-line .link-button {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+}

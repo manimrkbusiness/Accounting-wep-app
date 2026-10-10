@@ -8,7 +8,7 @@ import { useWorkspace } from "../lib/workspace";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatStockId, today, toNumber } from "../lib/format";
 import { processingTypes, type ProcessingType, type StockEntry } from "../lib/types";
 import { EmptyState, Panel } from "../components/ui";
-import { CostSettingsPanel, defaultSettings } from "../components/CostSettingsPanel";
+import { DefaultsSummary, defaultSettings } from "../components/CostSettingsPanel";
 
 type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; notes: string };
 
@@ -206,7 +206,7 @@ export default function StockPage() {
             <div><dt>Cost per kg</dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
             {saleRate > 0 ? <><div className="calculation-credit"><dt>Expected sale value</dt><dd>{formatCurrency(expectedValue)}</dd></div><div className={expectedMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Expected margin at {formatCurrency(saleRate)} / kg</dt><dd>{formatCurrency(expectedMargin)}</dd></div></> : null}
           </dl><p className="field-hint">Paid to farmers is taken from the purchase entries, after any deductions made there. Dehusking is what you pay at stock time. Together they are the cost of this stock before transport and other expenses.</p></section>
-          <CostSettingsPanel description="These defaults are used for new purchases and stock entries. Dehusking here uses the same rate as the purchase deduction." onSaved={(saved) => { if (!form.id) setForm((current) => ({ ...current, dehusking_rate_per_1000: String(saved.husk_removal_rate_per_1000), apply_dehusking: Number(saved.husk_removal_rate_per_1000) > 0 })); }} />
+          <DefaultsSummary note="Dehusking here uses the same rate as the purchase deduction. Change the defaults on the Settings page." />
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/v2/sales/new">Go to New sale</Link></section>
         </aside>
       </section>

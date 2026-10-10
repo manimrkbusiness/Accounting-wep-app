@@ -1,10 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { toNumber } from "../lib/format";
+import { formatCurrency, formatNumber, toNumber } from "../lib/format";
 import type { PurchaseMode, TraderSettings } from "../lib/types";
+import { KeyValueList } from "./ui";
+
+/** Compact read-only view of the defaults, with a link to the Settings page. */
+export function DefaultsSummary({ note }: { note?: string }) {
+  const ws = useWorkspace();
+  const settings = ws.settings ?? defaultSettings;
+  return (
+    <section className="tool-panel">
+      <div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Defaults in use</h2></div><Link className="secondary-button" href="/v2/settings">Settings</Link></div>
+      <KeyValueList rows={[
+        { label: "Default purchase method", value: settings.purchase_mode === "quantity" ? "Per nut" : "Weight-based" },
+        { label: "Dehusking deduction", value: `${formatCurrency(Number(settings.husk_removal_rate_per_1000))} / 1,000` },
+        { label: "Coconut harvesting deduction", value: `${formatCurrency(Number(settings.tree_collection_rate_per_1000))} / 1,000` },
+        { label: "Husk / Mattai price", value: `${formatCurrency(Number(settings.husk_price_per_piece))} / nut` },
+        { label: "Kudume wastage", value: `${formatNumber(Number(settings.kudume_wastage_percent), 2)}%` }
+      ]} />
+      {note ? <p className="field-hint">{note}</p> : null}
+    </section>
+  );
+}
 
 export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, kudume_wastage_percent: 3 };
 
