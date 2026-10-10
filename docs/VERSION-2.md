@@ -23,7 +23,13 @@ data migration because nothing in Version 1 was changed or duplicated.
 4. **Record expenses** (`/v2/expenses`): harvesting, dehusking and loading
    wages per worker, transport, diesel, vehicle maintenance, food and tea, and
    husk handling. Each expense counts towards coconut, husk or general.
-5. **Settle money** from Purchase history (Pay) and Sales history (Receive), or
+5. **Record harvesting** (`/v2/harvesting`). Add harvesting teams and the workers in
+   them, then log each day's harvest: team, pieces, and the pay rate. The amount paid
+   to the team is booked automatically as a harvesting-labor expense. Link a harvesting
+   entry to the purchase of those coconuts here or later from Purchase history. This is
+   separate from the "Deduct coconut harvesting" option on the purchase, which decides
+   whether the farmer or the trader bears the cost.
+6. **Settle money** from Purchase history (Pay) and Sales history (Receive), or
    from the cash book. Opening cash and capital are optional.
 6. **Dashboard** (`/v2`) shows net profit, coconut margin, husk profit, expenses
    by type, stock in hand and its value, stock ageing, payable to farmers,

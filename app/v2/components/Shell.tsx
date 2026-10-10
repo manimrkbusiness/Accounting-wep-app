@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, ArrowLeftRight, Boxes, HardHat, LayoutDashboard, LogOut, Receipt, Settings, ShoppingCart, Sprout, Store, Truck, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Boxes, HardHat, LayoutDashboard, LogOut, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
 
@@ -13,6 +13,7 @@ export const navItems: NavItem[] = [
   { href: "/v2", label: "Dashboard", short: "Home", icon: LayoutDashboard, description: "Profit, stock, cash and outstanding balances at a glance." },
   { href: "/v2/purchases", label: "Purchases", short: "Buy", icon: ShoppingCart, description: "Coconut bought from farmers and what is still in stock." },
   { href: "/v2/stock", label: "Stock", short: "Stock", icon: Boxes, description: "Weigh per-nut purchases into stock so they can go into a lorry load." },
+  { href: "/v2/harvesting", label: "Coconut Harvesting", short: "Harvest", icon: Trees, description: "Harvesting teams, the coconuts they harvest each day, and the labor you pay them." },
   { href: "/v2/sales", label: "Sales", short: "Sell", icon: Truck, description: "Coconut loads and husk sold to buyers." },
   { href: "/v2/farmers", label: "Farmers", short: "Farmers", icon: UsersRound, description: "Farmer contacts and their farming locations." },
   { href: "/v2/buyers", label: "Buyers", short: "Buyers", icon: Store, description: "Coconut and husk buyers you sell to." },

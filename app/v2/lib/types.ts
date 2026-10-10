@@ -225,7 +225,37 @@ export type Expense = {
   purchase_id: number | null;
   sale_id: number | null;
   stock_entry_id: number | null;
+  harvesting_entry_id: number | null;
   description: string | null;
+  created_at: string;
+};
+
+export type HarvestingTeam = {
+  id: number;
+  trader_id: string;
+  name: string;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HarvestingTeamMember = {
+  id: number;
+  trader_id: string;
+  team_id: number;
+  employee_id: number;
+};
+
+export type HarvestingEntry = {
+  id: number;
+  trader_id: string;
+  harvest_date: string;
+  team_id: number | null;
+  coconut_quantity: number;
+  rate_per_1000: number;
+  purchase_id: number | null;
+  notes: string | null;
+  total_cost: number;
   created_at: string;
 };
 

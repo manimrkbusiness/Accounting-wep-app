@@ -24,6 +24,15 @@ export default function PurchasesPage() {
   const [paymentFor, setPaymentFor] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentForm>({ amount: "", date: today(), method: "cash", description: "" });
   const [focusId, setFocusId] = useState<number | null>(null);
+  const [harvestFor, setHarvestFor] = useState<number | null>(null);
+  const [harvestPick, setHarvestPick] = useState("");
+
+  const harvestByPurchase = useMemo(() => {
+    const map = new Map<number, typeof ws.harvestingEntries>();
+    ws.harvestingEntries.forEach((entry) => { if (entry.purchase_id) map.set(entry.purchase_id, [...(map.get(entry.purchase_id) ?? []), entry]); });
+    return map;
+  }, [ws.harvestingEntries]);
+  const unlinkedHarvests = useMemo(() => ws.harvestingEntries.filter((entry) => !entry.purchase_id), [ws.harvestingEntries]);
 
   useEffect(() => {
     const focus = Number(new URLSearchParams(window.location.search).get("focus"));
@@ -91,6 +100,29 @@ export default function PurchasesPage() {
     await ws.refresh();
   }
 
+  async function linkHarvest(purchaseId: number) {
+    if (!ws.session || !harvestPick) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("harvesting_entries").update({ purchase_id: purchaseId }).eq("id", Number(harvestPick)).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    setHarvestFor(null); setHarvestPick("");
+    ws.notify("Harvesting linked to this purchase. Its labor cost now shows against this purchase.");
+    await ws.refresh();
+  }
+
+  async function unlinkHarvest(entryId: number) {
+    if (!ws.session) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("harvesting_entries").update({ purchase_id: null }).eq("id", entryId).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify("Harvesting unlinked from this purchase.");
+    await ws.refresh();
+  }
+
   async function deletePurchase(purchase: Purchase) {
     if (!ws.session) return;
     const info = ws.stock.get(purchase.id);
@@ -115,7 +147,7 @@ export default function PurchasesPage() {
         <label>Farmer<select value={farmerFilter} onChange={(event) => setFarmerFilter(event.target.value)}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
         <label>Stock<select value={stockFilter} onChange={(event) => setStockFilter(event.target.value as typeof stockFilter)}><option value="all">All purchases</option><option value="in-stock">Still in stock</option><option value="sold-out">Fully sold</option></select></label>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Actions</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Harvesting</th><th>Actions</th></tr></thead><tbody>
         {rows.map((purchase) => {
           const farmer = ws.farmerById.get(purchase.farmer_id);
           const location = purchase.location_id ? ws.locationById.get(purchase.location_id) ?? null : null;
@@ -134,6 +166,9 @@ export default function PurchasesPage() {
             <td>{purchase.purchase_mode === "quantity" ? "Per nut" : `${formatNumber(Number(purchase.payable_weight_kg))} kg`}{purchase.purchase_mode === "weight" ? <span className="muted-text">Net {formatNumber(Number(purchase.net_weight_kg))} kg</span> : null}</td>
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoPayment(purchase, entry)} type="button">Undo</button></span>)}</div> : null}</td>
+            <td>{(harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => unlinkHarvest(entry.id)} type="button">Unlink</button></div>)}
+              <button className="link-button" onClick={() => { setHarvestFor(harvestFor === purchase.id ? null : purchase.id); setHarvestPick(""); }} type="button">{harvestFor === purchase.id ? "Close" : "Link harvesting"}</button>
+              {harvestFor === purchase.id ? <div className="inline-form"><label>Harvesting entry<select value={harvestPick} onChange={(event) => setHarvestPick(event.target.value)}><option value="">Select an unlinked harvest</option>{unlinkedHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "No team"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs</option>)}</select></label>{unlinkedHarvests.length === 0 ? <span className="field-hint">No unlinked harvests. Record one on <Link href="/v2/harvesting">Coconut Harvesting</Link>.</span> : null}<div className="row-actions"><button className="primary-button" disabled={ws.saving || !harvestPick} onClick={() => linkHarvest(purchase.id)} type="button">Link</button><button className="link-button" onClick={() => setHarvestFor(null)} type="button">Cancel</button></div></div> : null}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName)} type="button">PDF</button>
               <button className="secondary-button" onClick={() => router.push(`/v2/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>
