@@ -6,7 +6,7 @@ import { Panel } from "../components/ui";
 export default function SettingsPage() {
   return (
     <section className="workspace-grid">
-      <CostSettingsPanel description="These defaults are applied automatically to every new purchase and stock entry. Change them here, or edit a deduction rate directly on the purchase form; both update the same default." />
+      <CostSettingsPanel description="These defaults are applied automatically to every new purchase and stock entry. Change them here. Editing a rate on a single purchase form changes that purchase only, not these defaults." />
       <Panel eyebrow="How they are used" title="What each default does">
         <dl className="detail-list">
           <div><dt>Default purchase method</dt><dd>Pre-selected on New purchase. Weight-based pays by payable kilograms after the weighbridge; per nut pays by piece and goes through Stock before a sale.</dd></div>

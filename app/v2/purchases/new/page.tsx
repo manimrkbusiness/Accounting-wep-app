@@ -184,22 +184,14 @@ export default function NewPurchasePage() {
     setRateEditor(kind);
   }
 
-  /** Applies the rate to this purchase and saves it as the trader default. */
-  async function saveRate(kind: "dehusking" | "harvesting") {
-    if (!ws.session) return;
+  /** Applies the rate to this purchase only. The default in Settings is not touched. */
+  function saveRate(kind: "dehusking" | "harvesting") {
     const value = toNumber(rateDraft);
     if (value < 0) { ws.fail("Enter a rate of 0 or more."); return; }
     if (kind === "dehusking") setForm((current) => ({ ...current, husk_removal_rate_per_1000: String(value), deduct_dehusking: value > 0 }));
     else setForm((current) => ({ ...current, tree_collection_rate_per_1000: String(value), deduct_harvesting: value > 0 }));
-    ws.setSaving(true);
-    const { error } = await supabase.from("trader_settings").upsert(kind === "dehusking"
-      ? { trader_id: ws.session.user.id, husk_removal_rate_per_1000: value }
-      : { trader_id: ws.session.user.id, tree_collection_rate_per_1000: value });
-    ws.setSaving(false);
-    if (error) { ws.fail(error.message); return; }
     setRateEditor(null);
-    ws.notify(`${kind === "dehusking" ? "Dehusking" : "Coconut harvesting"} rate applied to this purchase and saved as your default.`);
-    await ws.refresh();
+    ws.notify(`${kind === "dehusking" ? "Dehusking" : "Coconut harvesting"} rate changed for this purchase only. Your default in Settings is unchanged.`);
   }
 
   const deductionCard = (kind: "dehusking" | "harvesting") => {
@@ -210,7 +202,7 @@ export default function NewPurchasePage() {
       <div className="deduction-card" key={kind}>
         <label className="checkbox-field"><input type="checkbox" checked={checked} onChange={(event) => setField(kind === "dehusking" ? "deduct_dehusking" : "deduct_harvesting", event.target.checked)} /><span><strong>{label}</strong><small>Trader pays this labor and subtracts it from the farmer amount.</small></span></label>
         <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && calculation.quantity > 0 ? ` · ${formatCurrency(calculation.quantity / 1000 * rate)} on this purchase` : ""}</span>{rateEditor === kind ? null : <button className="link-button" onClick={() => openRateEditor(kind)} type="button">Edit rate</button>}</div>
-        {rateEditor === kind ? <div className="inline-form"><label>{label} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase and becomes the default in Settings.</span></div> : null}
+        {rateEditor === kind ? <div className="inline-form"><label>{label} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only, for example a special rate for this farmer. The default in Settings stays as it is.</span></div> : null}
       </div>
     );
   };
@@ -234,7 +226,7 @@ export default function NewPurchasePage() {
           {form.purchase_mode === "weight" ? <label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={form.rate_per_kg} onChange={(event) => setField("rate_per_kg", event.target.value)} required /></label> : <label>Price per coconut (INR)<input type="number" min="0" step="0.01" value={form.rate_per_piece} onChange={(event) => setField("rate_per_piece", event.target.value)} required /><span className="field-hint">The purchase total is pieces multiplied by this price.</span></label>}
           <label>Advance paid (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later settlements are recorded from Purchase history.</span></label>
         </div>
-        <fieldset className="deduction-options"><legend>Farmer deductions</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">Leave a deduction unchecked when the trader bears that cost. Record the wages you actually pay under Expenses. Rates come from Settings; Edit rate changes them for this purchase and for future ones.</span></fieldset>
+        <fieldset className="deduction-options"><legend>Farmer deductions</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">Leave a deduction unchecked when the trader bears that cost. Record the wages you actually pay under Expenses. Rates come from Settings; Edit rate changes them for this purchase only.</span></fieldset>
         <div className="adjustment-actions"><button className="adjustment-toggle credit" onClick={() => { setShowCredit(true); setField("additional_credit_amount", form.additional_credit_amount === "0" ? "" : form.additional_credit_amount); }} type="button">+ Add credit to farmer</button><button className="adjustment-toggle debit" onClick={() => { setShowDebit(true); setField("additional_debit_amount", form.additional_debit_amount === "0" ? "" : form.additional_debit_amount); }} type="button">- Add debit to farmer</button></div>
         {showCredit || toNumber(form.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_credit_amount} onChange={(event) => setField("additional_credit_amount", event.target.value)} /></label><label>Why is this being credited?<input value={form.additional_credit_reason} onChange={(event) => setField("additional_credit_reason", event.target.value)} placeholder="Reason for additional payment" /></label></div> : null}
         {showDebit || toNumber(form.additional_debit_amount) > 0 ? <div className="adjustment-fields debit-fields"><label>Debit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_debit_amount} onChange={(event) => setField("additional_debit_amount", event.target.value)} /></label><label>Why is this being deducted?<input value={form.additional_debit_reason} onChange={(event) => setField("additional_debit_reason", event.target.value)} placeholder="Reason for deduction" /></label></div> : null}
@@ -257,7 +249,7 @@ export default function NewPurchasePage() {
           {calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}
           <div className="calculation-total"><dt>Balance to pay</dt><dd>{formatCurrency(calculation.balance)}</dd></div>
         </dl><p className="field-hint">{calculation.purchaseMode === "weight" ? `Husk / Mattai credit is calculated at ${formatCurrency(toNumber(form.husk_price_per_piece))} per nut from your purchase cost settings. ` : ""}Green credits increase the farmer amount; red deductions reduce it.</p></section>
-        <DefaultsSummary note="New purchases start from these defaults. Edit rate on a deduction above changes the default too." />
+        <DefaultsSummary note="New purchases start from these defaults. Edit rate on a deduction changes that purchase only; change the defaults on the Settings page." />
       </aside>
     </section>
   );
