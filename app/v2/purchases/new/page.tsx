@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { supabase } from "../../../supabaseClient";
@@ -249,7 +250,7 @@ export default function NewPurchasePage() {
     <DraftNotice show={draft.restored} what="purchase" onDiscard={discardDraft} />
     <section className="workspace-grid">
       <form className="tool-panel purchase-form" onSubmit={savePurchase}>
-        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div>{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : null}</div>
+        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : null}<Link className="secondary-button" href="/v2/purchases">Purchase history</Link></div></div>
         {form.id && allocated > 0 ? <p className="mode-note">{formatNumber(allocated, 0)} pieces of this purchase are already allocated to sales. Those sales are not changed when you edit this record.</p> : null}
         <div className="form-grid">
           <label>Farmer<select value={form.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/farmers?returnTo=purchase"); return; } setForm((current) => ({ ...current, farmer_id: value, location_id: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label>

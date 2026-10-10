@@ -15,9 +15,20 @@ function readStored<S>(key: string): Stored<S> | null {
   }
 }
 
+const CHANGE_EVENT = "ctd-draft-change";
+
+function notifyChange() {
+  try {
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  } catch {
+    // ignore
+  }
+}
+
 function writeStored<S>(key: string, value: S) {
   try {
     window.localStorage.setItem(PREFIX + key, JSON.stringify({ value, savedAt: new Date().toISOString() } satisfies Stored<S>));
+    notifyChange();
   } catch {
     // Storage can be unavailable (private mode, quota). The form still works without drafts.
   }
@@ -25,10 +36,77 @@ function writeStored<S>(key: string, value: S) {
 
 function removeStored(key: string) {
   try {
-    window.localStorage.removeItem(PREFIX + key);
+    if (window.localStorage.getItem(PREFIX + key) !== null) {
+      window.localStorage.removeItem(PREFIX + key);
+      notifyChange();
+    }
   } catch {
     // ignore
   }
+}
+
+export type DraftSummary = { form: string; recordId: string; savedAt: string };
+
+/** Unsaved entries the trader has in progress, newest first. */
+export function listDrafts(traderId: string | undefined): DraftSummary[] {
+  if (typeof window === "undefined" || !traderId) return [];
+  const found = new Map<string, DraftSummary>();
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const storageKey = window.localStorage.key(index);
+      if (!storageKey || !storageKey.startsWith(`${PREFIX}${traderId}:`)) continue;
+      const [, form, recordId] = storageKey.slice(PREFIX.length).split(":");
+      if (!form || !recordId) continue;
+      const stored = readStored<unknown>(storageKey.slice(PREFIX.length));
+      const savedAt = stored?.savedAt ?? "";
+      const id = `${form}:${recordId}`;
+      const existing = found.get(id);
+      if (!existing || existing.savedAt < savedAt) found.set(id, { form, recordId, savedAt });
+    }
+  } catch {
+    return [];
+  }
+  return Array.from(found.values()).sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+}
+
+/** Removes every stored draft for one form (all records), or for one record when given. */
+export function discardDrafts(traderId: string | undefined, form: string, recordId?: string) {
+  if (typeof window === "undefined" || !traderId) return;
+  try {
+    const prefix = `${PREFIX}${traderId}:${form}:${recordId ?? ""}`;
+    const keys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const storageKey = window.localStorage.key(index);
+      if (storageKey && storageKey.startsWith(prefix)) keys.push(storageKey);
+    }
+    keys.forEach((storageKey) => window.localStorage.removeItem(storageKey));
+    if (keys.length) notifyChange();
+  } catch {
+    // ignore
+  }
+}
+
+/** Live list of drafts for the sidebar and history pages; updates whenever a draft is written or cleared. */
+export function useDraftIndex(traderId: string | undefined) {
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  useEffect(() => {
+    const refresh = () => setDrafts(listDrafts(traderId));
+    refresh();
+    window.addEventListener(CHANGE_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(CHANGE_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [traderId]);
+  return drafts;
+}
+
+/** Where to resume a form's latest draft, or null when there is none. */
+export function resumeHref(drafts: DraftSummary[], form: string, newPath: string) {
+  const latest = drafts.find((draft) => draft.form === form);
+  if (!latest) return null;
+  return latest.recordId === "new" ? newPath : `${newPath}?edit=${latest.recordId}`;
 }
 
 /**

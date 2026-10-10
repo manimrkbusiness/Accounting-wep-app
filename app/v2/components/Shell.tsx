@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, ArrowLeftRight, Boxes, HardHat, LayoutDashboard, LogOut, Receipt, Settings, ShoppingCart, Sprout, Store, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
+import { resumeHref, useDraftIndex } from "../lib/useDraft";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; description: string };
 
@@ -42,6 +43,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const workspace = useWorkspace();
   const { status, profile, message, error, signOut } = workspace;
+  const drafts = useDraftIndex(workspace.session?.user.id);
+
+  // While an entry is unsaved, its sidebar item reopens that entry instead of the list.
+  const resumeTargets: Record<string, string | null> = {
+    "/v2/purchases": resumeHref(drafts, "purchase", "/v2/purchases/new"),
+    "/v2/sales": resumeHref(drafts, "sale", "/v2/sales/new"),
+    "/v2/stock": drafts.some((draft) => draft.form === "stock") ? "/v2/stock" : null
+  };
+  const hrefFor = (item: NavItem) => resumeTargets[item.href] ?? item.href;
+  const hasDraft = (item: NavItem) => Boolean(resumeTargets[item.href]);
 
   if (status === "loading") {
     return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">Version 2 workspace</span><h1>Loading workspace</h1><p>Connecting to your private trader records.</p></section></main>;
@@ -63,7 +74,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className="desktop-sidebar">
         <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Version 2 preview</span></div></div></div>
         <nav className="sidebar-nav" aria-label="Version 2 navigation">
-          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={item.href} key={item.href} aria-current={active ? "page" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span></Link>; })}
+          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
           <Link className="v2-back-link" href="/dashboard"><ArrowLeft size={18} strokeWidth={2.2} aria-hidden="true" /><span>Back to Version 1</span></Link>
         </nav>
         <div className="sidebar-account"><span className="eyebrow">Signed in as</span><strong>{profile?.business_name || profile?.full_name}</strong><span>{profile?.email}</span></div>
@@ -76,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="topbar-actions"><Link className="secondary-button topbar-v1" href="/dashboard"><ArrowLeft size={16} strokeWidth={2.2} aria-hidden="true" />Version 1</Link><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
         </header>
         <nav className="mobile-section-nav" aria-label="Mobile navigation">
-          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={item.href} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.short}</span></Link>; })}
+          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.short}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
         </nav>
         {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}

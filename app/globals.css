@@ -1949,3 +1949,40 @@ tr.day-row td {
   display: grid;
   gap: 0;
 }
+
+.nav-draft {
+  background: var(--orange-soft);
+  border-radius: 999px;
+  color: var(--orange);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+  margin-left: auto;
+  padding: 2px 7px;
+}
+
+.mobile-section-nav .nav-draft {
+  margin-left: 2px;
+  padding: 0 4px;
+}
+
+.resume-banner {
+  align-items: center;
+  background: var(--orange-soft);
+  border: 1px solid #f1c9ad;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.resume-banner > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.resume-banner .eyebrow {
+  color: var(--orange);
+}

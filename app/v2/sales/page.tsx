@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleI
 import { cashMethods, type CashEntry, type CashMethod, type Sale } from "../lib/types";
 import { downloadSalePdf } from "../lib/pdf";
 import { EmptyState, StatusBadge } from "../components/ui";
+import { ResumeBanner } from "../components/ResumeBanner";
 
 type ReceiptForm = { amount: string; date: string; method: CashMethod; description: string };
 
@@ -93,6 +94,8 @@ export default function SalesPage() {
   }
 
   return (
+    <div className="stack">
+    <ResumeBanner form="sale" newPath="/v2/sales/new" what="sale" />
     <section className="ledger-panel">
       <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Sales history</h2></div><div className="page-actions"><Link className="primary-button" href="/v2/sales/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New coconut sale</Link><Link className="secondary-button" href="/v2/sales/new?kind=husk">Husk sale</Link></div></div>
       <div className="filter-bar">
@@ -143,5 +146,6 @@ export default function SalesPage() {
         })}
       </tbody></table>{rows.length === 0 ? <EmptyState>No sales match this search. Create a load from purchases in stock.</EmptyState> : null}</div>
     </section>
+    </div>
   );
 }

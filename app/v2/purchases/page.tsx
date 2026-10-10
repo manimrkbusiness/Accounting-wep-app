@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNu
 import { cashMethods, type CashEntry, type CashMethod, type Purchase } from "../lib/types";
 import { downloadPurchasePdf } from "../lib/pdf";
 import { EmptyState, StatusBadge } from "../components/ui";
+import { ResumeBanner } from "../components/ResumeBanner";
 
 type PaymentForm = { amount: string; date: string; method: CashMethod; description: string };
 
@@ -105,6 +106,8 @@ export default function PurchasesPage() {
   }
 
   return (
+    <div className="stack">
+    <ResumeBanner form="purchase" newPath="/v2/purchases/new" what="purchase" />
     <section className="ledger-panel">
       <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div><Link className="primary-button" href="/v2/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New purchase</Link></div>
       <div className="filter-bar">
@@ -148,5 +151,6 @@ export default function PurchasesPage() {
         })}
       </tbody></table>{rows.length === 0 ? <EmptyState>No purchases match this search.</EmptyState> : null}</div>
     </section>
+    </div>
   );
 }
