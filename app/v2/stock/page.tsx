@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
-import { draftKey, queryNumber, useDraft } from "../lib/useDraft";
+import { discardDrafts, draftKey, queryNumber, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatStockId, today, toNumber } from "../lib/format";
 import { processingTypes, type ProcessingType, type StockEntry } from "../lib/types";
@@ -121,9 +121,11 @@ export default function StockPage() {
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
     ws.notify(form.id ? `${formatStockId(Number(data))} updated.` : `${formatNumber(pieces, 0)} pieces weighed into stock as ${formatStockId(Number(data))}. They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
+    discardDrafts(ws.session.user.id, "stock");
     resetForm();
-    await ws.refresh();
     router.push("/v2/stock");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    await ws.refresh();
   }
 
   async function removeEntry(entry: StockEntry, mode: "undo" | "delete") {
@@ -181,7 +183,7 @@ export default function StockPage() {
               <td>{ws.farmerById.get(purchase.farmer_id)?.name ?? "Farmer"}</td>
               <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">Per nut · {Number(purchase.husk_removal_rate_per_1000) > 0 ? "dehusking deducted from farmer" : "dehusking not deducted"}</span></td>
               <td>{formatNumber(available, 0)} of {formatNumber(Number(purchase.coconut_quantity), 0)}</td>
-              <td>{selected ? <input type="number" min="1" max={Math.floor(available)} step="1" value={selection.get(purchase.id) ?? ""} onChange={(event) => setSelection((current) => new Map(current).set(purchase.id, event.target.value))} /> : <span className="muted-text">-</span>}</td>
+              <td>{selected ? <input type="number" min="1" max={Math.floor(available)} step="1" value={selection.get(purchase.id) ?? ""} onChange={(event) => { const raw = event.target.value; const clamped = raw === "" ? "" : String(Math.max(0, Math.min(Math.floor(toNumber(raw)), Math.floor(available)))); setSelection((current) => new Map(current).set(purchase.id, clamped)); }} /> : <span className="muted-text">-</span>}</td>
               <td>{selected ? (Math.max(available - selectedPieces, 0) > 0.5 ? <span className="chip warn">{formatNumber(Math.max(available - selectedPieces, 0), 0)} left to weigh</span> : <span className="muted-text">All weighed</span>) : <span className="muted-text">-</span>}</td>
               <td>{formatCurrency(info?.costPerPiece ?? 0)}</td>
               <td className="balance-cell">{selected ? formatCurrency(selectedPieces * (info?.costPerPiece ?? 0)) : "-"}</td>

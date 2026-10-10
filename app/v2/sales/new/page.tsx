@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../supabaseClient";
 import { useWorkspace } from "../../lib/workspace";
-import { draftKey, queryNumber, useDraft } from "../../lib/useDraft";
+import { discardDrafts, draftKey, queryNumber, useDraft } from "../../lib/useDraft";
 import { DraftNotice } from "../../components/DraftNotice";
 import { allocationCost, calculateSale, huskPiecesInHand } from "../../lib/calc";
 import { addDays, formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../../lib/format";
@@ -228,9 +228,14 @@ export default function NewSalePage() {
   }
 
   function setPart(purchaseId: number, key: "pieces" | "wasted", value: string) {
+    const available = availableFor(purchaseId);
     setSelection((current) => {
       const entry = current.get(purchaseId) ?? { pieces: "", wasted: "" };
-      return new Map(current).set(purchaseId, { ...entry, [key]: value });
+      // Pieces in the load plus wasted pieces can never exceed what is available.
+      const other = key === "pieces" ? toNumber(entry.wasted) : toNumber(entry.pieces);
+      const cap = Math.max(0, Math.floor(available) - other);
+      const clamped = value === "" ? "" : String(Math.max(0, Math.min(Math.floor(toNumber(value)), cap)));
+      return new Map(current).set(purchaseId, { ...entry, [key]: clamped });
     });
   }
 
@@ -282,10 +287,11 @@ export default function NewSalePage() {
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
+    if (ws.session) discardDrafts(ws.session.user.id, "sale");
     discardDraft();
     ws.notify(form.id ? `${formatSaleId(Number(data))} updated.` : `${formatSaleId(Number(data))} saved. Stock has been reduced for the included purchases.`);
-    await ws.refresh();
     router.push("/v2/sales");
+    await ws.refresh();
   }
 
   const unitLabel = form.unit === "kg" ? "kg" : form.unit === "piece" ? "pieces" : "loads";
