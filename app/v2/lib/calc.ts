@@ -37,8 +37,11 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const coconutTotal = purchaseMode === "quantity" ? quantity * toNumber(form.rate_per_piece) : payable * toNumber(form.rate_per_kg);
   const dehuskingPieces = form.dehusking_pieces?.trim() ? Math.max(toNumber(form.dehusking_pieces), 0) : quantity;
   const harvestingPieces = form.harvesting_pieces?.trim() ? Math.max(toNumber(form.harvesting_pieces), 0) : quantity;
-  const huskRemovalCost = form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
-  const treeCollectionCost = form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
+  // Dehusking and harvesting can only be deducted from the farmer on weight-based
+  // purchases. On per-nut purchases the trader bears those costs, so no deduction applies.
+  const canDeduct = purchaseMode === "weight";
+  const huskRemovalCost = canDeduct && form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
+  const treeCollectionCost = canDeduct && form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
   // Husk comes from the dehusked pieces, so the credit follows that count.
   const huskPriceIncome = purchaseMode === "weight" ? dehuskingPieces * toNumber(form.husk_price_per_piece) : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
