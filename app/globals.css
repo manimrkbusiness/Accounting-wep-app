@@ -1709,6 +1709,23 @@ td > .muted-text {
   color: var(--green-dark);
 }
 
+.harvest-pick {
+  background: var(--surface);
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  color: var(--green-dark);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 7px 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.harvest-pick:hover {
+  background: var(--green);
+  color: #fff;
+}
+
 .status-badge.pending {
   background: var(--orange-soft);
   color: var(--orange);
