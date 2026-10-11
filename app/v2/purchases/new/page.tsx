@@ -42,7 +42,7 @@ type PurchaseForm = {
   // Harvested coconuts this purchase is made from (new purchases only).
   harvest_ids: number[];
   additional_pieces: string;
-  additional_team_id: string;
+  additional_head_id: string;
   additional_rate: string;
 };
 
@@ -74,7 +74,7 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     notes: "",
     harvest_ids: [],
     additional_pieces: "",
-    additional_team_id: "",
+    additional_head_id: "",
     additional_rate: String(settings.tree_collection_rate_per_1000)
   };
 }
@@ -112,7 +112,7 @@ function formFromPurchase(purchase: Purchase, settings: TraderSettings): Purchas
     notes: purchase.notes ?? "",
     harvest_ids: [],
     additional_pieces: "",
-    additional_team_id: "",
+    additional_head_id: "",
     additional_rate: String(harvestingRate)
   };
 }
@@ -258,19 +258,24 @@ export default function NewPurchasePage() {
     if (saveError) { ws.setSaving(false); ws.fail(saveError); return; }
 
     // Reflect the chosen harvests in this new purchase.
+    let inlineHarvestPieces = 0;
     if (!form.id && newPurchaseId) {
       if (form.harvest_ids.length) {
         const { error } = await supabase.from("harvesting_entries").update({ purchase_id: newPurchaseId }).in("id", form.harvest_ids).eq("trader_id", ws.session.user.id);
         if (error) { ws.setSaving(false); ws.fail(`Purchase saved, but linking the harvests failed: ${error.message}`); await ws.refresh(); return; }
       }
-      if (additionalPieces > 0) {
-        const { error } = await supabase.from("harvesting_entries").insert({ trader_id: ws.session.user.id, harvest_date: form.trade_date, team_id: form.additional_team_id ? Number(form.additional_team_id) : null, coconut_quantity: additionalPieces, rate_per_1000: Math.max(toNumber(form.additional_rate), 0), purchase_id: newPurchaseId, notes: "Additional harvest added with the purchase" });
-        if (error) { ws.setSaving(false); ws.fail(`Purchase saved, but the additional harvest failed: ${error.message}`); await ws.refresh(); return; }
+      // Record a harvest inline when the trader named a team head (or typed extra pieces)
+      // without first recording it on Coconut Harvesting. Blank pieces uses the purchase
+      // quantity not already covered by the harvests picked above. Works for both methods.
+      inlineHarvestPieces = additionalPieces > 0 ? additionalPieces : (form.additional_head_id ? Math.max(calculation.quantity - selectedHarvestPieces, 0) : 0);
+      if (inlineHarvestPieces > 0) {
+        const { error } = await supabase.from("harvesting_entries").insert({ trader_id: ws.session.user.id, harvest_date: form.trade_date, head_employee_id: form.additional_head_id ? Number(form.additional_head_id) : null, farmer_id: form.farmer_id ? Number(form.farmer_id) : null, location_id: form.location_id ? Number(form.location_id) : null, coconut_quantity: inlineHarvestPieces, rate_per_1000: Math.max(toNumber(form.additional_rate), 0), purchase_id: newPurchaseId, notes: "Harvest recorded with the purchase" });
+        if (error) { ws.setSaving(false); ws.fail(`Purchase saved, but the harvest entry failed: ${error.message}`); await ws.refresh(); return; }
       }
     }
     ws.setSaving(false);
     draft.clear(blankForm(settings));
-    const harvestCount = (form.id ? 0 : form.harvest_ids.length) + (!form.id && additionalPieces > 0 ? 1 : 0);
+    const harvestCount = (form.id ? 0 : form.harvest_ids.length) + (inlineHarvestPieces > 0 ? 1 : 0);
     ws.notify(form.id ? "Purchase updated." : `Purchase recorded.${harvestCount > 0 ? ` ${harvestCount} harvest${harvestCount > 1 ? "s" : ""} linked to it.` : ""} It is now in stock and ready to be added to a sale.`);
     await ws.refresh();
     router.push("/v2/purchases");
@@ -329,13 +334,13 @@ export default function NewPurchasePage() {
           <p className="field-hint">Build this purchase from coconuts you recorded on Coconut Harvesting. The quantity below fills in from what you pick here.</p>
           <label>Select from previous harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">Choose a recorded harvest to add...</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : "No farmer"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "No head"}</option>)}</select><span className="field-hint">Picking a harvest fills in the farmer, location and quantity. Linked harvests no longer appear here.</span></label>
           {selectedHarvests.length ? <div className="chip-row">{selectedHarvests.map((entry) => <span className="chip good" key={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs{entry.farmer_id ? ` · ${ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer"}` : ""}<button className="chip-remove" onClick={() => removeHarvest(entry.id)} type="button">Remove</button></span>)}</div> : null}
-          {unlinkedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or add an additional harvest below.</p> : (availableHarvests.length === 0 && selectedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests{form.farmer_id ? " for this farmer" : ""}.</p> : null)}
+          {unlinkedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or name the team head below to record one now.</p> : (availableHarvests.length === 0 && selectedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests{form.farmer_id ? " for this farmer" : ""}.</p> : null)}
           <div className="form-grid">
-            <label>Additional harvest (pieces) <span className="optional">Optional</span><input type="number" min="0" step="1" value={form.additional_pieces} onChange={(event) => setField("additional_pieces", event.target.value)} placeholder="Extra coconuts not in a recorded harvest" /><span className="field-hint">Saved as a new harvest linked to this purchase.</span></label>
-            {additionalPieces > 0 ? <label>Harvested by team<select value={form.additional_team_id} onChange={(event) => setField("additional_team_id", event.target.value)}><option value="">No team</option>{ws.harvestingTeams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label> : null}
-            {additionalPieces > 0 ? <label>Pay rate per 1,000 (INR)<input type="number" min="0" step="0.01" value={form.additional_rate} onChange={(event) => setField("additional_rate", event.target.value)} /></label> : null}
+            <label>Harvested by (team head) <span className="optional">Optional</span><select value={form.additional_head_id} onChange={(event) => setField("additional_head_id", event.target.value)}><option value="">Not recorded here</option>{ws.employees.filter((emp) => emp.active).map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select><span className="field-hint">Pick the team head who harvested this load when you did not record it on Coconut Harvesting first. A harvest is saved and linked to this purchase.</span></label>
+            {form.additional_head_id || additionalPieces > 0 ? <label>Pieces harvested <span className="optional">Optional</span><input type="number" min="0" step="1" value={form.additional_pieces} onChange={(event) => setField("additional_pieces", event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(Math.max(calculation.quantity - selectedHarvestPieces, 0), 0) : "Pieces harvested"} /><span className="field-hint">Blank uses the purchase quantity{selectedHarvestPieces > 0 ? " not already in the harvests above" : ""}.</span></label> : null}
+            {form.additional_head_id || additionalPieces > 0 ? <label>Pay rate per 1,000 (INR)<input type="number" min="0" step="0.01" value={form.additional_rate} onChange={(event) => setField("additional_rate", event.target.value)} /></label> : null}
           </div>
-          {harvestTotal > 0 ? <p className="field-hint"><strong>{formatNumber(harvestTotal, 0)} pieces</strong> harvested ({formatNumber(selectedHarvestPieces, 0)} selected{additionalPieces > 0 ? ` + ${formatNumber(additionalPieces, 0)} additional` : ""}). The coconut quantity below is set to this.</p> : null}
+          {harvestTotal > 0 ? <p className="field-hint"><strong>{formatNumber(harvestTotal, 0)} pieces</strong> harvested ({formatNumber(selectedHarvestPieces, 0)} selected{additionalPieces > 0 ? ` + ${formatNumber(additionalPieces, 0)} extra` : ""}). The coconut quantity below is set to this.</p> : null}
         </fieldset> : (ws.harvestingEntries.some((entry) => entry.purchase_id === form.id) ? <p className="mode-note">Harvests linked to this purchase: {ws.harvestingEntries.filter((entry) => entry.purchase_id === form.id).map((entry) => `${formatNumber(Number(entry.coconut_quantity), 0)} pcs`).join(", ")}. Manage links from Purchase history.</p> : null)}
         <div className="form-grid">
           <label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(event) => setField("coconut_quantity", event.target.value)} required /><span className="field-hint">{form.purchase_mode === "weight" ? "Labor is deducted per 1,000 pieces; husk credit is added per nut." : "Labor deductions are calculated per 1,000 pieces."}</span></label>

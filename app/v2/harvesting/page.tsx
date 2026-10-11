@@ -35,6 +35,10 @@ export default function HarvestingPage() {
   const head = form.head_employee_id ? ws.employeeById.get(Number(form.head_employee_id)) : null;
   const entryFarmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   const periodEntries = useMemo(() => ws.harvestingEntries.filter((e) => inRange(e.harvest_date, range)), [ws.harvestingEntries, range]);
+  // History shows only harvests already tied to a purchase; pending ones sit in their own box.
+  const linkedEntries = useMemo(() => periodEntries.filter((e) => e.purchase_id), [periodEntries]);
+  const unlinkedEntries = useMemo(() => ws.harvestingEntries.filter((e) => !e.purchase_id).slice().sort((a, b) => (a.harvest_date < b.harvest_date ? 1 : -1)), [ws.harvestingEntries]);
+  const unlinkedCost = unlinkedEntries.reduce((sum, e) => sum + Number(e.total_cost), 0);
   const workers = ws.employees.filter((emp) => emp.active || String(emp.id) === form.head_employee_id);
 
   function headName(entry: HarvestingEntry) {
@@ -89,6 +93,17 @@ export default function HarvestingPage() {
     await ws.refresh();
   }
 
+  async function linkEntry(entry: HarvestingEntry, purchaseId: string) {
+    if (!ws.session || !purchaseId) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("harvesting_entries").update({ purchase_id: Number(purchaseId) }).eq("id", entry.id).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify(`Harvest linked to ${formatPurchaseId(Number(purchaseId))}. It has moved into history.`);
+    await ws.refresh();
+  }
+
   return (
     <div className="stack">
       <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => draft.clear(blankEntry(defaultRate))} />
@@ -120,20 +135,38 @@ export default function HarvestingPage() {
       </section>
 
       <section className="ledger-panel">
-        <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Harvesting entries</h2></div><PeriodPicker preset={period.preset} from={period.from} to={period.to} onChange={setPeriod} /></div>
-        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Farmer</th><th>Team head</th><th>Coconuts</th><th>Rate / 1,000</th><th>Paid</th><th>Linked purchase</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
-          {periodEntries.map((entry) => <tr key={entry.id}>
+        <div className="panel-heading"><div><span className="eyebrow">Not linked / not used</span><h2>Harvests waiting for a purchase</h2></div>{unlinkedEntries.length ? <span className="chip warn">{unlinkedEntries.length} pending · {formatCurrency(unlinkedCost)}</span> : null}</div>
+        <p className="muted-text">Harvests you have recorded but not yet tied to a purchase. Link one to the purchase of these coconuts, or build that purchase from it on the New purchase page. Once linked, it moves into the history below.</p>
+        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Farmer</th><th>Team head</th><th>Coconuts</th><th>Rate / 1,000</th><th>Paid</th><th>Link to purchase</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+          {unlinkedEntries.map((entry) => <tr key={entry.id}>
             <td>{formatDate(entry.harvest_date)}</td>
             <td>{entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : <span className="muted-text">-</span>}</td>
             <td>{headName(entry) ?? <span className="muted-text">-</span>}</td>
             <td>{formatNumber(Number(entry.coconut_quantity), 0)} pieces</td>
             <td>{formatCurrency(Number(entry.rate_per_1000))}</td>
             <td className="balance-cell">{formatCurrency(Number(entry.total_cost))}</td>
-            <td>{entry.purchase_id ? <Link className="chip good" href={`/v2/purchases?focus=${entry.purchase_id}`}>{formatPurchaseId(entry.purchase_id)}</Link> : <span className="chip warn">Not linked</span>}</td>
+            <td>{unlinkedPurchases.length ? <select value="" disabled={ws.saving} onChange={(e) => linkEntry(entry, e.target.value)}><option value="">Link to…</option>{unlinkedPurchases.slice(0, 100).map((p) => <option key={p.id} value={p.id}>{formatPurchaseId(p.id)} · {ws.farmerById.get(p.farmer_id)?.name ?? "Farmer"} · {formatDate(p.trade_date)} · {formatNumber(Number(p.coconut_quantity), 0)} pcs</option>)}</select> : <span className="muted-text">No free purchase</span>}</td>
             <td>{entry.notes || "-"}</td>
             <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => deleteEntry(entry)} type="button">Delete</button></div></td>
           </tr>)}
-        </tbody></table>{periodEntries.length === 0 ? <EmptyState>No harvesting recorded in this period.</EmptyState> : null}</div>
+        </tbody></table>{unlinkedEntries.length === 0 ? <EmptyState>Every recorded harvest is linked to a purchase.</EmptyState> : null}</div>
+      </section>
+
+      <section className="ledger-panel">
+        <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Harvests linked to a purchase</h2></div><PeriodPicker preset={period.preset} from={period.from} to={period.to} onChange={setPeriod} /></div>
+        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Farmer</th><th>Team head</th><th>Coconuts</th><th>Rate / 1,000</th><th>Paid</th><th>Linked purchase</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+          {linkedEntries.map((entry) => <tr key={entry.id}>
+            <td>{formatDate(entry.harvest_date)}</td>
+            <td>{entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : <span className="muted-text">-</span>}</td>
+            <td>{headName(entry) ?? <span className="muted-text">-</span>}</td>
+            <td>{formatNumber(Number(entry.coconut_quantity), 0)} pieces</td>
+            <td>{formatCurrency(Number(entry.rate_per_1000))}</td>
+            <td className="balance-cell">{formatCurrency(Number(entry.total_cost))}</td>
+            <td><Link className="chip good" href={`/v2/purchases?focus=${entry.purchase_id}`}>{formatPurchaseId(Number(entry.purchase_id))}</Link></td>
+            <td>{entry.notes || "-"}</td>
+            <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => deleteEntry(entry)} type="button">Delete</button></div></td>
+          </tr>)}
+        </tbody></table>{linkedEntries.length === 0 ? <EmptyState>No linked harvests in this period.</EmptyState> : null}</div>
       </section>
     </div>
   );
