@@ -168,12 +168,30 @@ export default function NewPurchasePage() {
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   const allocated = form.id ? ws.stock.get(form.id)?.soldPieces ?? 0 : 0;
 
-  // Harvested coconuts this new purchase is built from.
+  // Harvested coconuts this new purchase is built from. Once a harvest is linked to a
+  // purchase it drops out of this list, so it only shows again in Coconut Harvesting history.
   const unlinkedHarvests = useMemo(() => ws.harvestingEntries.filter((entry) => !entry.purchase_id), [ws.harvestingEntries]);
-  const selectedHarvestPieces = useMemo(() => ws.harvestingEntries.filter((entry) => form.harvest_ids.includes(entry.id)).reduce((sum, entry) => sum + Number(entry.coconut_quantity), 0), [ws.harvestingEntries, form.harvest_ids]);
+  const selectedHarvests = useMemo(() => ws.harvestingEntries.filter((entry) => form.harvest_ids.includes(entry.id)), [ws.harvestingEntries, form.harvest_ids]);
+  // The dropdown excludes ones already picked, and keeps to the chosen farmer so a load is from one farmer.
+  const availableHarvests = useMemo(() => unlinkedHarvests.filter((entry) => !form.harvest_ids.includes(entry.id) && (!form.farmer_id || !entry.farmer_id || String(entry.farmer_id) === form.farmer_id)), [unlinkedHarvests, form.harvest_ids, form.farmer_id]);
+  const selectedHarvestPieces = selectedHarvests.reduce((sum, entry) => sum + Number(entry.coconut_quantity), 0);
   const additionalPieces = Math.max(toNumber(form.additional_pieces), 0);
   const harvestTotal = selectedHarvestPieces + additionalPieces;
   const harvestAutoRef = useRef(0);
+
+  function addHarvest(id: number) {
+    const entry = ws.harvestingEntries.find((e) => e.id === id);
+    if (!entry) return;
+    setForm((current) => {
+      const next: PurchaseForm = { ...current, harvest_ids: current.harvest_ids.includes(id) ? current.harvest_ids : [...current.harvest_ids, id] };
+      // Pre-fill the farmer and location from the harvest when the purchase has none yet.
+      if (!current.farmer_id && entry.farmer_id) { next.farmer_id = String(entry.farmer_id); next.location_id = entry.location_id ? String(entry.location_id) : ""; }
+      return next;
+    });
+  }
+  function removeHarvest(id: number) {
+    setForm((current) => ({ ...current, harvest_ids: current.harvest_ids.filter((x) => x !== id) }));
+  }
 
   // Prefill the purchase quantity from the harvested total, unless it was typed manually.
   useEffect(() => {
@@ -309,8 +327,9 @@ export default function NewPurchasePage() {
         {form.purchase_mode === "weight" ? <fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={form.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setForm((current) => ({ ...current, processing_type: item.value, wastage_percent: item.value === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset> : <p className="mode-note">Quantity-based purchases use individual coconut pieces and do not use Mottai, Kudume wastage, Husk / Mattai credit, or weighbridge fields.</p>}
         {!form.id ? <fieldset className="deduction-options"><legend>Harvested coconuts <span className="optional">Optional</span></legend>
           <p className="field-hint">Build this purchase from coconuts you recorded on Coconut Harvesting. The quantity below fills in from what you pick here.</p>
-          <span className="form-section-label">Select from previous harvest</span>
-          {unlinkedHarvests.length ? <div className="checkbox-grid">{unlinkedHarvests.map((entry) => <label className="checkbox-field" key={entry.id}><input type="checkbox" checked={form.harvest_ids.includes(entry.id)} onChange={(event) => setForm((current) => ({ ...current, harvest_ids: event.target.checked ? [...current.harvest_ids, entry.id] : current.harvest_ids.filter((id) => id !== entry.id) }))} /><span><strong>{formatNumber(Number(entry.coconut_quantity), 0)} pieces</strong><small>{formatDate(entry.harvest_date)} · {entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "No team"} · {formatCurrency(Number(entry.total_cost))}</small></span></label>)}</div> : <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or add an additional harvest below.</p>}
+          <label>Select from previous harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">Choose a recorded harvest to add...</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : "No farmer"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "No team"}</option>)}</select><span className="field-hint">Picking a harvest fills in the farmer, location and quantity. Linked harvests no longer appear here.</span></label>
+          {selectedHarvests.length ? <div className="chip-row">{selectedHarvests.map((entry) => <span className="chip good" key={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs{entry.farmer_id ? ` · ${ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer"}` : ""}<button className="link-button undo-link" onClick={() => removeHarvest(entry.id)} type="button">Remove</button></span>)}</div> : null}
+          {unlinkedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or add an additional harvest below.</p> : (availableHarvests.length === 0 && selectedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests{form.farmer_id ? " for this farmer" : ""}.</p> : null)}
           <div className="form-grid">
             <label>Additional harvest (pieces) <span className="optional">Optional</span><input type="number" min="0" step="1" value={form.additional_pieces} onChange={(event) => setField("additional_pieces", event.target.value)} placeholder="Extra coconuts not in a recorded harvest" /><span className="field-hint">Saved as a new harvest linked to this purchase.</span></label>
             {additionalPieces > 0 ? <label>Harvested by team<select value={form.additional_team_id} onChange={(event) => setField("additional_team_id", event.target.value)}><option value="">No team</option>{ws.harvestingTeams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label> : null}
