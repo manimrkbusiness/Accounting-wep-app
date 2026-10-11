@@ -163,7 +163,7 @@ export default function StockPage() {
 
   return (
     <div className="stack">
-      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="stock entry" onDiscard={resetForm} />
+      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="stock entry" onDiscard={resetForm} showDiscard={false} />
       <section className="ledger-panel select-table">
         <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">{form.id ? `Editing ${formatStockId(form.id)}` : "Waiting to be weighed"}</span><h2>Select per-nut purchases</h2></div></div><div className="chip-row"><span className={awaitingTotal > 0 ? "chip warn" : "chip good"}>{formatNumber(awaitingTotal, 0)} pieces waiting</span><span className="chip good">{formatNumber(pieces, 0)} pieces selected</span><span className="chip">Paid to farmers {formatCurrency(farmerPaid)}</span></div></div>
         <p className="muted-text">Per-nut purchases are bought by count, so they are dehusked and weighed here before going into a sale. Weight-based purchases skip this step and can be sold straight away.</p>
@@ -194,7 +194,7 @@ export default function StockPage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEntry}>
-          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="link-button" onClick={() => { resetForm(); router.push("/v2/stock"); }} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="secondary-button" onClick={() => { resetForm(); router.push("/v2/stock"); }} type="button">Cancel edit</button> : (formDraft.restored || selectionDraft.restored || selection.size > 0 || toNumber(form.net_weight_kg) > 0 || form.notes.trim() !== "") ? <button className="secondary-button" onClick={resetForm} type="button">Discard</button> : null}</div>
           <div className="form-grid">
             <label>Weighed on<input type="date" value={form.entry_date} onChange={(event) => setForm((current) => ({ ...current, entry_date: event.target.value }))} required /></label>
             <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={form.net_weight_kg} onChange={(event) => setForm((current) => ({ ...current, net_weight_kg: event.target.value }))} placeholder="Weighbridge net weight" required /><span className="field-hint">Net weight of the selected pieces after dehusking.</span></label>
