@@ -6,16 +6,14 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { inRange } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../lib/format";
-import type { HarvestingEntry, HarvestingTeam } from "../lib/types";
+import type { HarvestingEntry } from "../lib/types";
 import { draftKey, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
-import { EmptyState, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "../components/ui";
+import { EmptyState, PeriodPicker, periodToRange, type PeriodPreset } from "../components/ui";
 
-type EntryForm = { id?: number; harvest_date: string; farmer_id: string; location_id: string; team_id: string; coconut_quantity: string; rate_per_1000: string; purchase_id: string; notes: string };
-type TeamForm = { id?: number; name: string; memberIds: number[] };
+type EntryForm = { id?: number; harvest_date: string; farmer_id: string; location_id: string; head_employee_id: string; coconut_quantity: string; rate_per_1000: string; purchase_id: string; notes: string };
 
-const blankEntry = (rate: string): EntryForm => ({ harvest_date: today(), farmer_id: "", location_id: "", team_id: "", coconut_quantity: "", rate_per_1000: rate, purchase_id: "", notes: "" });
-const blankTeam = (): TeamForm => ({ name: "", memberIds: [] });
+const blankEntry = (rate: string): EntryForm => ({ harvest_date: today(), farmer_id: "", location_id: "", head_employee_id: "", coconut_quantity: "", rate_per_1000: rate, purchase_id: "", notes: "" });
 
 export default function HarvestingPage() {
   const ws = useWorkspace();
@@ -23,82 +21,31 @@ export default function HarvestingPage() {
   const draft = useDraft<EntryForm>(draftKey(ws.session?.user.id, "harvesting"), () => blankEntry(defaultRate));
   const form = draft.value;
   const setForm = draft.setValue;
-  const [teamForm, setTeamForm] = useState<TeamForm>(blankTeam());
   const [period, setPeriod] = useState<{ preset: PeriodPreset; from: string; to: string }>({ preset: "month", from: "", to: today() });
   const range = periodToRange(period.preset, period.from, period.to);
 
-  const membersByTeam = useMemo(() => {
-    const map = new Map<number, number[]>();
-    ws.harvestingTeamMembers.forEach((m) => map.set(m.team_id, [...(map.get(m.team_id) ?? []), m.employee_id]));
-    return map;
-  }, [ws.harvestingTeamMembers]);
-
-  const linkedPurchaseIds = useMemo(() => new Set(ws.harvestingEntries.filter((e) => e.purchase_id && e.id !== form.id).map((e) => e.purchase_id)), [ws.harvestingEntries, form.id]);
-  const unlinkedPurchases = useMemo(() => ws.purchases.filter((p) => !linkedPurchaseIds.has(p.id)), [ws.purchases, linkedPurchaseIds]);
+  const unlinkedPurchases = useMemo(() => {
+    const linked = new Set(ws.harvestingEntries.filter((e) => e.purchase_id && e.id !== form.id).map((e) => e.purchase_id));
+    return ws.purchases.filter((p) => !linked.has(p.id));
+  }, [ws.purchases, ws.harvestingEntries, form.id]);
 
   const quantity = Math.max(toNumber(form.coconut_quantity), 0);
   const rate = Math.max(toNumber(form.rate_per_1000), 0);
   const cost = quantity / 1000 * rate;
-  const selectedTeam = form.team_id ? ws.harvestingTeamById.get(Number(form.team_id)) : null;
-  const selectedTeamMembers = form.team_id ? (membersByTeam.get(Number(form.team_id)) ?? []) : [];
-
-  const periodEntries = useMemo(() => ws.harvestingEntries.filter((e) => inRange(e.harvest_date, range)), [ws.harvestingEntries, range]);
+  const head = form.head_employee_id ? ws.employeeById.get(Number(form.head_employee_id)) : null;
   const entryFarmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
+  const periodEntries = useMemo(() => ws.harvestingEntries.filter((e) => inRange(e.harvest_date, range)), [ws.harvestingEntries, range]);
+  const workers = ws.employees.filter((emp) => emp.active || String(emp.id) === form.head_employee_id);
 
-  // ----- Team management -----
-  function editTeam(team: HarvestingTeam) {
-    setTeamForm({ id: team.id, name: team.name, memberIds: membersByTeam.get(team.id) ?? [] });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  function headName(entry: HarvestingEntry) {
+    if (entry.head_employee_id) return ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker";
+    if (entry.team_id) return ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team";
+    return null;
   }
 
-  async function saveTeam(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    ws.clearFeedback();
-    if (!ws.session) return;
-    if (teamForm.name.trim().length < 2) { ws.fail("Enter the team name."); return; }
-    ws.setSaving(true);
-    const traderId = ws.session.user.id;
-    let teamId = teamForm.id ?? null;
-    if (teamId) {
-      const { error } = await supabase.from("harvesting_teams").update({ name: teamForm.name.trim() }).eq("id", teamId).eq("trader_id", traderId);
-      if (error) { ws.setSaving(false); ws.fail(error.code === "23505" ? "A team with this name already exists." : error.message); return; }
-    } else {
-      const { data, error } = await supabase.from("harvesting_teams").insert({ trader_id: traderId, name: teamForm.name.trim() }).select("id").single();
-      if (error || !data) { ws.setSaving(false); ws.fail(error?.code === "23505" ? "A team with this name already exists." : error?.message || "Unable to add team."); return; }
-      teamId = (data as { id: number }).id;
-    }
-    const existing = new Set(membersByTeam.get(teamId) ?? []);
-    const wanted = new Set(teamForm.memberIds);
-    const toAdd = [...wanted].filter((id) => !existing.has(id));
-    const toRemove = [...existing].filter((id) => !wanted.has(id));
-    if (toAdd.length) {
-      const { error } = await supabase.from("harvesting_team_members").insert(toAdd.map((employee_id) => ({ trader_id: traderId, team_id: teamId, employee_id })));
-      if (error) { ws.setSaving(false); ws.fail(error.message); return; }
-    }
-    if (toRemove.length) {
-      const { error } = await supabase.from("harvesting_team_members").delete().eq("team_id", teamId).in("employee_id", toRemove);
-      if (error) { ws.setSaving(false); ws.fail(error.message); return; }
-    }
-    ws.setSaving(false);
-    ws.notify(teamForm.id ? "Team updated." : "Harvesting team added.");
-    setTeamForm(blankTeam());
-    await ws.refresh();
-  }
-
-  async function toggleTeamActive(team: HarvestingTeam) {
-    if (!ws.session) return;
-    ws.setSaving(true);
-    const { error } = await supabase.from("harvesting_teams").update({ active: !team.active }).eq("id", team.id).eq("trader_id", ws.session.user.id);
-    ws.setSaving(false);
-    if (error) { ws.fail(error.message); return; }
-    ws.notify(team.active ? "Team marked inactive." : "Team reactivated.");
-    await ws.refresh();
-  }
-
-  // ----- Entry management -----
   function editEntry(entry: HarvestingEntry) {
     ws.clearFeedback();
-    draft.clear({ id: entry.id, harvest_date: entry.harvest_date, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", team_id: entry.team_id ? String(entry.team_id) : "", coconut_quantity: String(entry.coconut_quantity), rate_per_1000: String(entry.rate_per_1000), purchase_id: entry.purchase_id ? String(entry.purchase_id) : "", notes: entry.notes ?? "" });
+    draft.clear({ id: entry.id, harvest_date: entry.harvest_date, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", head_employee_id: entry.head_employee_id ? String(entry.head_employee_id) : "", coconut_quantity: String(entry.coconut_quantity), rate_per_1000: String(entry.rate_per_1000), purchase_id: entry.purchase_id ? String(entry.purchase_id) : "", notes: entry.notes ?? "" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -114,7 +61,7 @@ export default function HarvestingPage() {
       harvest_date: form.harvest_date,
       farmer_id: form.farmer_id ? Number(form.farmer_id) : null,
       location_id: form.location_id ? Number(form.location_id) : null,
-      team_id: form.team_id ? Number(form.team_id) : null,
+      head_employee_id: form.head_employee_id ? Number(form.head_employee_id) : null,
       coconut_quantity: quantity,
       rate_per_1000: rate,
       purchase_id: form.purchase_id ? Number(form.purchase_id) : null,
@@ -125,7 +72,7 @@ export default function HarvestingPage() {
       : await supabase.from("harvesting_entries").insert(payload);
     ws.setSaving(false);
     if (result.error) { ws.fail(result.error.message); return; }
-    ws.notify(form.id ? "Harvesting entry updated." : `Harvesting recorded.${cost > 0 ? ` ${formatCurrency(cost)} booked under Expenses to pay the team.` : ""}`);
+    ws.notify(form.id ? "Harvesting entry updated." : `Harvesting recorded.${cost > 0 ? ` ${formatCurrency(cost)} booked under Expenses to pay ${head?.name ?? "the worker"}.` : ""}`);
     draft.clear(blankEntry(defaultRate));
     await ws.refresh();
   }
@@ -142,8 +89,6 @@ export default function HarvestingPage() {
     await ws.refresh();
   }
 
-  const activeTeams = ws.harvestingTeams.filter((t) => t.active || String(t.id) === form.team_id);
-
   return (
     <div className="stack">
       <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => draft.clear(blankEntry(defaultRate))} />
@@ -151,14 +96,14 @@ export default function HarvestingPage() {
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEntry}>
           <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => draft.clear(blankEntry(defaultRate))} type="button">Cancel edit</button> : null}</div>
-          <p className="muted-text">Record what a team harvested today. The amount you pay the team is booked automatically under Expenses. Link it to the purchase of these coconuts here or later from Purchase history.</p>
+          <p className="muted-text">Record what was harvested today and who led it. The amount you pay the team head is booked automatically under Expenses. Link it to the purchase of these coconuts here or later from Purchase history.</p>
           <div className="form-grid">
             <label>Harvest date<input type="date" value={form.harvest_date} onChange={(e) => setForm((c) => ({ ...c, harvest_date: e.target.value }))} required /></label>
+            <label>Team head / worker<select value={form.head_employee_id} onChange={(e) => setForm((c) => ({ ...c, head_employee_id: e.target.value }))}><option value="">No worker (just a record)</option>{workers.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` (${emp.role})` : ""}</option>)}</select>{ws.employees.length === 0 ? <span className="field-hint">Add workers on <Link href="/v2/team">Team &amp; vehicles</Link> first.</span> : <span className="field-hint">The person who led this harvest. Add more on <Link href="/v2/team">Team &amp; vehicles</Link>.</span>}</label>
             <label>Farmer <span className="optional">Optional</span><select value={form.farmer_id} onChange={(e) => setForm((c) => ({ ...c, farmer_id: e.target.value, location_id: "" }))}><option value="">No farmer selected</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select><span className="field-hint">Whose coconuts were harvested. A purchase built from this harvest is pre-filled with this farmer.</span></label>
             <label>Farming location <span className="optional">Optional</span><select value={form.location_id} onChange={(e) => setForm((c) => ({ ...c, location_id: e.target.value }))} disabled={!form.farmer_id}><option value="">{form.farmer_id ? "Select location" : "Choose a farmer first"}</option>{entryFarmerLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label>
-            <label>Harvesting team<select value={form.team_id} onChange={(e) => setForm((c) => ({ ...c, team_id: e.target.value }))}><option value="">No team (just a record)</option>{activeTeams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>{ws.harvestingTeams.length === 0 ? <span className="field-hint">Add a team on the right first.</span> : null}</label>
             <label>Coconuts harvested (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(e) => setForm((c) => ({ ...c, coconut_quantity: e.target.value }))} required /></label>
-            <label>Pay rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.rate_per_1000} onChange={(e) => setForm((c) => ({ ...c, rate_per_1000: e.target.value }))} /><span className="field-hint">Pre-filled from the harvesting rate in Settings. This is what you pay the team.</span></label>
+            <label>Pay rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.rate_per_1000} onChange={(e) => setForm((c) => ({ ...c, rate_per_1000: e.target.value }))} /><span className="field-hint">Pre-filled from the harvesting rate in Settings. This is what you pay.</span></label>
             <label>Link to purchase <span className="optional">Optional</span><select value={form.purchase_id} onChange={(e) => setForm((c) => ({ ...c, purchase_id: e.target.value }))}><option value="">Not linked yet</option>{unlinkedPurchases.slice(0, 100).map((p) => <option key={p.id} value={p.id}>{formatPurchaseId(p.id)} · {ws.farmerById.get(p.farmer_id)?.name ?? "Farmer"} · {formatDate(p.trade_date)} · {formatNumber(Number(p.coconut_quantity), 0)} pcs</option>)}</select><span className="field-hint">The purchase of these harvested coconuts. You can also link it later from Purchase history.</span></label>
           </div>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))} placeholder="Trees, area, quality note" /></label>
@@ -167,33 +112,20 @@ export default function HarvestingPage() {
         <aside className="side-stack">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Harvest summary</h2><dl className="calculation-list">
             <div><dt>Coconuts harvested</dt><dd>{formatNumber(quantity, 0)} pieces</dd></div>
-            <div><dt>Team</dt><dd>{selectedTeam?.name ?? "No team"}</dd></div>
-            <div><dt>Workers to pay</dt><dd>{selectedTeamMembers.length ? selectedTeamMembers.map((id) => ws.employeeById.get(id)?.name ?? "Worker").join(", ") : "-"}</dd></div>
-            <div className="calculation-deduction"><dt>Pay to the harvesting team<small className="formula">{formatNumber(quantity, 0)} pieces ÷ 1,000 × {formatCurrency(rate)}</small></dt><dd>{formatCurrency(cost)}</dd></div>
-          </dl><p className="field-hint">This amount is booked as a harvesting-labor expense. Whether the farmer or you ultimately bear it depends on the &quot;Deduct coconut harvesting&quot; option on the purchase.</p></section>
-          <form className="tool-panel" onSubmit={saveTeam}>
-            <div className="panel-heading"><div><span className="eyebrow">{teamForm.id ? "Edit team" : "Teams"}</span><h2>{teamForm.id ? "Update team" : "Add a harvesting team"}</h2></div>{teamForm.id ? <button className="link-button" onClick={() => setTeamForm(blankTeam())} type="button">Cancel</button> : null}</div>
-            <label>Team name<input value={teamForm.name} onChange={(e) => setTeamForm((c) => ({ ...c, name: e.target.value }))} placeholder="e.g. Morning climbers" required /></label>
-            <div className="field-heading"><label>Workers in this team</label><Link className="link-button" href="/v2/team">+ Add worker</Link></div>
-            {ws.employees.filter((emp) => emp.active || teamForm.memberIds.includes(emp.id)).length ? <div className="checkbox-grid">{ws.employees.filter((emp) => emp.active || teamForm.memberIds.includes(emp.id)).map((emp) => <label className="checkbox-field" key={emp.id}><input type="checkbox" checked={teamForm.memberIds.includes(emp.id)} onChange={(e) => setTeamForm((c) => ({ ...c, memberIds: e.target.checked ? [...c.memberIds, emp.id] : c.memberIds.filter((id) => id !== emp.id) }))} /><span><strong>{emp.name}</strong><small>{emp.role}</small></span></label>)}</div> : <p className="field-hint">No workers yet. Add them on Team &amp; vehicles, then tick them here.</p>}
-            <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : teamForm.id ? "Update team" : "Add team"}</button>
-          </form>
-          <Panel eyebrow="Your teams" title="Harvesting teams">
-            <div className="card-list">
-              {ws.harvestingTeams.map((team) => <article key={team.id}><div><strong>{team.name}{!team.active ? " (inactive)" : ""}</strong><span>{(membersByTeam.get(team.id) ?? []).map((id) => ws.employeeById.get(id)?.name ?? "Worker").join(", ") || "No workers added"}</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editTeam(team)} type="button">Edit</button><button className="secondary-button" onClick={() => toggleTeamActive(team)} type="button">{team.active ? "Make inactive" : "Reactivate"}</button></div></article>)}
-              {ws.harvestingTeams.length === 0 ? <EmptyState>No teams yet.</EmptyState> : null}
-            </div>
-          </Panel>
+            <div><dt>Team head</dt><dd>{head?.name ?? "No worker"}</dd></div>
+            <div className="calculation-deduction"><dt>Pay for this harvest<small className="formula">{formatNumber(quantity, 0)} pieces ÷ 1,000 × {formatCurrency(rate)}</small></dt><dd>{formatCurrency(cost)}</dd></div>
+          </dl><p className="field-hint">This amount is booked as a harvesting-labor expense to the team head. Whether the farmer or you ultimately bear it depends on the &quot;Deduct coconut harvesting&quot; option on the purchase.</p></section>
+          <section className="tool-panel"><span className="eyebrow">Workers</span><h2>Who can lead a harvest</h2><p className="muted-text">Pick the team head from your workers. Add or edit workers on Team &amp; vehicles.</p><div className="card-list">{ws.employees.filter((emp) => emp.active).slice(0, 12).map((emp) => <article key={emp.id}><div><strong>{emp.name}</strong><span>{emp.role}{emp.phone ? ` · ${emp.phone}` : ""}</span></div></article>)}{ws.employees.filter((emp) => emp.active).length === 0 ? <EmptyState>No workers yet.</EmptyState> : null}</div><Link className="secondary-button" href="/v2/team">Manage workers</Link></section>
         </aside>
       </section>
 
       <section className="ledger-panel">
         <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Harvesting entries</h2></div><PeriodPicker preset={period.preset} from={period.from} to={period.to} onChange={setPeriod} /></div>
-        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Farmer</th><th>Team</th><th>Coconuts</th><th>Rate / 1,000</th><th>Paid to team</th><th>Linked purchase</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Farmer</th><th>Team head</th><th>Coconuts</th><th>Rate / 1,000</th><th>Paid</th><th>Linked purchase</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
           {periodEntries.map((entry) => <tr key={entry.id}>
             <td>{formatDate(entry.harvest_date)}</td>
             <td>{entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : <span className="muted-text">-</span>}</td>
-            <td>{entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : <span className="muted-text">No team</span>}</td>
+            <td>{headName(entry) ?? <span className="muted-text">-</span>}</td>
             <td>{formatNumber(Number(entry.coconut_quantity), 0)} pieces</td>
             <td>{formatCurrency(Number(entry.rate_per_1000))}</td>
             <td className="balance-cell">{formatCurrency(Number(entry.total_cost))}</td>

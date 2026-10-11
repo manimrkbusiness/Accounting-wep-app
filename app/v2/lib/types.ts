@@ -251,6 +251,7 @@ export type HarvestingEntry = {
   trader_id: string;
   harvest_date: string;
   team_id: number | null;
+  head_employee_id: number | null;
   farmer_id: number | null;
   location_id: number | null;
   coconut_quantity: number;
