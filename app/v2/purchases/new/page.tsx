@@ -175,9 +175,15 @@ export default function NewPurchasePage() {
   // The dropdown excludes ones already picked, and keeps to the chosen farmer so a load is from one farmer.
   const availableHarvests = useMemo(() => unlinkedHarvests.filter((entry) => !form.harvest_ids.includes(entry.id) && (!form.farmer_id || !entry.farmer_id || String(entry.farmer_id) === form.farmer_id)), [unlinkedHarvests, form.harvest_ids, form.farmer_id]);
   const selectedHarvestPieces = selectedHarvests.reduce((sum, entry) => sum + Number(entry.coconut_quantity), 0);
+  // Who the picked harvests were done by, so the purchase can show it instead of asking again.
+  const selectedHeadNames = useMemo(() => {
+    const names = selectedHarvests.map((entry) => entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name : null).filter((name): name is string => Boolean(name));
+    return Array.from(new Set(names));
+  }, [selectedHarvests, ws.employeeById, ws.harvestingTeamById]);
   const additionalPieces = Math.max(toNumber(form.additional_pieces), 0);
   const harvestTotal = selectedHarvestPieces + additionalPieces;
   const harvestAutoRef = useRef(0);
+  const harvestingPiecesAutoRef = useRef("");
 
   function addHarvest(id: number) {
     const entry = ws.harvestingEntries.find((e) => e.id === id);
@@ -199,6 +205,17 @@ export default function NewPurchasePage() {
     setForm((current) => (current.coconut_quantity === "" || current.coconut_quantity === String(harvestAutoRef.current)) ? { ...current, coconut_quantity: String(harvestTotal) } : current);
     harvestAutoRef.current = harvestTotal;
   }, [harvestTotal, form.id, setForm]);
+
+  // The harvesting labor is for what the team actually harvested, not the whole lorry load.
+  // Default "Pieces harvested by the team" to the picked harvests, so bumping the coconut
+  // quantity for extra coconuts the farmer already had in hand does not inflate this cost.
+  // Blank (nothing picked) keeps the old behaviour of defaulting to the full quantity.
+  useEffect(() => {
+    if (form.id) return;
+    const target = selectedHarvestPieces > 0 ? String(selectedHarvestPieces) : "";
+    setForm((current) => (current.harvesting_pieces === "" || current.harvesting_pieces === harvestingPiecesAutoRef.current) ? { ...current, harvesting_pieces: target } : current);
+    harvestingPiecesAutoRef.current = target;
+  }, [selectedHarvestPieces, form.id, setForm]);
 
   async function savePurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -335,12 +352,14 @@ export default function NewPurchasePage() {
           <label>Select from previous harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">Choose a recorded harvest to add...</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {entry.farmer_id ? ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer" : "No farmer"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "No head"}</option>)}</select><span className="field-hint">Picking a harvest fills in the farmer, location and quantity. Linked harvests no longer appear here.</span></label>
           {selectedHarvests.length ? <div className="chip-row">{selectedHarvests.map((entry) => <span className="chip good" key={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs{entry.farmer_id ? ` · ${ws.farmerById.get(entry.farmer_id)?.name ?? "Farmer"}` : ""}<button className="chip-remove" onClick={() => removeHarvest(entry.id)} type="button">Remove</button></span>)}</div> : null}
           {unlinkedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or name the team head below to record one now.</p> : (availableHarvests.length === 0 && selectedHarvests.length === 0 ? <p className="field-hint">No unlinked harvests{form.farmer_id ? " for this farmer" : ""}.</p> : null)}
-          <div className="form-grid">
+          {selectedHarvests.length > 0
+            ? <p className="field-hint">Harvested by <strong>{selectedHeadNames.length ? selectedHeadNames.join(", ") : "— not named on the harvest"}</strong>, from the harvest{selectedHarvests.length > 1 ? "s" : ""} you picked. Coconut-harvesting pay uses the <strong>{formatNumber(selectedHarvestPieces, 0)} harvested pieces</strong>, not the lorry quantity — so you can raise the coconut quantity below for coconuts the farmer already had in hand without changing the harvesting cost.</p>
+            : <div className="form-grid">
             <label>Harvested by (team head) <span className="optional">Optional</span><select value={form.additional_head_id} onChange={(event) => setField("additional_head_id", event.target.value)}><option value="">Not recorded here</option>{ws.employees.filter((emp) => emp.active).map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select><span className="field-hint">Pick the team head who harvested this load when you did not record it on Coconut Harvesting first. A harvest is saved and linked to this purchase.</span></label>
             {form.additional_head_id || additionalPieces > 0 ? <label>Pieces harvested <span className="optional">Optional</span><input type="number" min="0" step="1" value={form.additional_pieces} onChange={(event) => setField("additional_pieces", event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(Math.max(calculation.quantity - selectedHarvestPieces, 0), 0) : "Pieces harvested"} /><span className="field-hint">Blank uses the purchase quantity{selectedHarvestPieces > 0 ? " not already in the harvests above" : ""}.</span></label> : null}
             {form.additional_head_id || additionalPieces > 0 ? <label>Pay rate per 1,000 (INR)<input type="number" min="0" step="0.01" value={form.additional_rate} onChange={(event) => setField("additional_rate", event.target.value)} /></label> : null}
-          </div>
-          {harvestTotal > 0 ? <p className="field-hint"><strong>{formatNumber(harvestTotal, 0)} pieces</strong> harvested ({formatNumber(selectedHarvestPieces, 0)} selected{additionalPieces > 0 ? ` + ${formatNumber(additionalPieces, 0)} extra` : ""}). The coconut quantity below is set to this.</p> : null}
+          </div>}
+          {additionalPieces > 0 ? <p className="field-hint"><strong>{formatNumber(harvestTotal, 0)} pieces</strong> harvested ({formatNumber(selectedHarvestPieces, 0)} selected + {formatNumber(additionalPieces, 0)} extra). The coconut quantity below starts from this — change it to the actual lorry load.</p> : null}
         </fieldset> : (ws.harvestingEntries.some((entry) => entry.purchase_id === form.id) ? <p className="mode-note">Harvests linked to this purchase: {ws.harvestingEntries.filter((entry) => entry.purchase_id === form.id).map((entry) => `${formatNumber(Number(entry.coconut_quantity), 0)} pcs`).join(", ")}. Manage links from Purchase history.</p> : null)}
         <div className="form-grid">
           <label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(event) => setField("coconut_quantity", event.target.value)} required /><span className="field-hint">{form.purchase_mode === "weight" ? "Labor is deducted per 1,000 pieces; husk credit is added per nut." : "Labor deductions are calculated per 1,000 pieces."}</span></label>
@@ -353,6 +372,7 @@ export default function NewPurchasePage() {
         {showCredit || toNumber(form.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_credit_amount} onChange={(event) => setField("additional_credit_amount", event.target.value)} /></label><label>Why is this being credited?<input value={form.additional_credit_reason} onChange={(event) => setField("additional_credit_reason", event.target.value)} placeholder="Reason for additional payment" /></label></div> : null}
         {showDebit || toNumber(form.additional_debit_amount) > 0 ? <div className="adjustment-fields debit-fields"><label>Debit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_debit_amount} onChange={(event) => setField("additional_debit_amount", event.target.value)} /></label><label>Why is this being deducted?<input value={form.additional_debit_reason} onChange={(event) => setField("additional_debit_reason", event.target.value)} placeholder="Reason for deduction" /></label></div> : null}
         <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Any quality, transport, or payment note" /></label>
+        {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
         <button className="primary-button" disabled={ws.saving || ws.farmers.length === 0} type="submit">{ws.saving ? "Saving..." : form.id ? "Update purchase" : "Save purchase"}</button>
       </form>
       <aside className="side-stack">

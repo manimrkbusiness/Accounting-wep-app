@@ -340,6 +340,12 @@ textarea:focus {
   color: var(--danger);
 }
 
+.form-error {
+  margin: 0;
+  font-weight: 600;
+  border: 1px solid var(--danger);
+}
+
 .role-grid {
   display: grid;
   gap: 12px;
