@@ -9,7 +9,7 @@ import { useWorkspace } from "../../lib/workspace";
 import { draftKey, queryNumber, useDraft } from "../../lib/useDraft";
 import { DraftNotice } from "../../components/DraftNotice";
 import { calculatePurchase } from "../../lib/calc";
-import { formatCurrency, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
+import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
 import { coconutColors, processingTypes, type CoconutColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
 import { defaultSettings } from "../../components/CostSettingsPanel";
 
@@ -39,6 +39,11 @@ type PurchaseForm = {
   additional_debit_amount: string;
   additional_debit_reason: string;
   notes: string;
+  // Harvested coconuts this purchase is made from (new purchases only).
+  harvest_ids: number[];
+  additional_pieces: string;
+  additional_team_id: string;
+  additional_rate: string;
 };
 
 function blankForm(settings: TraderSettings): PurchaseForm {
@@ -66,7 +71,11 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     additional_credit_reason: "",
     additional_debit_amount: "0",
     additional_debit_reason: "",
-    notes: ""
+    notes: "",
+    harvest_ids: [],
+    additional_pieces: "",
+    additional_team_id: "",
+    additional_rate: String(settings.tree_collection_rate_per_1000)
   };
 }
 
@@ -100,7 +109,11 @@ function formFromPurchase(purchase: Purchase, settings: TraderSettings): Purchas
     additional_credit_reason: purchase.additional_credit_reason ?? "",
     additional_debit_amount: String(purchase.additional_debit_amount ?? 0),
     additional_debit_reason: purchase.additional_debit_reason ?? "",
-    notes: purchase.notes ?? ""
+    notes: purchase.notes ?? "",
+    harvest_ids: [],
+    additional_pieces: "",
+    additional_team_id: "",
+    additional_rate: String(harvestingRate)
   };
 }
 
@@ -155,6 +168,20 @@ export default function NewPurchasePage() {
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   const allocated = form.id ? ws.stock.get(form.id)?.soldPieces ?? 0 : 0;
 
+  // Harvested coconuts this new purchase is built from.
+  const unlinkedHarvests = useMemo(() => ws.harvestingEntries.filter((entry) => !entry.purchase_id), [ws.harvestingEntries]);
+  const selectedHarvestPieces = useMemo(() => ws.harvestingEntries.filter((entry) => form.harvest_ids.includes(entry.id)).reduce((sum, entry) => sum + Number(entry.coconut_quantity), 0), [ws.harvestingEntries, form.harvest_ids]);
+  const additionalPieces = Math.max(toNumber(form.additional_pieces), 0);
+  const harvestTotal = selectedHarvestPieces + additionalPieces;
+  const harvestAutoRef = useRef(0);
+
+  // Prefill the purchase quantity from the harvested total, unless it was typed manually.
+  useEffect(() => {
+    if (form.id || harvestTotal <= 0) return;
+    setForm((current) => (current.coconut_quantity === "" || current.coconut_quantity === String(harvestAutoRef.current)) ? { ...current, coconut_quantity: String(harvestTotal) } : current);
+    harvestAutoRef.current = harvestTotal;
+  }, [harvestTotal, form.id, setForm]);
+
   async function savePurchase(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     ws.clearFeedback();
@@ -200,13 +227,33 @@ export default function NewPurchasePage() {
       payment_status: paymentStatus,
       notes: form.notes.trim() || null
     };
-    const result = form.id
-      ? await supabase.from("coconut_trades").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id)
-      : await supabase.from("coconut_trades").insert(payload);
+    let newPurchaseId: number | null = form.id ?? null;
+    let saveError: string | null = null;
+    if (form.id) {
+      const { error } = await supabase.from("coconut_trades").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id);
+      saveError = error?.message ?? null;
+    } else {
+      const { data, error } = await supabase.from("coconut_trades").insert(payload).select("id").single();
+      saveError = error?.message ?? null;
+      newPurchaseId = (data as { id: number } | null)?.id ?? null;
+    }
+    if (saveError) { ws.setSaving(false); ws.fail(saveError); return; }
+
+    // Reflect the chosen harvests in this new purchase.
+    if (!form.id && newPurchaseId) {
+      if (form.harvest_ids.length) {
+        const { error } = await supabase.from("harvesting_entries").update({ purchase_id: newPurchaseId }).in("id", form.harvest_ids).eq("trader_id", ws.session.user.id);
+        if (error) { ws.setSaving(false); ws.fail(`Purchase saved, but linking the harvests failed: ${error.message}`); await ws.refresh(); return; }
+      }
+      if (additionalPieces > 0) {
+        const { error } = await supabase.from("harvesting_entries").insert({ trader_id: ws.session.user.id, harvest_date: form.trade_date, team_id: form.additional_team_id ? Number(form.additional_team_id) : null, coconut_quantity: additionalPieces, rate_per_1000: Math.max(toNumber(form.additional_rate), 0), purchase_id: newPurchaseId, notes: "Additional harvest added with the purchase" });
+        if (error) { ws.setSaving(false); ws.fail(`Purchase saved, but the additional harvest failed: ${error.message}`); await ws.refresh(); return; }
+      }
+    }
     ws.setSaving(false);
-    if (result.error) { ws.fail(result.error.message); return; }
     draft.clear(blankForm(settings));
-    ws.notify(form.id ? "Purchase updated." : "Purchase recorded. It is now in stock and ready to be added to a sale.");
+    const harvestCount = (form.id ? 0 : form.harvest_ids.length) + (!form.id && additionalPieces > 0 ? 1 : 0);
+    ws.notify(form.id ? "Purchase updated." : `Purchase recorded.${harvestCount > 0 ? ` ${harvestCount} harvest${harvestCount > 1 ? "s" : ""} linked to it.` : ""} It is now in stock and ready to be added to a sale.`);
     await ws.refresh();
     router.push("/v2/purchases");
   }
@@ -260,6 +307,17 @@ export default function NewPurchasePage() {
           <label>Purchase method<select value={form.purchase_mode} onChange={(event) => { const value = event.target.value as PurchaseMode; setForm((current) => ({ ...current, purchase_mode: value, processing_type: value === "quantity" ? "mottai" : current.processing_type, wastage_percent: value === "quantity" ? "0" : current.processing_type === "kudume" ? String(settings.kudume_wastage_percent) : "0" })); }}><option value="weight">Weight-based / weighbridge</option><option value="quantity">Quantity-based / per nut</option></select><span className="field-hint">{form.purchase_mode === "quantity" ? "Pay by individual coconut using a per-nut price. The husk stays with you to sell." : "Pay by payable kilograms after weighbridge deductions. Husk credit is paid to the farmer."}</span></label>
         </div>
         {form.purchase_mode === "weight" ? <fieldset><legend>Coconut preparation</legend><div className="segmented">{processingTypes.map((item) => <button className={form.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setForm((current) => ({ ...current, processing_type: item.value, wastage_percent: item.value === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset> : <p className="mode-note">Quantity-based purchases use individual coconut pieces and do not use Mottai, Kudume wastage, Husk / Mattai credit, or weighbridge fields.</p>}
+        {!form.id ? <fieldset className="deduction-options"><legend>Harvested coconuts <span className="optional">Optional</span></legend>
+          <p className="field-hint">Build this purchase from coconuts you recorded on Coconut Harvesting. The quantity below fills in from what you pick here.</p>
+          <span className="form-section-label">Select from previous harvest</span>
+          {unlinkedHarvests.length ? <div className="checkbox-grid">{unlinkedHarvests.map((entry) => <label className="checkbox-field" key={entry.id}><input type="checkbox" checked={form.harvest_ids.includes(entry.id)} onChange={(event) => setForm((current) => ({ ...current, harvest_ids: event.target.checked ? [...current.harvest_ids, entry.id] : current.harvest_ids.filter((id) => id !== entry.id) }))} /><span><strong>{formatNumber(Number(entry.coconut_quantity), 0)} pieces</strong><small>{formatDate(entry.harvest_date)} · {entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "No team"} · {formatCurrency(Number(entry.total_cost))}</small></span></label>)}</div> : <p className="field-hint">No unlinked harvests yet. Record them on <Link href="/v2/harvesting">Coconut Harvesting</Link>, or add an additional harvest below.</p>}
+          <div className="form-grid">
+            <label>Additional harvest (pieces) <span className="optional">Optional</span><input type="number" min="0" step="1" value={form.additional_pieces} onChange={(event) => setField("additional_pieces", event.target.value)} placeholder="Extra coconuts not in a recorded harvest" /><span className="field-hint">Saved as a new harvest linked to this purchase.</span></label>
+            {additionalPieces > 0 ? <label>Harvested by team<select value={form.additional_team_id} onChange={(event) => setField("additional_team_id", event.target.value)}><option value="">No team</option>{ws.harvestingTeams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label> : null}
+            {additionalPieces > 0 ? <label>Pay rate per 1,000 (INR)<input type="number" min="0" step="0.01" value={form.additional_rate} onChange={(event) => setField("additional_rate", event.target.value)} /></label> : null}
+          </div>
+          {harvestTotal > 0 ? <p className="field-hint"><strong>{formatNumber(harvestTotal, 0)} pieces</strong> harvested ({formatNumber(selectedHarvestPieces, 0)} selected{additionalPieces > 0 ? ` + ${formatNumber(additionalPieces, 0)} additional` : ""}). The coconut quantity below is set to this.</p> : null}
+        </fieldset> : (ws.harvestingEntries.some((entry) => entry.purchase_id === form.id) ? <p className="mode-note">Harvests linked to this purchase: {ws.harvestingEntries.filter((entry) => entry.purchase_id === form.id).map((entry) => `${formatNumber(Number(entry.coconut_quantity), 0)} pcs`).join(", ")}. Manage links from Purchase history.</p> : null)}
         <div className="form-grid">
           <label>Coconut quantity (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(event) => setField("coconut_quantity", event.target.value)} required /><span className="field-hint">{form.purchase_mode === "weight" ? "Labor is deducted per 1,000 pieces; husk credit is added per nut." : "Labor deductions are calculated per 1,000 pieces."}</span></label>
           {form.purchase_mode === "weight" ? <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={form.net_weight_kg} onChange={(event) => setField("net_weight_kg", event.target.value)} placeholder="Weighbridge net weight" required /><span className="field-hint">Wastage and payable weight are calculated from the net weight.</span></label> : null}
