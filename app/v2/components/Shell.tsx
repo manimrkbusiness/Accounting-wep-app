@@ -88,7 +88,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="topbar-actions"><Link className="secondary-button topbar-v1" href="/dashboard"><ArrowLeft size={16} strokeWidth={2.2} aria-hidden="true" />Version 1</Link><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
         </header>
         <nav className="mobile-section-nav" aria-label="Mobile navigation">
-          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.short}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
+          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
         </nav>
         {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}
