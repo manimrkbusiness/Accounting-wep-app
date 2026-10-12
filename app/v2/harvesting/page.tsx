@@ -141,6 +141,17 @@ export default function HarvestingPage() {
     await ws.refresh();
   }
 
+  async function unlinkEntry(entry: HarvestingEntry) {
+    if (!ws.session || !entry.purchase_id) return;
+    ws.clearFeedback();
+    ws.setSaving(true);
+    const { error } = await supabase.from("harvesting_entries").update({ purchase_id: null }).eq("id", entry.id).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify("Harvest unlinked. It is back under \"Not linked / not used\".");
+    await ws.refresh();
+  }
+
   return (
     <div className="stack">
       <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} />
@@ -203,7 +214,7 @@ export default function HarvestingPage() {
             <td className="balance-cell">{formatCurrency(Number(entry.total_cost))}</td>
             <td><Link className="chip good" href={`/v2/purchases?focus=${entry.purchase_id}`}>{formatPurchaseId(Number(entry.purchase_id))}</Link></td>
             <td>{entry.notes || "-"}</td>
-            <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="danger-button" disabled={ws.saving} onClick={() => deleteEntry(entry)} type="button">Delete</button></div></td>
+            <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="secondary-button" disabled={ws.saving} onClick={() => unlinkEntry(entry)} type="button">Unlink</button><button className="danger-button" disabled={ws.saving} onClick={() => deleteEntry(entry)} type="button">Delete</button></div></td>
           </tr>)}
         </tbody></table>{linkedEntries.length === 0 ? <EmptyState>No linked harvests in this period.</EmptyState> : null}</div>
       </section>
