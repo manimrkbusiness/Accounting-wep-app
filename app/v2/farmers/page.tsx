@@ -108,7 +108,7 @@ export default function FarmersPage() {
               <div><strong>{farmer.name}</strong><span>{farmer.phone}</span></div>
               <div className="location-tags">{ws.locations.filter((location) => location.farmer_id === farmer.id).map((location) => <span key={location.id}>{location.location_name}</span>)}</div>
               <div className="chip-row"><span className="chip">{farmerPurchases.length} purchases · {formatCurrency(sumBy(farmerPurchases, (purchase) => purchase.total_amount))}</span>{due > 0.005 ? <span className="chip warn">Due {formatCurrency(due)}</span> : null}</div>
-              <div className="row-actions"><a className="secondary-button" href={`/dashboard/farmers/${farmer.id}`}>View farmer</a><button className="secondary-button" onClick={() => edit(farmer)} type="button">Edit farmer</button></div>
+              <div className="row-actions"><button className="secondary-button" onClick={() => edit(farmer)} type="button">Edit farmer</button></div>
             </article>;
           })}
           {visible.length === 0 ? <EmptyState>No farmers match this search.</EmptyState> : null}
