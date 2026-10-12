@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
@@ -18,6 +19,7 @@ const blankEntry = (rate: string): EntryForm => ({ harvest_date: today(), farmer
 
 export default function HarvestingPage() {
   const ws = useWorkspace();
+  const router = useRouter();
   const defaultRate = String(ws.settings?.tree_collection_rate_per_1000 ?? 1400);
   const draft = useDraft<EntryForm>(draftKey(ws.session?.user.id, "harvesting"), () => blankEntry(defaultRate));
   const form = draft.value;
@@ -35,6 +37,24 @@ export default function HarvestingPage() {
     setEditingRate(false);
     ws.notify("Harvesting rate changed for this entry only. Your default in Settings is unchanged.");
   }
+  // Clear the form back to blank, so the user can start over or pick a different farmer.
+  const hasContent = Boolean(form.farmer_id || form.location_id || form.head_employee_id || form.coconut_quantity || form.notes.trim());
+  function discardEntry() {
+    if (!window.confirm("Discard this harvesting entry and clear the form?")) return;
+    ws.clearFeedback();
+    draft.clear(blankEntry(defaultRate));
+    setEditingRate(false);
+  }
+
+  // Coming back from "+ Add farmer": select the farmer that was just added.
+  const farmerParamApplied = useRef(false);
+  useEffect(() => {
+    const farmerParam = Number(new URLSearchParams(window.location.search).get("farmer"));
+    if (farmerParam && !farmerParamApplied.current && ws.farmerById.has(farmerParam)) {
+      farmerParamApplied.current = true;
+      setForm((current) => current.farmer_id === String(farmerParam) ? current : { ...current, farmer_id: String(farmerParam), location_id: "" });
+    }
+  }, [ws.farmerById, setForm]);
 
   const unlinkedPurchases = useMemo(() => {
     const linked = new Set(ws.harvestingEntries.filter((e) => e.purchase_id && e.id !== form.id).map((e) => e.purchase_id));
@@ -71,6 +91,8 @@ export default function HarvestingPage() {
     event.preventDefault();
     ws.clearFeedback();
     if (!ws.session) return;
+    if (!form.farmer_id) { ws.fail("Choose the farmer whose coconuts were harvested."); return; }
+    if (!form.location_id) { ws.fail("Choose the farming location."); return; }
     if (quantity <= 0) { ws.fail("Enter how many coconuts were harvested."); return; }
     if (rate < 0) { ws.fail("Enter a valid harvesting rate."); return; }
     ws.setSaving(true);
@@ -125,13 +147,13 @@ export default function HarvestingPage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEntry}>
-          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} type="button">Cancel edit</button> : null}</div>
+          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} type="button">Cancel edit</button> : (hasContent ? <button className="secondary-button" onClick={discardEntry} type="button">Discard</button> : null)}</div>
           <p className="muted-text">Record what was harvested today and who led it. The amount you pay the team head is booked automatically under Expenses. The harvest then waits in &quot;Not linked / not used&quot; below until you link it to its purchase there or from Purchase history.</p>
           <div className="form-grid">
+            <label>Farmer<select value={form.farmer_id} onChange={(e) => { const value = e.target.value; if (value === "__add__") { router.push("/v2/farmers?returnTo=harvesting"); return; } setForm((c) => ({ ...c, farmer_id: value, location_id: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select><span className="field-hint">Whose coconuts were harvested. A purchase built from this harvest is pre-filled with this farmer.</span></label>
+            <label>Farming location<select value={form.location_id} onChange={(e) => setForm((c) => ({ ...c, location_id: e.target.value }))} disabled={!form.farmer_id} required><option value="">{form.farmer_id ? "Select location" : "Choose a farmer first"}</option>{entryFarmerLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label>
             <label>Harvest date<input type="date" value={form.harvest_date} onChange={(e) => setForm((c) => ({ ...c, harvest_date: e.target.value }))} required /></label>
             <label>Harvesting team head<select value={form.head_employee_id} onChange={(e) => setForm((c) => ({ ...c, head_employee_id: e.target.value }))}><option value="">No team (just a record)</option>{workers.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{workers.length === 0 ? <span className="field-hint">No harvesting team yet. Add a worker with the <strong>Harvester</strong> role on <Link href="/v2/team">Team &amp; vehicles</Link> first.</span> : <span className="field-hint">Only your harvesting team is shown here — dehuskers and loaders are their own teams. Add more on <Link href="/v2/team">Team &amp; vehicles</Link>.</span>}</label>
-            <label>Farmer <span className="optional">Optional</span><select value={form.farmer_id} onChange={(e) => setForm((c) => ({ ...c, farmer_id: e.target.value, location_id: "" }))}><option value="">No farmer selected</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select><span className="field-hint">Whose coconuts were harvested. A purchase built from this harvest is pre-filled with this farmer.</span></label>
-            <label>Farming location <span className="optional">Optional</span><select value={form.location_id} onChange={(e) => setForm((c) => ({ ...c, location_id: e.target.value }))} disabled={!form.farmer_id}><option value="">{form.farmer_id ? "Select location" : "Choose a farmer first"}</option>{entryFarmerLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label>
             <label>Coconuts harvested (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(e) => setForm((c) => ({ ...c, coconut_quantity: e.target.value }))} required /></label>
             <label>Pay rate per 1,000 pieces (INR)
               <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces</span>{editingRate ? null : <button className="secondary-button rate-edit-button" onClick={openRateEditor} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>

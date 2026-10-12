@@ -82,6 +82,7 @@ export default function FarmersPage() {
     draft.clear(blank);
     await ws.refresh();
     if (returnTo === "purchase") router.push(savedFarmerId ? `/v2/purchases/new?farmer=${savedFarmerId}` : "/v2/purchases/new");
+    else if (returnTo === "harvesting") router.push(savedFarmerId ? `/v2/harvesting?farmer=${savedFarmerId}` : "/v2/harvesting");
   }
 
   return (

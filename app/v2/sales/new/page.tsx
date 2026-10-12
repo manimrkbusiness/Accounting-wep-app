@@ -135,6 +135,12 @@ export default function NewSalePage() {
     metaDraft.clear(blankMeta());
     setLoadedEdit(null);
   }
+  // Always-available way to clear a new sale from the top of the form.
+  function discardSale() {
+    if (!window.confirm("Discard this sale and clear the form?")) return;
+    ws.clearFeedback();
+    discardDraft();
+  }
 
   // Pieces this sale already holds (sold plus wasted), so editing can re-use them.
   const ownAllocation = useMemo(() => {
@@ -341,7 +347,7 @@ export default function NewSalePage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveSale}>
-          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "sale", null)); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : null}<Link className="secondary-button" href="/v2/sales">Sales history</Link></div></div>
+          <div className="panel-heading"><div className="step-heading">{kind === "coconut" ? <span className="step-number">2</span> : null}<div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "sale", null)); router.push("/v2/sales/new"); }} type="button">Cancel edit</button> : ((form.buyer_id || form.quantity || form.rate || allocatedPieces > 0 || form.notes.trim()) ? <button className="secondary-button" onClick={discardSale} type="button">Discard</button> : null)}<Link className="secondary-button" href="/v2/sales">Sales history</Link></div></div>
           {kind === "husk" ? <div className="chip-row"><span className={huskInHand > 0 ? "chip good" : "chip"}>Husk in hand: {formatNumber(huskInHand, 0)} pieces, from dehusked coconut</span></div> : null}
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>

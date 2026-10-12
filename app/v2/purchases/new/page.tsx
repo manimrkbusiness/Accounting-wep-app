@@ -163,12 +163,19 @@ export default function NewPurchasePage() {
     setShowDebit(false);
     setLoadedEdit(null);
   }
+  // Always-available way to clear a new purchase, e.g. to switch to a different farmer.
+  function discardPurchase() {
+    if (!window.confirm("Discard this purchase and clear the form?")) return;
+    ws.clearFeedback();
+    discardDraft();
+  }
 
   const calculation = useMemo(() => calculatePurchase(form), [form]);
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   // Only the harvesting team can be named as who harvested; dehuskers and loaders are their own teams.
   const harvesters = useMemo(() => ws.employees.filter((emp) => emp.active && emp.role === "harvester"), [ws.employees]);
   const allocated = form.id ? ws.stock.get(form.id)?.soldPieces ?? 0 : 0;
+  const purchaseHasContent = Boolean(form.farmer_id || form.coconut_quantity || form.net_weight_kg || form.rate_per_kg || form.rate_per_piece || form.harvest_ids.length || form.notes.trim());
 
   // Harvested coconuts this new purchase is built from. Once a harvest is linked to a
   // purchase it drops out of this list, so it only shows again in Coconut Harvesting history.
@@ -343,7 +350,7 @@ export default function NewPurchasePage() {
     <DraftNotice show={draft.restored} what="purchase" onDiscard={discardDraft} />
     <section className="workspace-grid">
       <form className="tool-panel purchase-form" onSubmit={savePurchase}>
-        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : null}<Link className="secondary-button" href="/v2/purchases">Purchase history</Link></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/v2/purchases/new"); }} type="button">Cancel edit</button> : (purchaseHasContent ? <button className="secondary-button" onClick={discardPurchase} type="button">Discard</button> : null)}<Link className="secondary-button" href="/v2/purchases">Purchase history</Link></div></div>
         {form.id && allocated > 0 ? <p className="mode-note">{formatNumber(allocated, 0)} pieces of this purchase are already allocated to sales. Those sales are not changed when you edit this record.</p> : null}
         <div className="form-grid">
           <label>Farmer<select value={form.farmer_id} disabled={harvestLocked} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/farmers?returnTo=purchase"); return; } setForm((current) => value === current.farmer_id ? current : ({ ...current, farmer_id: value, location_id: "", harvest_ids: [], additional_head_id: "", additional_pieces: "", coconut_quantity: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select>{harvestLocked ? <span className="field-hint">Fixed to the picked harvest. Remove the harvest below to change the farmer or location.</span> : null}</label>
