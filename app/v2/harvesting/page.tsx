@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { inRange } from "../lib/calc";
@@ -23,6 +24,17 @@ export default function HarvestingPage() {
   const setForm = draft.setValue;
   const [period, setPeriod] = useState<{ preset: PeriodPreset; from: string; to: string }>({ preset: "month", from: "", to: today() });
   const range = periodToRange(period.preset, period.from, period.to);
+  // The pay rate defaults from Settings and is shown read-only; "Edit rate" opens it for this entry only.
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateDraft, setRateDraft] = useState("");
+  function openRateEditor() { setRateDraft(form.rate_per_1000); setEditingRate(true); }
+  function saveRate() {
+    const value = toNumber(rateDraft);
+    if (value < 0) { ws.fail("Enter a rate of 0 or more."); return; }
+    setForm((c) => ({ ...c, rate_per_1000: String(value) }));
+    setEditingRate(false);
+    ws.notify("Harvesting rate changed for this entry only. Your default in Settings is unchanged.");
+  }
 
   const unlinkedPurchases = useMemo(() => {
     const linked = new Set(ws.harvestingEntries.filter((e) => e.purchase_id && e.id !== form.id).map((e) => e.purchase_id));
@@ -51,6 +63,7 @@ export default function HarvestingPage() {
   function editEntry(entry: HarvestingEntry) {
     ws.clearFeedback();
     draft.clear({ id: entry.id, harvest_date: entry.harvest_date, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", head_employee_id: entry.head_employee_id ? String(entry.head_employee_id) : "", coconut_quantity: String(entry.coconut_quantity), rate_per_1000: String(entry.rate_per_1000), purchase_id: entry.purchase_id ? String(entry.purchase_id) : "", notes: entry.notes ?? "" });
+    setEditingRate(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -79,6 +92,7 @@ export default function HarvestingPage() {
     if (result.error) { ws.fail(result.error.message); return; }
     ws.notify(form.id ? "Harvesting entry updated." : `Harvesting recorded.${cost > 0 ? ` ${formatCurrency(cost)} booked under Expenses to pay ${head?.name ?? "the worker"}.` : ""}`);
     draft.clear(blankEntry(defaultRate));
+    setEditingRate(false);
     await ws.refresh();
   }
 
@@ -107,20 +121,22 @@ export default function HarvestingPage() {
 
   return (
     <div className="stack">
-      <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => draft.clear(blankEntry(defaultRate))} />
+      <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} />
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEntry}>
-          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => draft.clear(blankEntry(defaultRate))} type="button">Cancel edit</button> : null}</div>
-          <p className="muted-text">Record what was harvested today and who led it. The amount you pay the team head is booked automatically under Expenses. Link it to the purchase of these coconuts here or later from Purchase history.</p>
+          <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} type="button">Cancel edit</button> : null}</div>
+          <p className="muted-text">Record what was harvested today and who led it. The amount you pay the team head is booked automatically under Expenses. The harvest then waits in &quot;Not linked / not used&quot; below until you link it to its purchase there or from Purchase history.</p>
           <div className="form-grid">
             <label>Harvest date<input type="date" value={form.harvest_date} onChange={(e) => setForm((c) => ({ ...c, harvest_date: e.target.value }))} required /></label>
             <label>Harvesting team head<select value={form.head_employee_id} onChange={(e) => setForm((c) => ({ ...c, head_employee_id: e.target.value }))}><option value="">No team (just a record)</option>{workers.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{workers.length === 0 ? <span className="field-hint">No harvesting team yet. Add a worker with the <strong>Harvester</strong> role on <Link href="/v2/team">Team &amp; vehicles</Link> first.</span> : <span className="field-hint">Only your harvesting team is shown here — dehuskers and loaders are their own teams. Add more on <Link href="/v2/team">Team &amp; vehicles</Link>.</span>}</label>
             <label>Farmer <span className="optional">Optional</span><select value={form.farmer_id} onChange={(e) => setForm((c) => ({ ...c, farmer_id: e.target.value, location_id: "" }))}><option value="">No farmer selected</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select><span className="field-hint">Whose coconuts were harvested. A purchase built from this harvest is pre-filled with this farmer.</span></label>
             <label>Farming location <span className="optional">Optional</span><select value={form.location_id} onChange={(e) => setForm((c) => ({ ...c, location_id: e.target.value }))} disabled={!form.farmer_id}><option value="">{form.farmer_id ? "Select location" : "Choose a farmer first"}</option>{entryFarmerLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label>
             <label>Coconuts harvested (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(e) => setForm((c) => ({ ...c, coconut_quantity: e.target.value }))} required /></label>
-            <label>Pay rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.rate_per_1000} onChange={(e) => setForm((c) => ({ ...c, rate_per_1000: e.target.value }))} /><span className="field-hint">Pre-filled from the harvesting rate in Settings. This is what you pay.</span></label>
-            <label>Link to purchase <span className="optional">Optional</span><select value={form.purchase_id} onChange={(e) => setForm((c) => ({ ...c, purchase_id: e.target.value }))}><option value="">Not linked yet</option>{unlinkedPurchases.slice(0, 100).map((p) => <option key={p.id} value={p.id}>{formatPurchaseId(p.id)} · {ws.farmerById.get(p.farmer_id)?.name ?? "Farmer"} · {formatDate(p.trade_date)} · {formatNumber(Number(p.coconut_quantity), 0)} pcs</option>)}</select><span className="field-hint">The purchase of these harvested coconuts. You can also link it later from Purchase history.</span></label>
+            <label>Pay rate per 1,000 pieces (INR)
+              <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces</span>{editingRate ? null : <button className="secondary-button rate-edit-button" onClick={openRateEditor} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
+              {editingRate ? <div className="inline-form"><input type="number" min="0" step="0.01" value={rateDraft} onChange={(e) => setRateDraft(e.target.value)} autoFocus /><div className="row-actions"><button className="primary-button" onClick={saveRate} type="button">Save rate</button><button className="link-button" onClick={() => setEditingRate(false)} type="button">Cancel</button></div></div> : <span className="field-hint">Set from the harvesting rate in Settings. Use Edit rate to change it for this entry only.</span>}
+            </label>
           </div>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))} placeholder="Trees, area, quality note" /></label>
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update harvest" : "Save harvest"}</button>
