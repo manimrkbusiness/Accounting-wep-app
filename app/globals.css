@@ -55,6 +55,14 @@ button:disabled {
   opacity: 0.65;
 }
 
+select:disabled,
+input:disabled,
+textarea:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 a {
   color: var(--green);
   font-weight: 700;
