@@ -113,14 +113,17 @@ export default function StockPage() {
     }
     if (net <= 0) { ws.fail("Enter the net weight from the weighbridge."); return; }
     if (wastagePercent < 0 || wastagePercent > 100) { ws.fail("Wastage must be between 0 and 100 percent."); return; }
+    // If the entry being edited was undone or deleted meanwhile, save as a new entry instead of
+    // updating a row that no longer exists (which returned "Stock entry not found").
+    const editingId = form.id && ws.stockEntries.some((entry) => entry.id === form.id) ? form.id : null;
     ws.setSaving(true);
     const { data, error } = await supabase.rpc("save_stock_entry", {
-      entry_input: { id: form.id ?? null, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, husk_rate_per_piece: huskRate, notes: form.notes.trim() || null },
+      entry_input: { id: editingId, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, husk_rate_per_piece: huskRate, notes: form.notes.trim() || null },
       items_input: allocations
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify(form.id ? `${formatStockId(Number(data))} updated.` : `${formatNumber(pieces, 0)} pieces weighed into stock as ${formatStockId(Number(data))}. They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
+    ws.notify(editingId ? `${formatStockId(Number(data))} updated.` : `${formatNumber(pieces, 0)} pieces weighed into stock as ${formatStockId(Number(data))}. They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
     discardDrafts(ws.session.user.id, "stock");
     resetForm();
     router.push("/v2/stock");
@@ -147,9 +150,16 @@ export default function StockPage() {
 
   function editEntry(entry: StockEntry) {
     ws.clearFeedback();
-    setLoadedEdit(null);
-    router.push(`/v2/stock?edit=${entry.id}`);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Load the entry straight into the form. This page shows the form and history together,
+    // so clicking Edit never remounts; relying on the ?edit URL effect left the values blank.
+    const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
+    formDraft.clear({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
+    selectionDraft.clear(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === entry.id).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
+    setLoadedEdit(entry.id);
+    if (typeof window !== "undefined") {
+      if (new URLSearchParams(window.location.search).get("edit")) router.replace("/v2/stock");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   const perNutPurchases = ws.purchases.filter((purchase) => purchase.purchase_mode === "quantity");
