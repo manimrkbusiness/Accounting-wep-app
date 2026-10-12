@@ -1,6 +1,13 @@
 import { jsPDF } from "jspdf";
-import type { Buyer, Farmer, FarmerLocation, Purchase, Sale, SaleItem } from "./types";
+import type { Buyer, Farmer, FarmerLocation, PaymentStatus, Purchase, Sale, SaleItem } from "./types";
 import { formatDate, formatNumber, formatPurchaseId, formatSaleId, pdfMoney } from "./format";
+
+/** The moment the PDF was generated, e.g. "12 Oct 2026, 02:30 PM" — shown on every invoice. */
+function generatedStamp() {
+  return new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
+const statusLabel: Record<PaymentStatus, string> = { pending: "Pending - not yet paid", partial: "Partial - part paid", paid: "Paid in full" };
 
 type Tone = "normal" | "credit" | "debit" | "final";
 
@@ -58,11 +65,12 @@ function createWriter(doc: jsPDF) {
   return { line, rule, header, highlight, footer, bump };
 }
 
-export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined, location: FarmerLocation | null, traderName: string) {
+export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined, location: FarmerLocation | null, traderName: string, payment?: { paid: number; due: number; status: PaymentStatus; payments: Array<{ date: string; amount: number }> }) {
   const doc = new jsPDF();
   const w = createWriter(doc);
   w.header(formatPurchaseId(trade.id), traderName, "Purchase invoice");
-  w.line("Date", formatDate(trade.trade_date));
+  w.line("Generated on", generatedStamp());
+  w.line("Purchase date", formatDate(trade.trade_date));
   w.line("Farmer", farmer?.name ?? "Unknown farmer");
   w.line("Phone", farmer?.phone ?? "Unavailable");
   w.line("Location", location?.location_name ?? "Unavailable");
@@ -89,7 +97,6 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
     w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Husk / Mattai credit (${formatNumber(dehuskedPieces, 0)} pcs)` : "Husk / Mattai credit", pdfMoney(Number(trade.husk_price_total)), "credit");
   }
   w.line("Net payable to farmer", pdfMoney(Number(trade.total_amount)), "credit");
-  w.line("Advance paid", pdfMoney(Number(trade.advance_amount)), "credit");
   if (Number(trade.additional_credit_amount) > 0) {
     w.line("Additional credit", pdfMoney(Number(trade.additional_credit_amount)), "credit");
     w.line("Credit reason", trade.additional_credit_reason ?? "");
@@ -98,13 +105,22 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
     w.line("Additional debit", pdfMoney(Number(trade.additional_debit_amount)), "debit");
     w.line("Debit reason", trade.additional_debit_reason ?? "");
   }
-  w.highlight();
-  w.line("Balance to pay", pdfMoney(Number(trade.balance_amount)), "final");
+  w.line("Advance paid at purchase", pdfMoney(Number(trade.advance_amount)), "credit");
+  if (payment) {
+    payment.payments.forEach((p) => w.line(`Paid on ${formatDate(p.date)}`, pdfMoney(p.amount), "credit"));
+    w.line("Paid so far", pdfMoney(payment.paid), "credit");
+    w.line("Payment status", statusLabel[payment.status]);
+    w.highlight();
+    w.line("Remaining due", pdfMoney(payment.due), "final");
+  } else {
+    w.highlight();
+    w.line("Balance to pay", pdfMoney(Number(trade.balance_amount)), "final");
+  }
   if (trade.notes) {
     w.bump(3);
     w.line("Notes", trade.notes);
   }
-  w.footer("Generated from Coconut Trade Desk. Keep this invoice for your records.");
+  w.footer(`Generated from Coconut Trade Desk on ${generatedStamp()}. Keep this invoice for your records.`);
   doc.save(`purchase-${String(trade.id).padStart(6, "0")}.pdf`);
 }
 
@@ -113,7 +129,8 @@ export function downloadSalePdf(sale: Sale, buyer: Buyer | undefined, items: Sal
   const w = createWriter(doc);
   const isHusk = sale.sale_kind === "husk";
   w.header(formatSaleId(sale.id), traderName, isHusk ? "Husk sale invoice" : "Coconut sale invoice");
-  w.line("Date", formatDate(sale.sale_date));
+  w.line("Generated on", generatedStamp());
+  w.line("Sale date", formatDate(sale.sale_date));
   w.line("Buyer", buyer?.business_name ? `${buyer.name} (${buyer.business_name})` : buyer?.name ?? "Unknown buyer");
   w.line("Phone", buyer?.phone ?? "Unavailable");
   if (sale.vehicle_number) w.line("Vehicle", sale.vehicle_number);
@@ -152,6 +169,6 @@ export function downloadSalePdf(sale: Sale, buyer: Buyer | undefined, items: Sal
     w.bump(3);
     w.line("Notes", sale.notes);
   }
-  w.footer("Generated from Coconut Trade Desk. Keep this invoice for your records.");
+  w.footer(`Generated from Coconut Trade Desk on ${generatedStamp()}. Keep this invoice for your records.`);
   doc.save(`sale-${String(sale.id).padStart(6, "0")}.pdf`);
 }
