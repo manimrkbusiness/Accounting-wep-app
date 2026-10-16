@@ -163,6 +163,7 @@ export type SaleCalcInput = {
   empty_weight_kg: string;
   transport_charge: string;
   deduction_amount: string;
+  other_charge_amount: string;
   advance_amount: string;
 };
 
@@ -175,13 +176,14 @@ export function calculateSale(form: SaleCalcInput, allocatedPieces: number, cost
   const saleAmount = quantity * rate;
   const transport = toNumber(form.transport_charge);
   const deduction = toNumber(form.deduction_amount);
+  const otherCharge = toNumber(form.other_charge_amount);
   const advance = toNumber(form.advance_amount);
-  const total = saleAmount + transport - deduction;
+  const total = saleAmount + transport + otherCharge - deduction;
   const balance = total - advance;
   const averageKgPerNut = form.unit === "kg" && allocatedPieces > 0 ? quantity / allocatedPieces : 0;
   const pricePerPiece = allocatedPieces > 0 ? saleAmount / allocatedPieces : 0;
   const margin = saleAmount - costBasis;
-  return { gross, empty, derivedNet, quantity, rate, saleAmount, transport, deduction, advance, total, balance, averageKgPerNut, pricePerPiece, costBasis, margin };
+  return { gross, empty, derivedNet, quantity, rate, saleAmount, transport, deduction, otherCharge, advance, total, balance, averageKgPerNut, pricePerPiece, costBasis, margin };
 }
 
 // ---------------------------------------------------------------------------

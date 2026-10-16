@@ -25,6 +25,8 @@ type SaleForm = {
   transport_charge: string;
   deduction_amount: string;
   deduction_reason: string;
+  other_charge_amount: string;
+  other_charge_reason: string;
   advance_amount: string;
   vehicle_id: string;
   vehicle_number: string;
@@ -44,6 +46,8 @@ const blankForm = (): SaleForm => ({
   transport_charge: "0",
   deduction_amount: "0",
   deduction_reason: "",
+  other_charge_amount: "0",
+  other_charge_reason: "",
   advance_amount: "0",
   vehicle_id: "",
   vehicle_number: "",
@@ -68,6 +72,8 @@ function formFromSale(sale: Sale): SaleForm {
     transport_charge: String(sale.transport_charge),
     deduction_amount: String(sale.deduction_amount),
     deduction_reason: sale.deduction_reason ?? "",
+    other_charge_amount: String(sale.other_charge_amount ?? 0),
+    other_charge_reason: sale.other_charge_reason ?? "",
     advance_amount: String(sale.advance_amount),
     vehicle_id: sale.vehicle_id ? String(sale.vehicle_id) : "",
     vehicle_number: sale.vehicle_number ?? "",
@@ -171,7 +177,6 @@ export default function NewSalePage() {
   const allocatedKg = allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.kgPerPiece ?? 0), 0);
   const costBasis = kind === "coconut" ? allocationCost(allocations, ws.stock) : 0;
   /** Full farmer payable for the pieces in this load, including husk credit. */
-  const farmerCost = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0) : 0;
   /** Dehusking already booked on stock entries for the per-nut pieces in this load. */
   const stockDehusking = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.dehuskingCostPerPiece ?? 0), 0) : 0;
   /** Expected sale price from the stock entries in this load, weighted by weight. */
@@ -283,6 +288,8 @@ export default function NewSalePage() {
         transport_charge: calculation.transport,
         deduction_amount: calculation.deduction,
         deduction_reason: calculation.deduction > 0 ? form.deduction_reason.trim() : null,
+        other_charge_amount: calculation.otherCharge,
+        other_charge_reason: calculation.otherCharge > 0 ? form.other_charge_reason.trim() : null,
         advance_amount: calculation.advance,
         vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
         vehicle_number: form.vehicle_number.trim() || ws.vehicleById.get(Number(form.vehicle_id))?.vehicle_number || null,
@@ -335,13 +342,13 @@ export default function NewSalePage() {
             </tr>;
           })}
         </tbody></table>{candidates.length === 0 ? <p className="empty-state">No purchases with stock match these filters. Widen the dates or record a purchase first.</p> : null}</div>
-        {allocations.length ? <div className="table-wrap"><table><thead><tr><th>Farmer side of this load</th><th>Farmer</th><th>Pieces in load</th><th>Wasted</th><th>Weight from purchase</th><th>Paid to farmer</th><th>Total spent</th></tr></thead><tbody>
+        {allocations.length ? <div className="table-wrap"><table><thead><tr><th>Farmer side of this load</th><th>Farmer</th><th>Pieces in load</th><th>Wasted</th><th>Weight from purchase</th><th>Total spending</th></tr></thead><tbody>
           {allocations.map((item) => {
             const info = ws.stock.get(item.purchase_id);
             if (!info) return null;
-            return <tr key={item.purchase_id}><td><strong>{formatPurchaseId(item.purchase_id)}</strong><span className="muted-text">{info.stockCondition}{info.purchase.purchase_mode === "quantity" ? " · from stock" : ""}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(item.quantity_pieces, 0)}</td><td>{item.wastage_pieces > 0 ? <span className="balance-cell">{formatNumber(item.wastage_pieces, 0)}</span> : "-"}</td><td>{info.kgPerPiece > 0 ? `${formatNumber(item.quantity_pieces * info.kgPerPiece, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(item.quantity_pieces * info.costPerPiece)}</td><td>{formatCurrency(item.quantity_pieces * (info.coconutCostPerPiece + info.dehuskingCostPerPiece))}</td></tr>;
+            return <tr key={item.purchase_id}><td><strong>{formatPurchaseId(item.purchase_id)}</strong><span className="muted-text">{info.stockCondition}{info.purchase.purchase_mode === "quantity" ? " · from stock" : ""}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(item.quantity_pieces, 0)}</td><td>{item.wastage_pieces > 0 ? <span className="balance-cell">{formatNumber(item.wastage_pieces, 0)}</span> : "-"}</td><td>{info.kgPerPiece > 0 ? `${formatNumber(item.quantity_pieces * info.kgPerPiece, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(item.quantity_pieces * (info.coconutCostPerPiece + info.dehuskingCostPerPiece))}</td></tr>;
           })}
-          <tr className="day-row"><td colSpan={2}>Total for this load</td><td>{formatNumber(allocatedPieces, 0)}</td><td>{wastedPieces > 0 ? formatNumber(wastedPieces, 0) : "-"}</td><td>{allocatedKg > 0 ? `${formatNumber(allocatedKg, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(farmerCost)}</td><td>{formatCurrency(costBasis + stockDehusking)}</td></tr>
+          <tr className="day-row"><td colSpan={2}>Total for this load</td><td>{formatNumber(allocatedPieces, 0)}</td><td>{wastedPieces > 0 ? formatNumber(wastedPieces, 0) : "-"}</td><td>{allocatedKg > 0 ? `${formatNumber(allocatedKg, 1)} kg` : "-"}</td><td className="balance-cell">{formatCurrency(costBasis + stockDehusking)}</td></tr>
         </tbody></table></div> : null}
       </section> : null}
 
@@ -370,6 +377,8 @@ export default function NewSalePage() {
             <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>
             <label>Deduction by buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.deduction_amount} onChange={(event) => setField("deduction_amount", event.target.value)} /></label>
             {calculation.deduction > 0 ? <label>Deduction reason<input value={form.deduction_reason} onChange={(event) => setField("deduction_reason", event.target.value)} placeholder="Quality, shortage, damage..." /></label> : null}
+            <label>Other charges to buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.other_charge_amount} onChange={(event) => setField("other_charge_amount", event.target.value)} /><span className="field-hint">Money you paid that the buyer repays you (e.g. weighbridge fee). Added to what the buyer pays.</span></label>
+            {calculation.otherCharge > 0 ? <label>Other charge reason<input value={form.other_charge_reason} onChange={(event) => setField("other_charge_reason", event.target.value)} placeholder="Weighbridge fee, other purchase..." /></label> : null}
             <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value)} placeholder="TN 00 AB 0000" /></label>
           </div>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Quality, market, delivery note" /></label>
@@ -381,12 +390,13 @@ export default function NewSalePage() {
             <div><dt>{form.unit === "kg" ? "Net weight" : "Quantity"}</dt><dd>{formatNumber(calculation.quantity)} {unitLabel}</dd></div>
             <div className="calculation-credit"><dt>Sale amount<small className="formula">{formatNumber(calculation.quantity)} {unitLabel} × {formatCurrency(calculation.rate)}</small></dt><dd>{formatCurrency(calculation.saleAmount)}</dd></div>
             {calculation.transport > 0 ? <div className="calculation-credit"><dt>Transport charged</dt><dd>{formatCurrency(calculation.transport)}</dd></div> : null}
+            {calculation.otherCharge > 0 ? <div className="calculation-credit"><dt>Other charges to buyer{form.other_charge_reason.trim() ? <small className="formula">{form.other_charge_reason.trim()}</small> : null}</dt><dd>{formatCurrency(calculation.otherCharge)}</dd></div> : null}
             {calculation.deduction > 0 ? <div className="calculation-deduction"><dt>Deduction</dt><dd>{formatCurrency(calculation.deduction)}</dd></div> : null}
-            <div className="calculation-total"><dt>Buyer pays<small className="formula">{formatCurrency(calculation.saleAmount)}{calculation.transport > 0 ? ` + ${formatCurrency(calculation.transport)} transport` : ""}{calculation.deduction > 0 ? ` − ${formatCurrency(calculation.deduction)} deduction` : ""}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
+            <div className="calculation-total"><dt>Buyer pays<small className="formula">{formatCurrency(calculation.saleAmount)}{calculation.transport > 0 ? ` + ${formatCurrency(calculation.transport)} transport` : ""}{calculation.otherCharge > 0 ? ` + ${formatCurrency(calculation.otherCharge)} other` : ""}{calculation.deduction > 0 ? ` − ${formatCurrency(calculation.deduction)} deduction` : ""}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable<small className="formula">{formatCurrency(calculation.total)} − {formatCurrency(calculation.advance)}</small></dt><dd>{formatCurrency(calculation.balance)}</dd></div>
-            {kind === "coconut" ? <><div className="calculation-deduction"><dt>Paid to farmers for these pieces</dt><dd>{formatCurrency(farmerCost)}</dd></div><div className="calculation-deduction"><dt>Total spent on these pieces<small className="formula">coconut cost{stockDehusking > 0 ? " + dehusking at stock" : ""}</small></dt><dd>{formatCurrency(costBasis + stockDehusking)}</dd></div>{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss</dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}<div className={calculation.margin - stockDehusking - wastageLoss >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin${wastageLoss > 0 ? " after wastage" : ""}`}<small className="formula">{formatCurrency(calculation.saleAmount)} − {formatCurrency(costBasis + stockDehusking)}{wastageLoss > 0 ? ` − ${formatCurrency(wastageLoss)}` : ""}</small></dt><dd>{formatCurrency(calculation.margin - stockDehusking - wastageLoss)}</dd></div></> : null}
-          </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Paid to farmers is the farmer payable for the selected pieces, including any husk credit. Total spent is what the coconut cost you, including dehusking booked at the Stock stage; the margin takes that off. Husk is sold separately; transport, loading and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
+            {kind === "coconut" ? <><div className="calculation-deduction calculation-spent"><dt>Total spending on this stock<small className="formula">paid to farmers {formatCurrency(costBasis)}{stockDehusking > 0 ? ` + dehusking ${formatCurrency(stockDehusking)}` : ""}</small></dt><dd>{formatCurrency(costBasis + stockDehusking)}</dd></div>{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss</dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}<div className={calculation.margin - stockDehusking - wastageLoss >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin${wastageLoss > 0 ? " after wastage" : ""}`}<small className="formula">{formatCurrency(calculation.saleAmount)} − {formatCurrency(costBasis + stockDehusking)}{wastageLoss > 0 ? ` − ${formatCurrency(wastageLoss)}` : ""}</small></dt><dd>{formatCurrency(calculation.margin - stockDehusking - wastageLoss)}</dd></div></> : null}
+          </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value. Total spending is what this stock cost you — paid to the farmers for these pieces plus any dehusking booked at the Stock stage; the margin takes that off. Husk is sold separately; transport, loading and other costs go under Expenses." : "Husk profit on the dashboard compares husk sales with husk credit paid to farmers and husk expenses."}</p></section>
           <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Before saving</h2><p className="muted-text">{kind === "coconut" ? "Tick the purchases in this lorry, enter the buyer, net weight and rate, then save. Each purchase keeps its own record and remaining stock." : "Choose the husk buyer, enter how much was sold and the rate, and record the loading wages under Expenses."}</p></section>
         </aside>
       </section>

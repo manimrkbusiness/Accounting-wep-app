@@ -158,6 +158,8 @@ export type Sale = {
   transport_charge: number;
   deduction_amount: number;
   deduction_reason: string | null;
+  other_charge_amount: number;
+  other_charge_reason: string | null;
   advance_amount: number;
   vehicle_id: number | null;
   vehicle_number: string | null;
