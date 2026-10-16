@@ -12,13 +12,13 @@ import { processingTypes, type ProcessingType, type StockEntry } from "../lib/ty
 import { EmptyState, Panel } from "../components/ui";
 import { defaultSettings } from "../components/CostSettingsPanel";
 
-type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; husk_rate_per_piece: string; notes: string };
+type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; coconuts_loaded: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; husk_rate_per_piece: string; notes: string };
 
 export default function StockPage() {
   const ws = useWorkspace();
   const router = useRouter();
   const settings = ws.settings ?? defaultSettings;
-  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", husk_rate_per_piece: Number(settings.husk_price_per_piece) > 0 ? String(settings.husk_price_per_piece) : "", notes: "" });
+  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", coconuts_loaded: "", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", husk_rate_per_piece: Number(settings.husk_price_per_piece) > 0 ? String(settings.husk_price_per_piece) : "", notes: "" });
   // Drafts keep the entry across page changes until it is saved or discarded.
   const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, "stock", queryNumber("edit")));
   const formDraft = useDraft<StockForm>(`${draftScope}:form`, blankForm);
@@ -48,7 +48,7 @@ export default function StockPage() {
       const entry = ws.stockEntries.find((item) => item.id === editId);
       if (entry && !draftWasRestored) {
         const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
-        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
+        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
         setSelection(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === editId).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
         setLoadedEdit(editId);
       }
@@ -66,20 +66,23 @@ export default function StockPage() {
   }), [ws.purchases, selection, farmerFilter, ws.stock, ownAllocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allocations = useMemo(() => Array.from(selection.entries()).map(([purchase_id, pieces]) => ({ purchase_id, quantity_pieces: toNumber(pieces) })).filter((item) => item.quantity_pieces > 0), [selection]);
-  const pieces = allocations.reduce((sum, item) => sum + item.quantity_pieces, 0);
+  const pieces = allocations.reduce((sum, item) => sum + item.quantity_pieces, 0); // pieces taken from the purchases
+  // Coconuts actually loaded/weighed; the rest of what was taken is wasted (a loss) at this stage.
+  const loaded = form.coconuts_loaded.trim() ? Math.min(Math.max(Math.round(toNumber(form.coconuts_loaded)), 0), pieces) : pieces;
+  const wasted = Math.max(pieces - loaded, 0);
   const farmerPaid = allocations.reduce((sum, item) => sum + item.quantity_pieces * (ws.stock.get(item.purchase_id)?.costPerPiece ?? 0), 0);
   const net = Math.max(toNumber(form.net_weight_kg), 0);
   const wastagePercent = form.processing_type === "kudume" ? toNumber(form.wastage_percent) : 0;
   const wastage = net * wastagePercent / 100;
   const payable = Math.max(net - wastage, 0);
-  const gramsPerNut = pieces > 0 ? net / pieces * 1000 : 0;
+  const gramsPerNut = loaded > 0 ? net / loaded * 1000 : 0;
   const dehuskingRate = form.apply_dehusking ? Math.max(toNumber(form.dehusking_rate_per_1000), 0) : 0;
-  const dehuskingCost = pieces / 1000 * dehuskingRate;
+  const dehuskingCost = loaded / 1000 * dehuskingRate;
   const totalCost = farmerPaid + dehuskingCost;
   const saleRate = Math.max(toNumber(form.sale_rate_per_kg), 0);
   const huskRate = Math.max(toNumber(form.husk_rate_per_piece), 0);
   const expectedValue = payable * saleRate;
-  const expectedHuskValue = pieces * huskRate;
+  const expectedHuskValue = loaded * huskRate;
   const expectedMargin = expectedValue + expectedHuskValue - totalCost;
 
   function toggle(purchaseId: number, checked: boolean) {
@@ -112,18 +115,21 @@ export default function StockPage() {
       if (item.quantity_pieces > available + 0.001) { ws.fail(`${formatPurchaseId(item.purchase_id)} only has ${formatNumber(available, 0)} pieces waiting to be weighed.`); return; }
     }
     if (net <= 0) { ws.fail("Enter the net weight from the weighbridge."); return; }
+    if (loaded <= 0) { ws.fail("Coconuts loaded must be more than zero."); return; }
     if (wastagePercent < 0 || wastagePercent > 100) { ws.fail("Wastage must be between 0 and 100 percent."); return; }
     // If the entry being edited was undone or deleted meanwhile, save as a new entry instead of
     // updating a row that no longer exists (which returned "Stock entry not found").
     const editingId = form.id && ws.stockEntries.some((entry) => entry.id === form.id) ? form.id : null;
+    // Split the wasted pieces across the picked purchases so each keeps its own stock and wastage.
+    const items_input = splitWastage(allocations, wasted);
     ws.setSaving(true);
     const { data, error } = await supabase.rpc("save_stock_entry", {
       entry_input: { id: editingId, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, husk_rate_per_piece: huskRate, notes: form.notes.trim() || null },
-      items_input: allocations
+      items_input
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify(editingId ? `${formatStockId(Number(data))} updated.` : `${formatNumber(pieces, 0)} pieces weighed into stock as ${formatStockId(Number(data))}. They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
+    ws.notify(editingId ? `${formatStockId(Number(data))} updated.` : `${formatNumber(loaded, 0)} pieces weighed into stock as ${formatStockId(Number(data))}.${wasted > 0 ? ` ${formatNumber(wasted, 0)} wasted.` : ""} They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
     discardDrafts(ws.session.user.id, "stock");
     resetForm();
     router.push("/v2/stock");
@@ -153,7 +159,7 @@ export default function StockPage() {
     // Load the entry straight into the form. This page shows the form and history together,
     // so clicking Edit never remounts; relying on the ?edit URL effect left the values blank.
     const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
-    formDraft.clear({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
+    formDraft.clear({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
     selectionDraft.clear(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === entry.id).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
     setLoadedEdit(entry.id);
     if (typeof window !== "undefined") {
@@ -207,7 +213,8 @@ export default function StockPage() {
           <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="secondary-button" onClick={() => { resetForm(); router.push("/v2/stock"); }} type="button">Cancel edit</button> : (formDraft.restored || selectionDraft.restored || selection.size > 0 || toNumber(form.net_weight_kg) > 0 || form.notes.trim() !== "") ? <button className="secondary-button" onClick={resetForm} type="button">Discard</button> : null}</div>
           <div className="form-grid">
             <label>Weighed on<input type="date" value={form.entry_date} onChange={(event) => setForm((current) => ({ ...current, entry_date: event.target.value }))} required /></label>
-            <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={form.net_weight_kg} onChange={(event) => setForm((current) => ({ ...current, net_weight_kg: event.target.value }))} placeholder="Weighbridge net weight" required /><span className="field-hint">Net weight of the selected pieces after dehusking.</span></label>
+            <label>Coconuts loaded (pieces)<input type="number" min="1" step="1" value={form.coconuts_loaded} onChange={(event) => setForm((current) => ({ ...current, coconuts_loaded: event.target.value }))} placeholder={pieces > 0 ? formatNumber(pieces, 0) : "How many went on the lorry"} /><span className="field-hint">{wasted > 0 ? `${formatNumber(wasted, 0)} of the ${formatNumber(pieces, 0)} picked are wasted (a loss).` : `Blank = all ${formatNumber(pieces, 0)} picked. Enter fewer if some were wasted while weighing.`}</span></label>
+            <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={form.net_weight_kg} onChange={(event) => setForm((current) => ({ ...current, net_weight_kg: event.target.value }))} placeholder="Weighbridge net weight" required /><span className="field-hint">Weight of the {formatNumber(loaded, 0)} loaded coconuts after dehusking. The average per nut uses this.</span></label>
           </div>
           <fieldset><legend>Coconut condition</legend><div className="segmented">{processingTypes.map((item) => <button className={form.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => chooseCondition(item.value)} type="button"><strong>{item.label}</strong><span>{item.description}</span></button>)}</div></fieldset>
           {form.processing_type === "kudume" ? <label>Kudume wastage (%)<input type="number" min="0" max="100" step="0.01" value={form.wastage_percent} onChange={(event) => setForm((current) => ({ ...current, wastage_percent: event.target.value }))} /><span className="field-hint">Deducted from the net weight to get the sellable weight. Default comes from your purchase cost settings.</span></label> : null}
@@ -223,17 +230,18 @@ export default function StockPage() {
         </form>
         <aside className="side-stack">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Stock summary</h2><dl className="calculation-list">
-            <div><dt>Pieces weighed</dt><dd>{formatNumber(pieces, 0)} pieces</dd></div>
+            <div><dt>Coconuts loaded</dt><dd>{formatNumber(loaded, 0)} pieces</dd></div>
+            {wasted > 0 ? <div className="calculation-deduction"><dt>Wasted (loss)<small className="formula">{formatNumber(pieces, 0)} picked − {formatNumber(loaded, 0)} loaded</small></dt><dd>{formatNumber(wasted, 0)} pieces</dd></div> : null}
             <div><dt>Net weight</dt><dd>{formatNumber(net)} kg</dd></div>
-            <div><dt>Average weight per nut<small className="formula">{formatNumber(net)} kg ÷ {formatNumber(pieces, 0)} pieces</small></dt><dd>{pieces > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
+            <div><dt>Average weight per nut<small className="formula">{formatNumber(net)} kg ÷ {formatNumber(loaded, 0)} pieces</small></dt><dd>{loaded > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
             {form.processing_type === "kudume" ? <div className="calculation-deduction"><dt>Kudume wastage<small className="formula">{formatNumber(net)} kg × {formatNumber(wastagePercent, 2)}%</small></dt><dd>{formatNumber(wastage)} kg</dd></div> : null}
             <div className="calculation-total"><dt>Sellable weight<small className="formula">{formatNumber(net)} kg − {formatNumber(wastage)} kg</small></dt><dd>{formatNumber(payable)} kg</dd></div>
-            <div className="calculation-credit"><dt>Expected husk value<small className="formula">{huskRate > 0 ? `${formatNumber(pieces, 0)} pieces × ${formatCurrency(huskRate)} / nut` : "Enter the husk price per nut"}</small></dt><dd>{formatCurrency(expectedHuskValue)}</dd></div>
+            <div className="calculation-credit"><dt>Expected husk value<small className="formula">{huskRate > 0 ? `${formatNumber(loaded, 0)} pieces × ${formatCurrency(huskRate)} / nut` : "Enter the husk price per nut"}</small></dt><dd>{formatCurrency(expectedHuskValue)}</dd></div>
             <div className="calculation-credit"><dt>Expected sale value<small className="formula">{saleRate > 0 ? `${formatNumber(payable)} kg × ${formatCurrency(saleRate)} / kg` : "Enter the expected sale price per kg"}</small></dt><dd>{formatCurrency(expectedValue)}</dd></div>
             <div className="calculation-deduction"><dt>Paid to farmers<small className="formula">From the purchase entries, pieces × farmer payable per nut</small></dt><dd>{formatCurrency(farmerPaid)}</dd></div>
-            <div className="calculation-deduction"><dt>Dehusking cost<small className="formula">{form.apply_dehusking ? `${formatNumber(pieces, 0)} pieces ÷ 1,000 × ${formatCurrency(dehuskingRate)}` : "Not added"}</small></dt><dd>{formatCurrency(dehuskingCost)}</dd></div>
-            <div className="calculation-deduction calculation-spent"><dt>Spent on this stock<small className="formula">{formatCurrency(farmerPaid)} + {formatCurrency(dehuskingCost)}</small></dt><dd>{formatCurrency(totalCost)}</dd></div>
-            <div><dt>Average cost per nut<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(pieces, 0)} pieces</small></dt><dd>{pieces > 0 ? `${formatCurrency(totalCost / pieces)} / nut` : "-"}</dd></div>
+            <div className="calculation-deduction"><dt>Dehusking cost<small className="formula">{form.apply_dehusking ? `${formatNumber(loaded, 0)} pieces ÷ 1,000 × ${formatCurrency(dehuskingRate)}` : "Not added"}</small></dt><dd>{formatCurrency(dehuskingCost)}</dd></div>
+            <div className="calculation-deduction calculation-spent"><dt>Spent on this stock<small className="formula">{formatCurrency(farmerPaid)} farmers + {formatCurrency(dehuskingCost)} dehusking</small></dt><dd>{formatCurrency(totalCost)}</dd></div>
+            <div><dt>Average cost per nut<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(loaded, 0)} pieces</small></dt><dd>{loaded > 0 ? `${formatCurrency(totalCost / loaded)} / nut` : "-"}</dd></div>
             <div><dt>Average cost per kg<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(payable)} kg</small></dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
             <div className={expectedMargin >= 0 ? "calculation-total" : "calculation-deduction calculation-spent"}><dt>Expected margin<small className="formula">{formatCurrency(expectedValue)} + {formatCurrency(expectedHuskValue)} − {formatCurrency(totalCost)}</small></dt><dd>{formatCurrency(expectedMargin)}</dd></div>
           </dl><p className="field-hint">Red lines are money you spent: paid to farmers (from the purchase entries, after deductions) plus dehusking at stock time. Green lines are what you expect back from the coconut and the husk. Transport and other expenses are not included here.</p></section>
@@ -279,4 +287,18 @@ export default function StockPage() {
       </Panel>
     </div>
   );
+}
+
+// Spread a total wasted-piece count across the picked purchases in proportion to how many
+// pieces each one contributes, so the per-purchase wasted counts add up to exactly the total.
+function splitWastage(allocations: Array<{ purchase_id: number; quantity_pieces: number }>, totalWasted: number) {
+  if (totalWasted <= 0) return allocations.map((item) => ({ ...item, wastage_pieces: 0 }));
+  const totalTaken = allocations.reduce((sum, item) => sum + item.quantity_pieces, 0);
+  if (totalTaken <= 0) return allocations.map((item) => ({ ...item, wastage_pieces: 0 }));
+  const raw = allocations.map((item) => item.quantity_pieces / totalTaken * totalWasted);
+  const wasted = raw.map((value) => Math.floor(value));
+  const remainder = Math.round(totalWasted - wasted.reduce((sum, value) => sum + value, 0));
+  const order = raw.map((value, index) => ({ index, frac: value - Math.floor(value) })).sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder && k < order.length; k += 1) wasted[order[k].index] += 1;
+  return allocations.map((item, index) => ({ ...item, wastage_pieces: Math.min(wasted[index], item.quantity_pieces) }));
 }
