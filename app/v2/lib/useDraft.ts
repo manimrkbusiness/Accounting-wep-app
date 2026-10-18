@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 
 const PREFIX = "ctd-draft:";
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Map);
+}
+
 type Stored<S> = { value: S; savedAt: string };
 
 function readStored<S>(key: string): Stored<S> | null {
@@ -128,7 +132,15 @@ export function useDraft<T, S = T>(key: string, initial: () => T, options?: { se
     const stored = readStored<S>(key);
     if (stored && JSON.stringify(stored.value) !== initialJson.current) {
       restoredRef.current = true;
-      return deserialize(stored.value);
+      const restoredValue = deserialize(stored.value);
+      // Merge the fresh defaults under a restored plain-object form, so fields added to the
+      // form since the draft was saved get their default rather than staying undefined (which
+      // would crash code that reads them, e.g. `form.newField.trim()`). Custom-deserialized
+      // values (such as a Map) are returned as-is.
+      if (!options?.deserialize && isPlainObject(fresh) && isPlainObject(restoredValue)) {
+        return { ...(fresh as object), ...(restoredValue as object) } as T;
+      }
+      return restoredValue;
     }
     return fresh;
   });

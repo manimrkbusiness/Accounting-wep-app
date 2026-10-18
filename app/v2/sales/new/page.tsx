@@ -289,7 +289,7 @@ export default function NewSalePage() {
         deduction_amount: calculation.deduction,
         deduction_reason: calculation.deduction > 0 ? form.deduction_reason.trim() : null,
         other_charge_amount: calculation.otherCharge,
-        other_charge_reason: calculation.otherCharge > 0 ? form.other_charge_reason.trim() : null,
+        other_charge_reason: calculation.otherCharge > 0 ? (form.other_charge_reason || "").trim() : null,
         advance_amount: calculation.advance,
         vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
         vehicle_number: form.vehicle_number.trim() || ws.vehicleById.get(Number(form.vehicle_id))?.vehicle_number || null,
@@ -390,7 +390,7 @@ export default function NewSalePage() {
             <div><dt>{form.unit === "kg" ? "Net weight" : "Quantity"}</dt><dd>{formatNumber(calculation.quantity)} {unitLabel}</dd></div>
             <div className="calculation-credit"><dt>Sale amount<small className="formula">{formatNumber(calculation.quantity)} {unitLabel} × {formatCurrency(calculation.rate)}</small></dt><dd>{formatCurrency(calculation.saleAmount)}</dd></div>
             {calculation.transport > 0 ? <div className="calculation-credit"><dt>Transport charged</dt><dd>{formatCurrency(calculation.transport)}</dd></div> : null}
-            {calculation.otherCharge > 0 ? <div className="calculation-credit"><dt>Other charges to buyer{form.other_charge_reason.trim() ? <small className="formula">{form.other_charge_reason.trim()}</small> : null}</dt><dd>{formatCurrency(calculation.otherCharge)}</dd></div> : null}
+            {calculation.otherCharge > 0 ? <div className="calculation-credit"><dt>Other charges to buyer{(form.other_charge_reason || "").trim() ? <small className="formula">{(form.other_charge_reason || "").trim()}</small> : null}</dt><dd>{formatCurrency(calculation.otherCharge)}</dd></div> : null}
             {calculation.deduction > 0 ? <div className="calculation-deduction"><dt>Deduction</dt><dd>{formatCurrency(calculation.deduction)}</dd></div> : null}
             <div className="calculation-total"><dt>Buyer pays<small className="formula">{formatCurrency(calculation.saleAmount)}{calculation.transport > 0 ? ` + ${formatCurrency(calculation.transport)} transport` : ""}{calculation.otherCharge > 0 ? ` + ${formatCurrency(calculation.otherCharge)} other` : ""}{calculation.deduction > 0 ? ` − ${formatCurrency(calculation.deduction)} deduction` : ""}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
