@@ -1,5 +1,6 @@
 export type Role = "farmer" | "trader";
 export type CoconutColor = "green" | "brown" | "black";
+export type HuskColor = "green" | "brown";
 export type SaleColor = CoconutColor | "mixed";
 export type ProcessingType = "mottai" | "kudume";
 export type SaleProcessing = ProcessingType | "mixed";
@@ -80,6 +81,11 @@ export type Purchase = {
   labor_cost_total: number;
   husk_price_per_piece: number;
   husk_price_total: number;
+  /** Whether the trader is buying the husk from the farmer on this purchase (weight-based only). */
+  buys_husk: boolean;
+  husk_color: HuskColor | null;
+  /** Husk pieces being bought; null means the dehusked count (dehusking_pieces, else coconut_quantity). */
+  husk_pieces: number | null;
   average_weight_kg: number;
   average_price_per_piece: number;
   additional_credit_amount: number;
@@ -102,6 +108,8 @@ export type TraderSettings = {
   husk_removal_rate_per_1000: number;
   tree_collection_rate_per_1000: number;
   husk_price_per_piece: number;
+  husk_price_green_per_piece: number;
+  husk_price_brown_per_piece: number;
   kudume_wastage_percent: number;
 };
 
@@ -191,6 +199,10 @@ export type StockEntry = {
   dehusking_cost: number;
   sale_rate_per_kg: number;
   husk_rate_per_piece: number;
+  /** Colour of the husk kept from this stock entry's per-nut coconut. */
+  husk_color: HuskColor | null;
+  /** Husk pieces kept; null means the loaded count (coconut_quantity). Not paid to the farmer. */
+  husk_pieces: number | null;
   notes: string | null;
   wastage_weight_kg: number;
   payable_weight_kg: number;
@@ -203,6 +215,15 @@ export type StockEntryItem = {
   stock_entry_id: number;
   purchase_id: number;
   quantity_pieces: number;
+};
+
+export type HuskSaleItem = {
+  id: number;
+  trader_id: string;
+  sale_id: number;
+  purchase_id: number;
+  quantity_pieces: number;
+  created_at: string;
 };
 
 export type StockWastage = {
@@ -288,6 +309,16 @@ export const coconutColors: Array<{ value: CoconutColor; label: string }> = [
 ];
 
 export const saleColors: Array<{ value: SaleColor; label: string }> = [...coconutColors, { value: "mixed", label: "Mixed colours" }];
+
+export const huskColors: Array<{ value: HuskColor; label: string }> = [
+  { value: "green", label: "Green husk" },
+  { value: "brown", label: "Brown husk" }
+];
+
+/** Husk colour that follows a coconut colour (black coconut keeps brown husk). */
+export function huskColorForCoconut(color: CoconutColor): HuskColor {
+  return color === "green" ? "green" : "brown";
+}
 
 export const processingTypes: Array<{ value: ProcessingType; label: string; description: string }> = [
   { value: "mottai", label: "Mottai coconut", description: "Fully shaved coconut" },

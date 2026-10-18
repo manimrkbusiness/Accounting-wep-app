@@ -12,7 +12,7 @@ export default function SettingsPage() {
           <div><dt>Default purchase method</dt><dd>Pre-selected on New purchase. Weight-based pays by payable kilograms after the weighbridge; per nut pays by piece and goes through Stock before a sale.</dd></div>
           <div><dt>Dehusking deduction / 1,000</dt><dd>Taken off the farmer amount when "Deduct dehusking" is ticked on a purchase. The same rate is the dehusking cost booked when per-nut coconut is weighed into stock.</dd></div>
           <div><dt>Coconut harvesting deduction / 1,000</dt><dd>Taken off the farmer amount when "Deduct coconut harvesting" is ticked on a purchase.</dd></div>
-          <div><dt>Husk / Mattai price per nut</dt><dd>Credit added to the farmer on weight-based purchases, calculated on the piece count. Per-nut purchases keep the husk with you.</dd></div>
+          <div><dt>Green / brown husk price per piece</dt><dd>Default price used when you buy the husk from the farmer on a weight-based purchase, by husk colour. Per-nut purchases keep the husk with you (not paid), using the same prices as the expected husk value.</dd></div>
           <div><dt>Kudume wastage %</dt><dd>Deducted from the net weight of Kudume coconut, on purchases and on stock entries, to give the payable or sellable weight.</dd></div>
         </dl>
         <p className="field-hint">Changing a default does not alter purchases or stock entries already saved. Each record keeps the rates it was saved with.</p>

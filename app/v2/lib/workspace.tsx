@@ -3,8 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../../supabaseClient";
-import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, HarvestingEntry, HarvestingTeam, HarvestingTeamMember, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle } from "./types";
-import { buildStockMap, type StockInfo } from "./calc";
+import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, HarvestingEntry, HarvestingTeam, HarvestingTeamMember, HuskSaleItem, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle } from "./types";
+import { buildHuskMap, buildStockMap, type HuskInfo, type StockInfo } from "./calc";
 
 export type WorkspaceStatus = "loading" | "signed-out" | "no-profile" | "not-trader" | "ready";
 
@@ -18,6 +18,7 @@ type WorkspaceData = {
   vehicles: Vehicle[];
   sales: Sale[];
   saleItems: SaleItem[];
+  huskSaleItems: HuskSaleItem[];
   stockEntries: StockEntry[];
   stockEntryItems: StockEntryItem[];
   stockWastage: StockWastage[];
@@ -38,6 +39,7 @@ const emptyData: WorkspaceData = {
   vehicles: [],
   sales: [],
   saleItems: [],
+  huskSaleItems: [],
   stockEntries: [],
   stockEntryItems: [],
   stockWastage: [],
@@ -70,6 +72,7 @@ export type Workspace = WorkspaceData & {
   vehicleById: Map<number, Vehicle>;
   harvestingTeamById: Map<number, HarvestingTeam>;
   stock: Map<number, StockInfo>;
+  husk: Map<number, HuskInfo>;
   traderName: string;
 };
 
@@ -107,7 +110,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setStatus("not-trader");
       return;
     }
-    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries] = await Promise.all([
+    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries] = await Promise.all([
       supabase.from("trader_farmers").select("*").order("name"),
       supabase.from("farmer_locations").select("*").order("location_name"),
       supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false }),
@@ -117,6 +120,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       supabase.from("vehicles").select("*").order("vehicle_number"),
       supabase.from("sales").select("*").order("sale_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("sale_items").select("*"),
+      supabase.from("husk_sale_items").select("*"),
       supabase.from("stock_entries").select("*").order("entry_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("stock_entry_items").select("*"),
       supabase.from("stock_wastage").select("*").order("wastage_date", { ascending: false }).order("id", { ascending: false }),
@@ -126,7 +130,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("cash_entries").select("*").order("entry_date", { ascending: false }).order("id", { ascending: false })
     ]);
-    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries].find((result) => result.error);
+    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries].find((result) => result.error);
     if (failed?.error) {
       setError(failed.error.message);
     } else {
@@ -140,6 +144,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         vehicles: (vehicles.data ?? []) as Vehicle[],
         sales: (sales.data ?? []) as Sale[],
         saleItems: (saleItems.data ?? []) as SaleItem[],
+        huskSaleItems: (huskSaleItems.data ?? []) as HuskSaleItem[],
         stockEntries: (stockEntries.data ?? []) as StockEntry[],
         stockEntryItems: (stockEntryItems.data ?? []) as StockEntryItem[],
         stockWastage: (stockWastage.data ?? []) as StockWastage[],
@@ -221,6 +226,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       vehicleById,
       harvestingTeamById,
       stock: buildStockMap(data.purchases, data.saleItems, data.stockEntries, data.stockEntryItems, data.stockWastage),
+      husk: buildHuskMap(data.purchases, data.stockEntries, data.stockEntryItems, data.huskSaleItems),
       traderName: profile?.business_name || profile?.full_name || "Trader"
     };
   }, [data, session, profile, status, message, error, saving, refresh, signOut]);

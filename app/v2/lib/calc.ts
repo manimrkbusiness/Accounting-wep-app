@@ -1,4 +1,4 @@
-import type { CashEntry, Expense, ExpenseCategory, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage } from "./types";
+import type { CashEntry, Expense, ExpenseCategory, HuskColor, HuskSaleItem, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage } from "./types";
 import { cashKinds, expenseCategories } from "./types";
 import { toNumber } from "./format";
 
@@ -20,6 +20,10 @@ export type PurchaseCalcInput = {
   husk_removal_rate_per_1000: string;
   tree_collection_rate_per_1000: string;
   husk_price_per_piece: string;
+  /** Whether the trader is buying the husk from the farmer (weight-based only). */
+  buys_husk: boolean;
+  /** Husk pieces being bought; blank means the dehusked count. */
+  husk_pieces?: string;
   deduct_dehusking: boolean;
   deduct_harvesting: boolean;
   advance_amount: string;
@@ -42,8 +46,10 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const canDeduct = purchaseMode === "weight";
   const huskRemovalCost = canDeduct && form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
   const treeCollectionCost = canDeduct && form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
-  // Husk comes from the dehusked pieces, so the credit follows that count.
-  const huskPriceIncome = purchaseMode === "weight" ? dehuskingPieces * toNumber(form.husk_price_per_piece) : 0;
+  // Husk credit: only when the trader is buying the husk, on the husk pieces (default the dehusked count).
+  const buysHusk = purchaseMode === "weight" && form.buys_husk;
+  const huskPieces = form.husk_pieces?.trim() ? Math.max(toNumber(form.husk_pieces), 0) : dehuskingPieces;
+  const huskPriceIncome = buysHusk ? huskPieces * toNumber(form.husk_price_per_piece) : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
   const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
   const advance = toNumber(form.advance_amount);
@@ -52,7 +58,7 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const averageWeightGrams = purchaseMode === "weight" && quantity > 0 ? net / quantity * 1000 : 0;
   const averagePricePerPiece = quantity > 0 ? total / quantity : 0;
   const balance = total - advance + additionalCredit - additionalDebit;
-  return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
+  return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, huskPieces, buysHusk, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
 }
 
 // ---------------------------------------------------------------------------
@@ -155,15 +161,95 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
   return stock;
 }
 
-/** Husk pieces still with the trader: every dehusked coconut leaves its husk, minus husk already sold by the piece. */
-export function huskPiecesInHand(purchases: Purchase[], sales: Sale[]) {
-  const dehusked = sumBy(purchases, (purchase) => purchase.dehusking_pieces != null ? Number(purchase.dehusking_pieces) : Number(purchase.coconut_quantity));
-  const soldPieces = sumBy(sales.filter((sale) => sale.sale_kind === "husk" && sale.unit === "piece"), (sale) => sale.quantity);
-  return Math.max(dehusked - soldPieces, 0);
-}
-
 export function allocationCost(items: Array<{ purchase_id: number; quantity_pieces: number }>, stock: Map<number, StockInfo>) {
   return items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (stock.get(item.purchase_id)?.coconutCostPerPiece ?? 0), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Husk: pieces in hand and cost per purchase
+// ---------------------------------------------------------------------------
+
+export type HuskInfo = {
+  purchase: Purchase;
+  /** Where this husk comes from: bought from the farmer (weight-based) or kept from stock (per-nut). */
+  source: "purchase" | "stock";
+  color: HuskColor | null;
+  /** Total husk pieces this purchase can supply. */
+  huskPieces: number;
+  huskSoldPieces: number;
+  /** Husk pieces still available to sell. */
+  huskInHand: number;
+  /** What each husk piece cost the trader: the farmer credit for weight-based, zero for per-nut. */
+  huskCostPerPiece: number;
+  /** Expected sale price per piece from the stock entry, when one was set (per-nut). */
+  expectedPricePerPiece: number;
+};
+
+/**
+ * Husk available per purchase. Weight-based purchases carry husk bought from the farmer (cost = the
+ * credit paid); per-nut purchases carry husk kept at the stock stage (cost zero, since the whole nut
+ * was bought wholesale). Each stock entry's husk is split across its purchases by their piece share.
+ */
+export function buildHuskMap(
+  purchases: Purchase[],
+  stockEntries: StockEntry[] = [],
+  stockEntryItems: StockEntryItem[] = [],
+  huskSaleItems: HuskSaleItem[] = []
+) {
+  const soldByPurchase = new Map<number, number>();
+  huskSaleItems.forEach((row) => soldByPurchase.set(row.purchase_id, (soldByPurchase.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces)));
+
+  const entryById = new Map(stockEntries.map((entry) => [entry.id, entry]));
+  const takenByEntry = new Map<number, number>();
+  stockEntryItems.forEach((item) => takenByEntry.set(item.stock_entry_id, (takenByEntry.get(item.stock_entry_id) ?? 0) + Number(item.quantity_pieces)));
+  const stockHuskByPurchase = new Map<number, { pieces: number; color: HuskColor | null; ratedPrice: number; ratedPieces: number }>();
+  stockEntryItems.forEach((item) => {
+    const entry = entryById.get(item.stock_entry_id);
+    if (!entry) return;
+    const taken = takenByEntry.get(item.stock_entry_id) ?? 0;
+    const entryHusk = entry.husk_pieces != null ? Number(entry.husk_pieces) : Number(entry.coconut_quantity);
+    const share = taken > 0 ? Number(item.quantity_pieces) / taken : 0;
+    const pieces = entryHusk * share;
+    const price = Number(entry.husk_rate_per_piece ?? 0);
+    const current = stockHuskByPurchase.get(item.purchase_id) ?? { pieces: 0, color: null as HuskColor | null, ratedPrice: 0, ratedPieces: 0 };
+    stockHuskByPurchase.set(item.purchase_id, {
+      pieces: current.pieces + pieces,
+      color: current.color ?? entry.husk_color ?? null,
+      ratedPrice: current.ratedPrice + (price > 0 ? price * pieces : 0),
+      ratedPieces: current.ratedPieces + (price > 0 ? pieces : 0)
+    });
+  });
+
+  const husk = new Map<number, HuskInfo>();
+  purchases.forEach((purchase) => {
+    const perNut = purchase.purchase_mode === "quantity";
+    let source: "purchase" | "stock" = perNut ? "stock" : "purchase";
+    let huskPieces = 0;
+    let color: HuskColor | null = null;
+    let huskCostPerPiece = 0;
+    let expectedPricePerPiece = 0;
+    if (perNut) {
+      const stocked = stockHuskByPurchase.get(purchase.id);
+      huskPieces = stocked ? stocked.pieces : 0;
+      color = stocked?.color ?? null;
+      expectedPricePerPiece = stocked && stocked.ratedPieces > 0 ? stocked.ratedPrice / stocked.ratedPieces : 0;
+    } else if (purchase.buys_husk) {
+      huskPieces = purchase.husk_pieces != null
+        ? Number(purchase.husk_pieces)
+        : purchase.dehusking_pieces != null ? Number(purchase.dehusking_pieces) : Number(purchase.coconut_quantity);
+      color = purchase.husk_color ?? null;
+      huskCostPerPiece = Number(purchase.husk_price_per_piece ?? 0);
+    }
+    const huskSoldPieces = soldByPurchase.get(purchase.id) ?? 0;
+    const huskInHand = Math.max(huskPieces - huskSoldPieces, 0);
+    husk.set(purchase.id, { purchase, source, color, huskPieces, huskSoldPieces, huskInHand, huskCostPerPiece, expectedPricePerPiece });
+  });
+  return husk;
+}
+
+/** What the husk in a husk sale cost the trader (sum of picked pieces times each purchase's husk cost). */
+export function huskAllocationCost(items: Array<{ purchase_id: number; quantity_pieces: number }>, husk: Map<number, HuskInfo>) {
+  return items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (husk.get(item.purchase_id)?.huskCostPerPiece ?? 0), 0);
 }
 
 // ---------------------------------------------------------------------------

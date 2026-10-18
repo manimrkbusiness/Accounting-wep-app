@@ -8,17 +8,19 @@ import { useWorkspace } from "../lib/workspace";
 import { discardDrafts, draftKey, queryNumber, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatStockId, today, toNumber } from "../lib/format";
-import { processingTypes, type ProcessingType, type StockEntry } from "../lib/types";
+import { huskColors, processingTypes, type HuskColor, type ProcessingType, type StockEntry } from "../lib/types";
 import { EmptyState, Panel } from "../components/ui";
 import { defaultSettings } from "../components/CostSettingsPanel";
 
-type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; coconuts_loaded: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; husk_rate_per_piece: string; notes: string };
+type StockForm = { id?: number; entry_date: string; processing_type: ProcessingType; net_weight_kg: string; wastage_percent: string; coconuts_loaded: string; apply_dehusking: boolean; dehusking_rate_per_1000: string; sale_rate_per_kg: string; husk_color: HuskColor; husk_pieces: string; husk_rate_per_piece: string; notes: string };
 
 export default function StockPage() {
   const ws = useWorkspace();
   const router = useRouter();
   const settings = ws.settings ?? defaultSettings;
-  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", coconuts_loaded: "", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", husk_rate_per_piece: Number(settings.husk_price_per_piece) > 0 ? String(settings.husk_price_per_piece) : "", notes: "" });
+  /** Default expected husk price for a colour, from Settings. */
+  const huskDefaultPrice = (color: HuskColor) => color === "green" ? Number(settings.husk_price_green_per_piece) : Number(settings.husk_price_brown_per_piece);
+  const blankForm = (): StockForm => ({ entry_date: today(), processing_type: "mottai", net_weight_kg: "", wastage_percent: "0", coconuts_loaded: "", apply_dehusking: Number(settings.husk_removal_rate_per_1000) > 0, dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000), sale_rate_per_kg: "", husk_color: "green", husk_pieces: "", husk_rate_per_piece: Number(settings.husk_price_green_per_piece) > 0 ? String(settings.husk_price_green_per_piece) : "", notes: "" });
   // Drafts keep the entry across page changes until it is saved or discarded.
   const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, "stock", queryNumber("edit")));
   const formDraft = useDraft<StockForm>(`${draftScope}:form`, blankForm);
@@ -48,7 +50,7 @@ export default function StockPage() {
       const entry = ws.stockEntries.find((item) => item.id === editId);
       if (entry && !draftWasRestored) {
         const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
-        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
+        setForm({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_color: entry.husk_color ?? "green", husk_pieces: entry.husk_pieces != null ? String(entry.husk_pieces) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
         setSelection(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === editId).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
         setLoadedEdit(editId);
       }
@@ -81,8 +83,10 @@ export default function StockPage() {
   const totalCost = farmerPaid + dehuskingCost;
   const saleRate = Math.max(toNumber(form.sale_rate_per_kg), 0);
   const huskRate = Math.max(toNumber(form.husk_rate_per_piece), 0);
+  // Husk pieces kept from this entry, capped at the loaded count. Blank means all loaded nuts.
+  const huskPieces = form.husk_pieces.trim() ? Math.min(Math.max(Math.round(toNumber(form.husk_pieces)), 0), loaded) : loaded;
   const expectedValue = payable * saleRate;
-  const expectedHuskValue = loaded * huskRate;
+  const expectedHuskValue = huskPieces * huskRate;
   const expectedMargin = expectedValue + expectedHuskValue - totalCost;
 
   function toggle(purchaseId: number, checked: boolean) {
@@ -124,7 +128,7 @@ export default function StockPage() {
     const items_input = splitWastage(allocations, wasted);
     ws.setSaving(true);
     const { data, error } = await supabase.rpc("save_stock_entry", {
-      entry_input: { id: editingId, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, husk_rate_per_piece: huskRate, notes: form.notes.trim() || null },
+      entry_input: { id: editingId, entry_date: form.entry_date, processing_type: form.processing_type, net_weight_kg: net, wastage_percent: wastagePercent, dehusking_rate_per_1000: dehuskingRate, sale_rate_per_kg: saleRate, husk_rate_per_piece: huskRate, husk_color: form.husk_color, husk_pieces: form.husk_pieces.trim() ? huskPieces : null, notes: form.notes.trim() || null },
       items_input
     });
     ws.setSaving(false);
@@ -159,7 +163,7 @@ export default function StockPage() {
     // Load the entry straight into the form. This page shows the form and history together,
     // so clicking Edit never remounts; relying on the ?edit URL effect left the values blank.
     const storedRate = Number(entry.dehusking_rate_per_1000 ?? 0);
-    formDraft.clear({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
+    formDraft.clear({ id: entry.id, entry_date: entry.entry_date, processing_type: entry.processing_type, net_weight_kg: String(entry.net_weight_kg), wastage_percent: String(entry.wastage_percent), coconuts_loaded: String(entry.coconut_quantity), apply_dehusking: storedRate > 0, dehusking_rate_per_1000: String(storedRate > 0 ? storedRate : settings.husk_removal_rate_per_1000), sale_rate_per_kg: Number(entry.sale_rate_per_kg ?? 0) > 0 ? String(entry.sale_rate_per_kg) : "", husk_color: entry.husk_color ?? "green", husk_pieces: entry.husk_pieces != null ? String(entry.husk_pieces) : "", husk_rate_per_piece: Number(entry.husk_rate_per_piece ?? 0) > 0 ? String(entry.husk_rate_per_piece) : "", notes: entry.notes ?? "" });
     selectionDraft.clear(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === entry.id).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
     setLoadedEdit(entry.id);
     if (typeof window !== "undefined") {
@@ -221,10 +225,15 @@ export default function StockPage() {
           <fieldset className="deduction-options"><legend>Dehusking cost</legend>
             <label className="checkbox-field"><input type="checkbox" checked={form.apply_dehusking} onChange={(event) => setForm((current) => ({ ...current, apply_dehusking: event.target.checked, dehusking_rate_per_1000: event.target.checked ? String(settings.husk_removal_rate_per_1000) : current.dehusking_rate_per_1000 }))} /><span><strong>Add dehusking cost for these pieces</strong><small>Calculated at {formatCurrency(form.apply_dehusking ? toNumber(form.dehusking_rate_per_1000) : Number(settings.husk_removal_rate_per_1000))} per 1,000 pieces from Purchase cost settings and booked automatically under Expenses, so do not add it there again. Untick when the farmer bore the dehusking.</small></span></label>
           </fieldset>
-          <div className="form-grid">
-            <label>Expected sale price per kg (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.sale_rate_per_kg} onChange={(event) => setForm((current) => ({ ...current, sale_rate_per_kg: event.target.value }))} placeholder="Rate you expect from the buyer" /><span className="field-hint">Becomes the default Rate when this stock goes into New sale.</span></label>
-            <label>Expected husk price per nut (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.husk_rate_per_piece} onChange={(event) => setForm((current) => ({ ...current, husk_rate_per_piece: event.target.value }))} placeholder="Husk price per coconut" /><span className="field-hint">The husk from these pieces stays with you to sell. Pre-filled from the husk price in Settings.</span></label>
-          </div>
+          <label>Expected sale price per kg (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.sale_rate_per_kg} onChange={(event) => setForm((current) => ({ ...current, sale_rate_per_kg: event.target.value }))} placeholder="Rate you expect from the buyer" /><span className="field-hint">Becomes the default Rate when this stock goes into New sale.</span></label>
+          <fieldset className="deduction-options"><legend>Husk kept from these pieces</legend>
+            <div className="form-grid">
+              <label>Husk colour<select value={form.husk_color} onChange={(event) => { const color = event.target.value as HuskColor; setForm((current) => ({ ...current, husk_color: color, husk_rate_per_piece: huskDefaultPrice(color) > 0 ? String(huskDefaultPrice(color)) : current.husk_rate_per_piece })); }}>{huskColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+              <label>Husk pieces <span className="optional">Blank = {formatNumber(loaded, 0)} loaded</span><input type="number" min="0" step="1" value={form.husk_pieces} onChange={(event) => setForm((current) => ({ ...current, husk_pieces: event.target.value }))} placeholder={formatNumber(loaded, 0)} /></label>
+              <label>Expected husk price per piece (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.husk_rate_per_piece} onChange={(event) => setForm((current) => ({ ...current, husk_rate_per_piece: event.target.value }))} placeholder="Husk price per piece" /></label>
+            </div>
+            <span className="field-hint">This husk is not paid to the farmer — the whole nut was bought per piece — so it costs you nothing and the Husk sale is pure profit. Kept to sell later; the price here is just the expected value, pre-filled from Settings by colour.</span>
+          </fieldset>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Weighbridge slip number, lorry, quality note" /></label>
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update stock entry" : "Add to stock"}</button>
         </form>
@@ -236,7 +245,7 @@ export default function StockPage() {
             <div><dt>Average weight per nut<small className="formula">{formatNumber(net)} kg ÷ {formatNumber(loaded, 0)} pieces</small></dt><dd>{loaded > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
             {form.processing_type === "kudume" ? <div className="calculation-deduction"><dt>Kudume wastage<small className="formula">{formatNumber(net)} kg × {formatNumber(wastagePercent, 2)}%</small></dt><dd>{formatNumber(wastage)} kg</dd></div> : null}
             <div className="calculation-total"><dt>Sellable weight<small className="formula">{formatNumber(net)} kg − {formatNumber(wastage)} kg</small></dt><dd>{formatNumber(payable)} kg</dd></div>
-            <div className="calculation-credit"><dt>Expected husk value<small className="formula">{huskRate > 0 ? `${formatNumber(loaded, 0)} pieces × ${formatCurrency(huskRate)} / nut` : "Enter the husk price per nut"}</small></dt><dd>{formatCurrency(expectedHuskValue)}</dd></div>
+            <div className="calculation-credit"><dt>Expected husk value ({form.husk_color} husk)<small className="formula">{huskRate > 0 ? `${formatNumber(huskPieces, 0)} husk pieces × ${formatCurrency(huskRate)} / piece` : "Enter the husk price per piece"}</small></dt><dd>{formatCurrency(expectedHuskValue)}</dd></div>
             <div className="calculation-credit"><dt>Expected sale value<small className="formula">{saleRate > 0 ? `${formatNumber(payable)} kg × ${formatCurrency(saleRate)} / kg` : "Enter the expected sale price per kg"}</small></dt><dd>{formatCurrency(expectedValue)}</dd></div>
             <div className="calculation-deduction"><dt>Paid to farmers<small className="formula">From the purchase entries, pieces × farmer payable per nut</small></dt><dd>{formatCurrency(farmerPaid)}</dd></div>
             <div className="calculation-deduction"><dt>Dehusking cost<small className="formula">{form.apply_dehusking ? `${formatNumber(loaded, 0)} pieces ÷ 1,000 × ${formatCurrency(dehuskingRate)}` : "Not added"}</small></dt><dd>{formatCurrency(dehuskingCost)}</dd></div>

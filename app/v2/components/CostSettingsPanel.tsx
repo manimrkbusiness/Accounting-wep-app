@@ -19,7 +19,8 @@ export function DefaultsSummary({ note }: { note?: string }) {
         { label: "Default purchase method", value: settings.purchase_mode === "quantity" ? "Per nut" : "Weight-based" },
         { label: "Dehusking deduction", value: `${formatCurrency(Number(settings.husk_removal_rate_per_1000))} / 1,000` },
         { label: "Coconut harvesting deduction", value: `${formatCurrency(Number(settings.tree_collection_rate_per_1000))} / 1,000` },
-        { label: "Husk / Mattai price", value: `${formatCurrency(Number(settings.husk_price_per_piece))} / nut` },
+        { label: "Green husk price", value: `${formatCurrency(Number(settings.husk_price_green_per_piece))} / piece` },
+        { label: "Brown husk price", value: `${formatCurrency(Number(settings.husk_price_brown_per_piece))} / piece` },
         { label: "Kudume wastage", value: `${formatNumber(Number(settings.kudume_wastage_percent), 2)}%` }
       ]} />
       {note ? <p className="field-hint">{note}</p> : null}
@@ -27,15 +28,16 @@ export function DefaultsSummary({ note }: { note?: string }) {
   );
 }
 
-export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, kudume_wastage_percent: 3 };
+export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, husk_price_green_per_piece: 0, husk_price_brown_per_piece: 0, kudume_wastage_percent: 3 };
 
-type SettingsForm = { purchaseMode: PurchaseMode; huskRemoval: string; treeCollection: string; huskPrice: string; kudumeWastage: string };
+type SettingsForm = { purchaseMode: PurchaseMode; huskRemoval: string; treeCollection: string; huskPriceGreen: string; huskPriceBrown: string; kudumeWastage: string };
 
 const formFrom = (settings: TraderSettings): SettingsForm => ({
   purchaseMode: settings.purchase_mode,
   huskRemoval: String(settings.husk_removal_rate_per_1000),
   treeCollection: String(settings.tree_collection_rate_per_1000),
-  huskPrice: String(settings.husk_price_per_piece),
+  huskPriceGreen: String(settings.husk_price_green_per_piece),
+  huskPriceBrown: String(settings.husk_price_brown_per_piece),
   kudumeWastage: String(settings.kudume_wastage_percent)
 });
 
@@ -54,11 +56,12 @@ export function CostSettingsPanel({ onSaved, description }: { onSaved?: (setting
     if (!ws.session) return;
     const huskRemoval = toNumber(form.huskRemoval);
     const treeCollection = toNumber(form.treeCollection);
-    const huskPrice = toNumber(form.huskPrice);
+    const huskPriceGreen = toNumber(form.huskPriceGreen);
+    const huskPriceBrown = toNumber(form.huskPriceBrown);
     const kudumeWastage = toNumber(form.kudumeWastage);
-    if ([huskRemoval, treeCollection, huskPrice, kudumeWastage].some((value) => value < 0) || kudumeWastage > 100) { ws.fail("Enter valid non-negative rates and a wastage percentage from 0 to 100."); return; }
+    if ([huskRemoval, treeCollection, huskPriceGreen, huskPriceBrown, kudumeWastage].some((value) => value < 0) || kudumeWastage > 100) { ws.fail("Enter valid non-negative rates and a wastage percentage from 0 to 100."); return; }
     ws.setSaving(true);
-    const { data, error } = await supabase.from("trader_settings").upsert({ trader_id: ws.session.user.id, purchase_mode: form.purchaseMode, husk_removal_rate_per_1000: huskRemoval, tree_collection_rate_per_1000: treeCollection, husk_price_per_piece: huskPrice, kudume_wastage_percent: kudumeWastage }).select("*").single();
+    const { data, error } = await supabase.from("trader_settings").upsert({ trader_id: ws.session.user.id, purchase_mode: form.purchaseMode, husk_removal_rate_per_1000: huskRemoval, tree_collection_rate_per_1000: treeCollection, husk_price_per_piece: huskPriceGreen, husk_price_green_per_piece: huskPriceGreen, husk_price_brown_per_piece: huskPriceBrown, kudume_wastage_percent: kudumeWastage }).select("*").single();
     ws.setSaving(false);
     if (error || !data) { ws.fail(error?.message || "Unable to save purchase settings."); return; }
     setEditing(false);
@@ -75,7 +78,8 @@ export function CostSettingsPanel({ onSaved, description }: { onSaved?: (setting
         <label>Default purchase method<select value={form.purchaseMode} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, purchaseMode: event.target.value as PurchaseMode }))}><option value="weight">Weight-based / weighbridge</option><option value="quantity">Quantity-based / per nut</option></select></label>
         <label>Dehusking deduction / 1,000<input type="number" min="0" step="0.01" value={form.huskRemoval} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskRemoval: event.target.value }))} /></label>
         <label>Coconut harvesting deduction / 1,000<input type="number" min="0" step="0.01" value={form.treeCollection} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, treeCollection: event.target.value }))} /></label>
-        <label>Husk / Mattai price per nut (weight-based)<input type="number" min="0" step="0.01" value={form.huskPrice} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskPrice: event.target.value }))} /></label>
+        <label>Green husk price per piece<input type="number" min="0" step="0.01" value={form.huskPriceGreen} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskPriceGreen: event.target.value }))} /></label>
+        <label>Brown husk price per piece<input type="number" min="0" step="0.01" value={form.huskPriceBrown} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskPriceBrown: event.target.value }))} /></label>
         <label>Kudume wastage % (weight-based)<input type="number" min="0" max="100" step="0.01" value={form.kudumeWastage} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, kudumeWastage: event.target.value }))} /></label>
       </div>
       {editing ? <button className="primary-button" disabled={ws.saving} onClick={save} type="button">Save settings</button> : null}

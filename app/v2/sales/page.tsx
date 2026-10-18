@@ -31,6 +31,12 @@ export default function SalesPage() {
     return map;
   }, [ws.saleItems]);
 
+  const huskItemsBySale = useMemo(() => {
+    const map = new Map<number, typeof ws.huskSaleItems>();
+    ws.huskSaleItems.forEach((item) => map.set(item.sale_id, [...(map.get(item.sale_id) ?? []), item]));
+    return map;
+  }, [ws.huskSaleItems]);
+
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return ws.sales.filter((sale) => {
@@ -108,6 +114,9 @@ export default function SalesPage() {
         {rows.map((sale) => {
           const buyer = ws.buyerById.get(sale.buyer_id);
           const items = itemsBySale.get(sale.id) ?? [];
+          const huskItems = huskItemsBySale.get(sale.id) ?? [];
+          const huskCost = huskItems.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.husk.get(item.purchase_id)?.huskCostPerPiece ?? 0), 0);
+          const huskMargin = Number(sale.total_amount) - huskCost;
           const receipts = ws.cashEntries.filter((entry) => entry.kind === "buyer_receipt" && entry.sale_id === sale.id);
           const received = Number(sale.advance_amount) + receivedFromBuyer(sale.id, ws.cashEntries);
           const due = saleOutstanding(sale, ws.cashEntries);
@@ -127,9 +136,9 @@ export default function SalesPage() {
             <td>{formatNumber(Number(sale.quantity))} {unit}{sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0 ? <span className="muted-text">Gross {formatNumber(Number(sale.gross_weight_kg))} kg</span> : null}</td>
             <td>{formatCurrency(Number(sale.rate))} / {sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "nut" : "load"}</td>
             <td className="amount-cell">{formatCurrency(Number(sale.total_amount))}{Number(sale.transport_charge) > 0 ? <span className="muted-text">incl. transport {formatCurrency(Number(sale.transport_charge))}</span> : null}{Number(sale.deduction_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(sale.deduction_amount))}</span> : null}</td>
-            <td>{sale.sale_kind === "coconut" && items.length ? <div className="cell-stack"><span className="muted-text">Total spending</span><span className="balance-cell">{formatCurrency(totalSpending)}</span><span className="muted-text">Margin</span><span className={margin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(margin)}</span></div> : <span className="muted-text">-</span>}</td>
+            <td>{sale.sale_kind === "coconut" && items.length ? <div className="cell-stack"><span className="muted-text">Total spending</span><span className="balance-cell">{formatCurrency(totalSpending)}</span><span className="muted-text">Margin</span><span className={margin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(margin)}</span></div> : sale.sale_kind === "husk" && huskItems.length ? <div className="cell-stack"><span className="muted-text">Husk cost</span><span className="balance-cell">{formatCurrency(huskCost)}</span><span className="muted-text">Margin</span><span className={huskMargin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(huskMargin)}</span></div> : <span className="muted-text">-</span>}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoReceipt(sale, entry)} type="button">Undo</button></span>)}</div> : null}</td>
-            <td>{items.length || wasted.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}{wasted.map((row) => <span className="chip warn" key={`wasted-${row.id}`}>{formatPurchaseId(row.purchase_id)} · {formatNumber(Number(row.quantity_pieces), 0)} wasted</span>)}</div> : <span className="muted-text">-</span>}</td>
+            <td>{items.length || wasted.length || huskItems.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}{huskItems.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={`husk-${item.id}`}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)} husk</Link>)}{wasted.map((row) => <span className="chip warn" key={`wasted-${row.id}`}>{formatPurchaseId(row.purchase_id)} · {formatNumber(Number(row.quantity_pieces), 0)} wasted</span>)}</div> : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName)} type="button">PDF</button>
               <button className="secondary-button" onClick={() => router.push(`/v2/sales/new?edit=${sale.id}`)} type="button">Edit</button>
