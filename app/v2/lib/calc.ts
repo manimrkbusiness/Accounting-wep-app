@@ -92,7 +92,15 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
   const soldByPurchase = new Map<number, number>();
   saleItems.forEach((item) => soldByPurchase.set(item.purchase_id, (soldByPurchase.get(item.purchase_id) ?? 0) + Number(item.quantity_pieces)));
   const wastedByPurchase = new Map<number, number>();
-  stockWastage.forEach((row) => wastedByPurchase.set(row.purchase_id, (wastedByPurchase.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces)));
+  // Wastage that happened at the stock stage (nuts taken from the farmer but never loaded).
+  // Its cost is absorbed into the pieces that survived, so it is tracked separately here.
+  const stockStageWastedByPurchase = new Map<number, number>();
+  stockWastage.forEach((row) => {
+    wastedByPurchase.set(row.purchase_id, (wastedByPurchase.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces));
+    if (row.stock_entry_id != null) {
+      stockStageWastedByPurchase.set(row.purchase_id, (stockStageWastedByPurchase.get(row.purchase_id) ?? 0) + Number(row.quantity_pieces));
+    }
+  });
   const entryById = new Map(stockEntries.map((entry) => [entry.id, entry]));
   const stockedByPurchase = new Map<number, { pieces: number; kg: number; kudumePieces: number; dehusking: number; ratedKg: number; rateKg: number }>();
   stockEntryItems.forEach((item) => {
@@ -133,7 +141,14 @@ export function buildStockMap(purchases: Purchase[], saleItems: SaleItem[], stoc
     const remainingKg = perNut ? sellablePieces * kgPerPiece : remainingPieces * kgPerPiece;
     const stockCondition: ProcessingType = perNut ? (stocked.kudumePieces > stocked.pieces / 2 ? "kudume" : "mottai") : purchase.processing_type;
     const coconutCost = Number(purchase.total_amount) - Number(purchase.husk_price_total);
-    const coconutCostPerPiece = pieces > 0 ? coconutCost / pieces : 0;
+    // Nuts wasted at the stock stage (taken from the farmer but not loaded) still cost what the
+    // farmer was paid for them. Spread that cost over the pieces that survived to be sold, so the
+    // coconut cost per sellable piece absorbs the wastage and a sale's "total spending" equals what
+    // was actually spent to buy this stock. costPerPiece stays on the bought count, for the stock
+    // screen's "paid to farmer" on the pieces taken.
+    const stockStageWasted = stockStageWastedByPurchase.get(purchase.id) ?? 0;
+    const effectivePieces = Math.max(pieces - stockStageWasted, 0);
+    const coconutCostPerPiece = effectivePieces > 0 ? coconutCost / effectivePieces : 0;
     const costPerPiece = pieces > 0 ? Number(purchase.total_amount) / pieces : 0;
     stock.set(purchase.id, { purchase, soldPieces, wastedPieces, remainingPieces, remainingKg, stockedPieces, awaitingStockPieces, sellablePieces, kgPerPiece, stockCondition, dehuskingCostPerPiece, stockSaleRatePerKg, coconutCostPerPiece, costPerPiece, remainingValue: remainingPieces * coconutCostPerPiece });
   });
@@ -282,7 +297,11 @@ export function summarizeFinancials(args: {
 }): FinancialSummary {
   const { purchases, sales, saleItems, expenses, cashEntries, range, stockEntries = [], stockEntryItems = [], stockWastage = [] } = args;
   const stock = buildStockMap(purchases, saleItems, stockEntries, stockEntryItems, stockWastage);
-  const periodWastage = stockWastage.filter((row) => inRange(row.wastage_date, range));
+  // Stock-stage wastage (nuts lost before loading) is absorbed into coconutCostPerPiece and recovered
+  // through the cost of goods sold as pieces sell, so counting it here too would charge it twice. The
+  // standalone wastage figures therefore cover only sale-stage wastage — good nuts spoiled while a sale
+  // was being built. Stock-stage losses stay visible on the Stock screen where they happen.
+  const periodWastage = stockWastage.filter((row) => inRange(row.wastage_date, range) && row.stock_entry_id == null);
   const wastedPieces = sumBy(periodWastage, (row) => row.quantity_pieces);
   const wastageLoss = periodWastage.reduce((sum, row) => sum + Number(row.quantity_pieces) * (stock.get(row.purchase_id)?.coconutCostPerPiece ?? 0), 0);
   const periodPurchases = purchases.filter((purchase) => inRange(purchase.trade_date, range));

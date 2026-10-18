@@ -210,6 +210,8 @@ export type StockWastage = {
   trader_id: string;
   purchase_id: number;
   sale_id: number | null;
+  /** Set when the wastage happened at the Stock stage (nuts taken but not loaded); null for sale-stage. */
+  stock_entry_id: number | null;
   wastage_date: string;
   quantity_pieces: number;
   reason: string | null;
