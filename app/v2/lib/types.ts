@@ -8,7 +8,7 @@ export type PurchaseMode = "weight" | "quantity";
 export type PaymentStatus = "pending" | "partial" | "paid";
 export type SaleKind = "coconut" | "husk";
 export type SaleUnit = "kg" | "piece" | "load";
-export type EmployeeRole = "harvester" | "dehusker" | "loader" | "driver" | "supervisor" | "other";
+export type EmployeeRole = "harvester" | "dehusker" | "loader" | "husk_loader" | "driver" | "supervisor" | "other";
 export type VehicleType = "lorry" | "tempo" | "tractor" | "pickup" | "other";
 export type Ownership = "own" | "hired";
 export type ExpenseCategory =
@@ -343,7 +343,8 @@ export const saleProcessingTypes: Array<{ value: SaleProcessing; label: string }
 export const employeeRoles: Array<{ value: EmployeeRole; label: string }> = [
   { value: "harvester", label: "Coconut harvester" },
   { value: "dehusker", label: "Dehusking worker" },
-  { value: "loader", label: "Loading worker" },
+  { value: "loader", label: "Coconut loading worker" },
+  { value: "husk_loader", label: "Husk loading worker" },
   { value: "driver", label: "Driver" },
   { value: "supervisor", label: "Supervisor" },
   { value: "other", label: "Other" }

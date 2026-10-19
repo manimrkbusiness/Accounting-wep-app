@@ -83,13 +83,19 @@ export default function TeamPage() {
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : employeeForm.id ? "Update worker" : "Add worker"}</button>
         </form>
         <Panel eyebrow="Your team" title="Workers" action={<strong>{ws.employees.length}</strong>}>
-          <div className="card-list">
-            {ws.employees.map((employee) => {
-              const paid = sumBy(ws.expenses.filter((expense) => expense.employee_id === employee.id), (expense) => expense.amount);
-              return <article key={employee.id}><div><strong>{employee.name}{!employee.active ? " (inactive)" : ""}</strong><span>{employeeRoles.find((role) => role.value === employee.role)?.label}{employee.phone ? ` · ${employee.phone}` : ""}{Number(employee.daily_wage) > 0 ? ` · ${formatCurrency(Number(employee.daily_wage))} / day` : ""}</span></div><div className="chip-row"><span className="chip">Paid {formatCurrency(paid)} so far</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editEmployee(employee)} type="button">Edit</button></div></article>;
-            })}
-            {ws.employees.length === 0 ? <EmptyState>No workers added yet.</EmptyState> : null}
-          </div>
+          {ws.employees.length === 0 ? <EmptyState>No workers added yet.</EmptyState> : employeeRoles.map((role) => {
+            const group = ws.employees.filter((employee) => employee.role === role.value);
+            if (group.length === 0) return null;
+            return <div className="team-role-group" key={role.value}>
+              <p className="eyebrow team-role-label">{role.label} · {group.length}</p>
+              <div className="card-list">
+                {group.map((employee) => {
+                  const paid = sumBy(ws.expenses.filter((expense) => expense.employee_id === employee.id), (expense) => expense.amount);
+                  return <article key={employee.id}><div><strong>{employee.name}{!employee.active ? " (inactive)" : ""}</strong><span>{[employee.phone, Number(employee.daily_wage) > 0 ? `${formatCurrency(Number(employee.daily_wage))} / day` : null].filter(Boolean).join(" · ") || "—"}</span></div><div className="chip-row"><span className="chip">Paid {formatCurrency(paid)} so far</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editEmployee(employee)} type="button">Edit</button></div></article>;
+                })}
+              </div>
+            </div>;
+          })}
         </Panel>
       </section>
 

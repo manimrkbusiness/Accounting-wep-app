@@ -29,7 +29,7 @@ export function DefaultsSummary({ note }: { note?: string }) {
   );
 }
 
-export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, husk_price_green_per_piece: 0, husk_price_brown_per_piece: 0, husk_loading_rate_per_1000: 0, kudume_wastage_percent: 3 };
+export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, husk_price_green_per_piece: 0, husk_price_brown_per_piece: 0, husk_loading_rate_per_1000: 180, kudume_wastage_percent: 3 };
 
 type SettingsForm = { purchaseMode: PurchaseMode; huskRemoval: string; treeCollection: string; huskPriceGreen: string; huskPriceBrown: string; huskLoading: string; kudumeWastage: string };
 

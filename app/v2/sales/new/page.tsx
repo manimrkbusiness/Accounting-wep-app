@@ -303,12 +303,12 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   }, [form.gross_weight_kg, form.empty_weight_kg, useGrossTare]);
 
   const buyers = ws.buyers.filter((buyer) => buyer.active && (kind === "husk" ? buyer.buys_husk : buyer.buys_coconut));
-  const loaders = ws.employees.filter((employee) => employee.active && employee.role === "loader");
+  const loaders = ws.employees.filter((employee) => employee.active && employee.role === "husk_loader");
 
   async function addLoader() {
-    if (!ws.session || loaderName.trim().length < 2) { ws.fail("Enter the loading worker's name (at least 2 letters)."); return; }
+    if (!ws.session || loaderName.trim().length < 2) { ws.fail("Enter the husk loading worker's name (at least 2 letters)."); return; }
     ws.setSaving(true);
-    const { data, error } = await supabase.from("employees").insert({ trader_id: ws.session.user.id, name: loaderName.trim(), role: "loader", active: true }).select("id").single();
+    const { data, error } = await supabase.from("employees").insert({ trader_id: ws.session.user.id, name: loaderName.trim(), role: "husk_loader", active: true }).select("id").single();
     ws.setSaving(false);
     if (error || !data) { ws.fail(error?.message || "Could not add the loading worker."); return; }
     setField("husk_loading_employee_id", String((data as { id: number }).id));
@@ -501,7 +501,23 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             </div>
             <button className="link-button" onClick={() => setUseGrossTare((value) => !value)} type="button">{useGrossTare ? "Enter net weight directly instead" : "Calculate from gross and empty weight"}</button>
           </fieldset> : kind === "husk" ? <label>Husk pieces to sell<input type="number" value={form.quantity} readOnly placeholder="0" /><span className="field-hint">Total husk pieces ticked above. Change the per-purchase pieces in the table to adjust it.</span></label> : <label>Quantity ({unitLabel})<input type="number" min="0.01" step={form.unit === "piece" ? "1" : "0.01"} value={form.quantity} onChange={(event) => { setWeightEdited(true); setField("quantity", event.target.value); }} required />{form.unit === "piece" && allocatedPieces > 0 && toNumber(form.quantity) !== allocatedPieces ? <button className="link-button" onClick={() => { setWeightEdited(false); setField("quantity", String(allocatedPieces)); }} type="button">Use {formatNumber(allocatedPieces, 0)} allocated pieces</button> : null}</label>}
-          <div className="form-grid">
+          {kind === "husk" ? <>
+            <fieldset className="deduction-options"><legend>Delivery</legend>
+              <label className="checkbox-field"><input type="checkbox" checked={form.delivery_by_trader} onChange={(event) => { const on = event.target.checked; setForm((current) => ({ ...current, delivery_by_trader: on, husk_loading_rate_per_1000: on && !current.husk_loading_rate_per_1000.trim() ? String(settings.husk_loading_rate_per_1000) : current.husk_loading_rate_per_1000 })); }} /><span><strong>I deliver the husk to the buyer</strong><small>Leave off when the buyer collects it — then there are no delivery costs. Turn on to add loading, fuel and other costs and the vehicle; they are booked under Expenses and taken off the margin.</small></span></label>
+              {form.delivery_by_trader ? <>
+                <div className="form-grid">
+                  <label>Husk loading worker{loaders.length ? <select value={form.husk_loading_employee_id} onChange={(event) => { if (event.target.value === "__add__") { setAddingLoader(true); return; } setField("husk_loading_employee_id", event.target.value); }}><option value="">Not recorded</option>{loaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add husk loading worker</option></select> : <button className="secondary-button" onClick={() => setAddingLoader(true)} type="button">+ Add husk loading worker</button>}</label>
+                  <label>Loading rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.husk_loading_rate_per_1000} onChange={(event) => setField("husk_loading_rate_per_1000", event.target.value)} placeholder={String(settings.husk_loading_rate_per_1000)} /><span className="field-hint">Default from Settings. Loading cost = pieces ÷ 1,000 × this rate.</span></label>
+                  <label>Vehicle fuel cost (INR)<input type="number" min="0" step="0.01" value={form.husk_fuel_cost} onChange={(event) => setField("husk_fuel_cost", event.target.value)} /></label>
+                  <label>Other expenses (INR)<input type="number" min="0" step="0.01" value={form.husk_other_expense} onChange={(event) => setField("husk_other_expense", event.target.value)} /></label>
+                  <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value)} placeholder="TN 00 AB 0000" /></label>
+                </div>
+                {addingLoader ? <div className="inline-form"><label>New husk loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
+              </> : null}
+              <span className="field-hint">These costs apply only when you deliver. Loading is booked as husk loading labor, fuel as diesel, and other as a husk expense — all under Expenses and reflected in the margin.</span>
+            </fieldset>
+            <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>
+          </> : <div className="form-grid">
             <label>Transport charged to buyer (INR)<input type="number" min="0" step="0.01" value={form.transport_charge} onChange={(event) => setField("transport_charge", event.target.value)} /><span className="field-hint">Added to the buyer bill when the buyer pays for delivery.</span></label>
             <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>
             <label>Deduction by buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.deduction_amount} onChange={(event) => setField("deduction_amount", event.target.value)} /></label>
@@ -509,20 +525,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             <label>Other charges to buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.other_charge_amount} onChange={(event) => setField("other_charge_amount", event.target.value)} /><span className="field-hint">Money you paid that the buyer repays you (e.g. weighbridge fee). Added to what the buyer pays.</span></label>
             {calculation.otherCharge > 0 ? <label>Other charge reason<input value={form.other_charge_reason} onChange={(event) => setField("other_charge_reason", event.target.value)} placeholder="Weighbridge fee, other purchase..." /></label> : null}
             <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value)} placeholder="TN 00 AB 0000" /></label>
-          </div>
-          {kind === "husk" ? <fieldset className="deduction-options"><legend>Delivery</legend>
-            <label className="checkbox-field"><input type="checkbox" checked={form.delivery_by_trader} onChange={(event) => { const on = event.target.checked; setForm((current) => ({ ...current, delivery_by_trader: on, husk_loading_rate_per_1000: on && !current.husk_loading_rate_per_1000.trim() ? String(settings.husk_loading_rate_per_1000) : current.husk_loading_rate_per_1000 })); }} /><span><strong>I deliver the husk to the buyer</strong><small>Leave off when the buyer collects it — then there are no delivery costs. Turn on to add loading, fuel and other costs; they are booked under Expenses and taken off the margin.</small></span></label>
-            {form.delivery_by_trader ? <>
-              <div className="form-grid">
-                <label>Loading worker{loaders.length ? <select value={form.husk_loading_employee_id} onChange={(event) => { if (event.target.value === "__add__") { setAddingLoader(true); return; } setField("husk_loading_employee_id", event.target.value); }}><option value="">Not recorded</option>{loaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add loading worker</option></select> : <button className="secondary-button" onClick={() => setAddingLoader(true)} type="button">+ Add loading worker</button>}</label>
-                <label>Loading rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.husk_loading_rate_per_1000} onChange={(event) => setField("husk_loading_rate_per_1000", event.target.value)} placeholder={String(settings.husk_loading_rate_per_1000)} /><span className="field-hint">Default from Settings. Loading cost = pieces ÷ 1,000 × this rate.</span></label>
-                <label>Vehicle fuel cost (INR)<input type="number" min="0" step="0.01" value={form.husk_fuel_cost} onChange={(event) => setField("husk_fuel_cost", event.target.value)} /></label>
-                <label>Other expenses (INR)<input type="number" min="0" step="0.01" value={form.husk_other_expense} onChange={(event) => setField("husk_other_expense", event.target.value)} /></label>
-              </div>
-              {addingLoader ? <div className="inline-form"><label>New loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
-            </> : null}
-            <span className="field-hint">These costs apply only when you deliver. Loading is booked as husk loading labor, fuel as diesel, and other as a husk expense — all under Expenses and reflected in the margin.</span>
-          </fieldset> : null}
+          </div>}
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Quality, market, delivery note" /></label>
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update sale" : "Save sale"}</button>
         </form>
@@ -548,5 +551,5 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
 }
 
 export default function NewSalePage() {
-  return <SaleEntry />;
+  return <SaleEntry forcedKind="coconut" />;
 }
