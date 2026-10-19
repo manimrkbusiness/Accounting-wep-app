@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, LogOut, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
 
@@ -11,10 +11,12 @@ type NavItem = { href: string; label: string; short: string; icon: LucideIcon; d
 
 export const navItems: NavItem[] = [
   { href: "/v2", label: "Dashboard", short: "Home", icon: LayoutDashboard, description: "Profit, stock, cash and outstanding balances at a glance." },
-  { href: "/v2/purchases", label: "Purchases", short: "Buy", icon: ShoppingCart, description: "Coconut bought from farmers and what is still in stock." },
+  { href: "/v2/purchases", label: "Coconut purchases", short: "Buy", icon: ShoppingCart, description: "Coconut bought from farmers and what is still in stock." },
+  { href: "/v2/husk-purchases", label: "Husk purchase", short: "Husk buy", icon: Leaf, description: "Husk bought straight from a farmer, without any coconut." },
   { href: "/v2/stock", label: "Stock", short: "Stock", icon: Boxes, description: "Weigh per-nut purchases into stock so they can go into a lorry load." },
   { href: "/v2/harvesting", label: "Coconut Harvesting", short: "Harvest", icon: Trees, description: "Harvesting teams, the coconuts they harvest each day, and the labor you pay them." },
-  { href: "/v2/sales", label: "Sales", short: "Sell", icon: Truck, description: "Coconut loads and husk sold to buyers." },
+  { href: "/v2/sales", label: "Coconut sales", short: "Sell", icon: Truck, description: "Coconut loads sold to buyers." },
+  { href: "/v2/husk-sales", label: "Husk sale", short: "Husk sell", icon: Package, description: "Husk sold to buyers, from your coconut purchases or husk purchases." },
   { href: "/v2/farmers", label: "Farmers", short: "Farmers", icon: UsersRound, description: "Farmer contacts and their farming locations." },
   { href: "/v2/buyers", label: "Buyers", short: "Buyers", icon: Store, description: "Coconut and husk buyers you sell to." },
   { href: "/v2/expenses", label: "Expenses", short: "Spend", icon: Receipt, description: "Labor, transport, diesel, food and other costs." },
@@ -26,7 +28,9 @@ export const navItems: NavItem[] = [
 
 const subPages: Record<string, { label: string; description: string }> = {
   "/v2/purchases/new": { label: "New purchase", description: "Record coconut bought from a farmer. Costs are calculated for you." },
-  "/v2/sales/new": { label: "New sale", description: "Pick the purchases going in this load, then enter the buyer and weighbridge details." }
+  "/v2/sales/new": { label: "New sale", description: "Pick the purchases going in this load, then enter the buyer and weighbridge details." },
+  "/v2/husk-sales": { label: "Husk sale", description: "Pick the husk you are selling, then enter the buyer, rate and any delivery costs." },
+  "/v2/husk-purchases": { label: "Husk purchase", description: "Record husk bought straight from a farmer, without any coconut." }
 };
 
 function pageMeta(pathname: string) {
@@ -50,6 +54,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const resumeTargets: Record<string, string | null> = {
     "/v2/purchases": resumeHref(drafts, "purchase", "/v2/purchases/new"),
     "/v2/sales": resumeHref(drafts, "sale", "/v2/sales/new"),
+    "/v2/husk-sales": drafts.some((draft) => draft.form === "husk-sale") ? "/v2/husk-sales" : null,
+    "/v2/husk-purchases": drafts.some((draft) => draft.form === "husk-purchase") ? "/v2/husk-purchases" : null,
     "/v2/stock": drafts.some((draft) => draft.form === "stock") ? "/v2/stock" : null
   };
   const hrefFor = (item: NavItem) => resumeTargets[item.href] ?? item.href;

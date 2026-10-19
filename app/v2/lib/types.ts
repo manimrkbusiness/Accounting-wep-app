@@ -86,6 +86,8 @@ export type Purchase = {
   husk_color: HuskColor | null;
   /** Husk pieces being bought; null means the dehusked count (dehusking_pieces, else coconut_quantity). */
   husk_pieces: number | null;
+  /** A husk-only purchase (husk bought from a farmer, no coconut); reuses this table with coconut_quantity 0. */
+  husk_only: boolean;
   average_weight_kg: number;
   average_price_per_piece: number;
   additional_credit_amount: number;
@@ -110,6 +112,7 @@ export type TraderSettings = {
   husk_price_per_piece: number;
   husk_price_green_per_piece: number;
   husk_price_brown_per_piece: number;
+  husk_loading_rate_per_1000: number;
   kudume_wastage_percent: number;
 };
 
@@ -171,6 +174,12 @@ export type Sale = {
   advance_amount: number;
   vehicle_id: number | null;
   vehicle_number: string | null;
+  /** Husk sale delivery: when true the trader delivers and loading/fuel/other are booked as husk expenses. */
+  delivery_by_trader: boolean;
+  husk_loading_rate_per_1000: number;
+  husk_loading_employee_id: number | null;
+  husk_fuel_cost: number;
+  husk_other_expense: number;
   payment_status: PaymentStatus;
   notes: string | null;
   sale_amount: number;

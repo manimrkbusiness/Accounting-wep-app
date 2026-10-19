@@ -39,6 +39,7 @@ export default function PurchasesPage() {
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return ws.purchases.filter((purchase) => {
+      if (purchase.husk_only) return false; // husk-only purchases live on the Husk purchase page
       if (farmerFilter && String(purchase.farmer_id) !== farmerFilter) return false;
       const info = ws.stock.get(purchase.id);
       if (stockFilter === "in-stock" && !(info && info.remainingPieces > 0.5)) return false;

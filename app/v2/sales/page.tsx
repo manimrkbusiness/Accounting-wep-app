@@ -141,7 +141,7 @@ export default function SalesPage() {
             <td>{items.length || wasted.length || huskItems.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}{huskItems.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={`husk-${item.id}`}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)} husk</Link>)}{wasted.map((row) => <span className="chip warn" key={`wasted-${row.id}`}>{formatPurchaseId(row.purchase_id)} · {formatNumber(Number(row.quantity_pieces), 0)} wasted</span>)}</div> : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName)} type="button">PDF</button>
-              <button className="secondary-button" onClick={() => router.push(`/v2/sales/new?edit=${sale.id}`)} type="button">Edit</button>
+              <button className="secondary-button" onClick={() => router.push(`${sale.sale_kind === "husk" ? "/v2/husk-sales" : "/v2/sales/new"}?edit=${sale.id}`)} type="button">Edit</button>
               {due > 0.005 ? <button className="secondary-button" onClick={() => openReceipt(sale)} type="button">Receive</button> : null}
               <button className="danger-button" disabled={ws.saving} onClick={() => deleteSale(sale)} type="button">Delete</button>
             </div>

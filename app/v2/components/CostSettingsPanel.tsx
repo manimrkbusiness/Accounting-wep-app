@@ -21,6 +21,7 @@ export function DefaultsSummary({ note }: { note?: string }) {
         { label: "Coconut harvesting deduction", value: `${formatCurrency(Number(settings.tree_collection_rate_per_1000))} / 1,000` },
         { label: "Green husk price", value: `${formatCurrency(Number(settings.husk_price_green_per_piece))} / piece` },
         { label: "Brown husk price", value: `${formatCurrency(Number(settings.husk_price_brown_per_piece))} / piece` },
+        { label: "Husk loading", value: `${formatCurrency(Number(settings.husk_loading_rate_per_1000))} / 1,000` },
         { label: "Kudume wastage", value: `${formatNumber(Number(settings.kudume_wastage_percent), 2)}%` }
       ]} />
       {note ? <p className="field-hint">{note}</p> : null}
@@ -28,9 +29,9 @@ export function DefaultsSummary({ note }: { note?: string }) {
   );
 }
 
-export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, husk_price_green_per_piece: 0, husk_price_brown_per_piece: 0, kudume_wastage_percent: 3 };
+export const defaultSettings: TraderSettings = { trader_id: "", purchase_mode: "weight", husk_removal_rate_per_1000: 1100, tree_collection_rate_per_1000: 1450, husk_price_per_piece: 0, husk_price_green_per_piece: 0, husk_price_brown_per_piece: 0, husk_loading_rate_per_1000: 0, kudume_wastage_percent: 3 };
 
-type SettingsForm = { purchaseMode: PurchaseMode; huskRemoval: string; treeCollection: string; huskPriceGreen: string; huskPriceBrown: string; kudumeWastage: string };
+type SettingsForm = { purchaseMode: PurchaseMode; huskRemoval: string; treeCollection: string; huskPriceGreen: string; huskPriceBrown: string; huskLoading: string; kudumeWastage: string };
 
 const formFrom = (settings: TraderSettings): SettingsForm => ({
   purchaseMode: settings.purchase_mode,
@@ -38,6 +39,7 @@ const formFrom = (settings: TraderSettings): SettingsForm => ({
   treeCollection: String(settings.tree_collection_rate_per_1000),
   huskPriceGreen: String(settings.husk_price_green_per_piece),
   huskPriceBrown: String(settings.husk_price_brown_per_piece),
+  huskLoading: String(settings.husk_loading_rate_per_1000),
   kudumeWastage: String(settings.kudume_wastage_percent)
 });
 
@@ -58,10 +60,11 @@ export function CostSettingsPanel({ onSaved, description }: { onSaved?: (setting
     const treeCollection = toNumber(form.treeCollection);
     const huskPriceGreen = toNumber(form.huskPriceGreen);
     const huskPriceBrown = toNumber(form.huskPriceBrown);
+    const huskLoading = toNumber(form.huskLoading);
     const kudumeWastage = toNumber(form.kudumeWastage);
-    if ([huskRemoval, treeCollection, huskPriceGreen, huskPriceBrown, kudumeWastage].some((value) => value < 0) || kudumeWastage > 100) { ws.fail("Enter valid non-negative rates and a wastage percentage from 0 to 100."); return; }
+    if ([huskRemoval, treeCollection, huskPriceGreen, huskPriceBrown, huskLoading, kudumeWastage].some((value) => value < 0) || kudumeWastage > 100) { ws.fail("Enter valid non-negative rates and a wastage percentage from 0 to 100."); return; }
     ws.setSaving(true);
-    const { data, error } = await supabase.from("trader_settings").upsert({ trader_id: ws.session.user.id, purchase_mode: form.purchaseMode, husk_removal_rate_per_1000: huskRemoval, tree_collection_rate_per_1000: treeCollection, husk_price_per_piece: huskPriceGreen, husk_price_green_per_piece: huskPriceGreen, husk_price_brown_per_piece: huskPriceBrown, kudume_wastage_percent: kudumeWastage }).select("*").single();
+    const { data, error } = await supabase.from("trader_settings").upsert({ trader_id: ws.session.user.id, purchase_mode: form.purchaseMode, husk_removal_rate_per_1000: huskRemoval, tree_collection_rate_per_1000: treeCollection, husk_price_per_piece: huskPriceGreen, husk_price_green_per_piece: huskPriceGreen, husk_price_brown_per_piece: huskPriceBrown, husk_loading_rate_per_1000: huskLoading, kudume_wastage_percent: kudumeWastage }).select("*").single();
     ws.setSaving(false);
     if (error || !data) { ws.fail(error?.message || "Unable to save purchase settings."); return; }
     setEditing(false);
@@ -80,6 +83,7 @@ export function CostSettingsPanel({ onSaved, description }: { onSaved?: (setting
         <label>Coconut harvesting deduction / 1,000<input type="number" min="0" step="0.01" value={form.treeCollection} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, treeCollection: event.target.value }))} /></label>
         <label>Green husk price per piece<input type="number" min="0" step="0.01" value={form.huskPriceGreen} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskPriceGreen: event.target.value }))} /></label>
         <label>Brown husk price per piece<input type="number" min="0" step="0.01" value={form.huskPriceBrown} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskPriceBrown: event.target.value }))} /></label>
+        <label>Husk loading per 1,000 pieces<input type="number" min="0" step="0.01" value={form.huskLoading} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, huskLoading: event.target.value }))} /></label>
         <label>Kudume wastage % (weight-based)<input type="number" min="0" max="100" step="0.01" value={form.kudumeWastage} disabled={!editing} onChange={(event) => setForm((current) => ({ ...current, kudumeWastage: event.target.value }))} /></label>
       </div>
       {editing ? <button className="primary-button" disabled={ws.saving} onClick={save} type="button">Save settings</button> : null}
