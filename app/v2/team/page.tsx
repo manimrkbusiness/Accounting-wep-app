@@ -8,7 +8,6 @@ import { DraftNotice } from "../components/DraftNotice";
 import { sumBy } from "../lib/calc";
 import { formatCurrency, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
 import { employeeRoles, vehicleTypes, type Employee, type EmployeeRole, type Ownership, type Vehicle, type VehicleType } from "../lib/types";
-import { EmptyState } from "../components/ui";
 
 type EmployeeForm = { id?: number; name: string; phone: string; role: EmployeeRole; daily_wage: string; notes: string; active: boolean };
 type VehicleForm = { id?: number; vehicle_number: string; vehicle_type: VehicleType; ownership: Ownership; notes: string; active: boolean };
@@ -123,6 +122,20 @@ export default function TeamPage() {
   function cancelEmployee() { employeeDraft.clear(blankEmployee); setShowEmployeeForm(false); }
   function cancelVehicle() { vehicleDraft.clear(blankVehicle); setShowVehicleForm(false); }
 
+  function openEmployeeForm(role: EmployeeRole) {
+    ws.clearFeedback();
+    employeeDraft.clear({ ...blankEmployee, role });
+    setShowEmployeeForm(true);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openVehicleForm() {
+    ws.clearFeedback();
+    vehicleDraft.clear(blankVehicle);
+    setShowVehicleForm(true);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const isTeamRole = teamRoles.includes(employeeForm.role);
 
   return (
@@ -161,35 +174,33 @@ export default function TeamPage() {
       </form> : null}
 
       <section className="ledger-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Team & vehicles</span><h2>Your team ({ws.employees.length}) and vehicles ({ws.vehicles.length})</h2></div><div className="page-actions">{!showEmployeeForm ? <button className="primary-button" onClick={() => { ws.clearFeedback(); employeeDraft.clear(blankEmployee); setShowEmployeeForm(true); }} type="button">+ Add a team</button> : null}{!showVehicleForm ? <button className="secondary-button" onClick={() => { ws.clearFeedback(); vehicleDraft.clear(blankVehicle); setShowVehicleForm(true); }} type="button">+ Add a vehicle</button> : null}</div></div>
+        <div className="panel-heading"><div><span className="eyebrow">Team & vehicles</span><h2>Your team ({ws.employees.length}) and vehicles ({ws.vehicles.length})</h2></div><div className="page-actions">{!showEmployeeForm ? <button className="primary-button" onClick={() => openEmployeeForm("harvester")} type="button">+ Add a team</button> : null}{!showVehicleForm ? <button className="secondary-button" onClick={() => openVehicleForm()} type="button">+ Add a vehicle</button> : null}</div></div>
         <div className="team-board">
           {employeeRoles.map((role) => {
             const group = ws.employees.filter((employee) => employee.role === role.value);
-            if (group.length === 0) return null;
+            if (group.length === 0 && !teamRoles.includes(role.value)) return null;
             return <div className="team-card-box" key={role.value}>
-              <div className="box-heading"><strong>{sectionLabel[role.value]}</strong><span className="chip">{group.length}</span></div>
-              <div className="card-list">
+              <div className="box-heading"><strong>{sectionLabel[role.value]}</strong><div className="box-heading-actions"><span className="chip">{group.length}</span><button className="link-button" onClick={() => openEmployeeForm(role.value)} type="button">+ Add</button></div></div>
+              {group.length ? <div className="card-list">
                 {group.map((employee) => {
                   const paid = sumBy(ws.expenses.filter((expense) => expense.employee_id === employee.id), (expense) => expense.amount);
                   const locked = employeeHasEntries(employee);
                   return <article key={employee.id}><div><strong>{employee.name}{!employee.active ? " (inactive)" : ""}</strong><span>{[employee.phone, Number(employee.daily_wage) > 0 ? `${formatCurrency(Number(employee.daily_wage))} / day` : null].filter(Boolean).join(" · ") || "—"}</span></div><div className="chip-row"><span className="chip">Paid {formatCurrency(paid)} so far</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editEmployee(employee)} type="button">Edit</button><button className="danger-button" disabled={ws.saving || locked} title={locked ? "Has wages or records; cannot delete" : undefined} onClick={() => deleteEmployee(employee)} type="button">Delete</button></div></article>;
                 })}
-              </div>
+              </div> : <p className="muted-text box-empty">None yet — use + Add.</p>}
             </div>;
           })}
           <div className="team-card-box">
-            <div className="box-heading"><strong>Vehicles</strong><span className="chip">{ws.vehicles.length}</span></div>
-            <div className="card-list">
+            <div className="box-heading"><strong>Vehicles</strong><div className="box-heading-actions"><span className="chip">{ws.vehicles.length}</span><button className="link-button" onClick={() => openVehicleForm()} type="button">+ Add</button></div></div>
+            {ws.vehicles.length ? <div className="card-list">
               {ws.vehicles.map((vehicle) => {
                 const spent = sumBy(ws.expenses.filter((expense) => expense.vehicle_id === vehicle.id), (expense) => expense.amount);
                 const loads = ws.sales.filter((sale) => sale.vehicle_id === vehicle.id).length;
                 const locked = vehicleHasEntries(vehicle);
                 return <article key={vehicle.id}><div><strong>{vehicle.vehicle_number}{!vehicle.active ? " (inactive)" : ""}</strong><span>{vehicleTypes.find((type) => type.value === vehicle.vehicle_type)?.label} · {vehicle.ownership === "own" ? "Own" : "Hired"}</span></div><div className="chip-row"><span className="chip">{loads} loads</span><span className="chip">Spent {formatCurrency(spent)}</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editVehicle(vehicle)} type="button">Edit</button><button className="danger-button" disabled={ws.saving || locked} title={locked ? "Used on loads or expenses; cannot delete" : undefined} onClick={() => deleteVehicle(vehicle)} type="button">Delete</button></div></article>;
               })}
-              {ws.vehicles.length === 0 ? <EmptyState>No vehicles added yet.</EmptyState> : null}
-            </div>
+            </div> : <p className="muted-text box-empty">None yet — use + Add.</p>}
           </div>
-          {ws.employees.length === 0 ? <EmptyState>No team members added yet. Use “Add a team”.</EmptyState> : null}
         </div>
       </section>
     </div>
