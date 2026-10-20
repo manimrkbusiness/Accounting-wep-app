@@ -47,7 +47,7 @@ function isActive(pathname: string, href: string) {
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const workspace = useWorkspace();
-  const { status, profile, message, error, signOut } = workspace;
+  const { status, profile, message, signOut } = workspace;
   const drafts = useDraftIndex(workspace.session?.user.id);
 
   // While an entry is unsaved, its sidebar item reopens that entry instead of the list.
@@ -95,7 +95,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="mobile-section-nav" aria-label="Mobile navigation">
           {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
         </nav>
-        {error ? <p className="error-message">{error}</p> : null}
         {message ? <p className="status-message">{message}</p> : null}
         {children}
       </section>

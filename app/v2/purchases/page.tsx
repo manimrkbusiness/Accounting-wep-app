@@ -115,6 +115,7 @@ export default function PurchasesPage() {
   return (
     <div className="stack">
     <ResumeBanner form="purchase" newPath="/v2/purchases/new" what="purchase" />
+    {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
     <section className="ledger-panel">
       <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div><Link className="primary-button" href="/v2/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New purchase</Link></div>
       <div className="filter-bar">

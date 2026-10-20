@@ -235,6 +235,7 @@ export default function StockPage() {
             <span className="field-hint">This husk is not paid to the farmer — the whole nut was bought per piece — so it costs you nothing and the Husk sale is pure profit. Kept to sell later; the price here is just the expected value, pre-filled from Settings by colour.</span>
           </fieldset>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Weighbridge slip number, lorry, quality note" /></label>
+          {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update stock entry" : "Add to stock"}</button>
         </form>
         <aside className="side-stack">

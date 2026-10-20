@@ -96,6 +96,7 @@ export default function ExpensesPage() {
             <label>Sale <span className="optional">Optional</span><select value={form.sale_id} onChange={(event) => setForm((current) => ({ ...current, sale_id: event.target.value }))}><option value="">Not linked to a sale</option>{ws.sales.slice(0, 100).map((sale) => <option key={sale.id} value={sale.id}>{formatSaleId(sale.id)} · {ws.buyerById.get(sale.buyer_id)?.name ?? "Buyer"} · {formatDate(sale.sale_date)}</option>)}</select></label>
           </div>
           <label>Description <span className="optional">Optional</span><input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Breakfast for 6 workers, tyre repair, diesel 40 litres..." /></label>
+          {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update expense" : "Save expense"}</button>
         </form>
         <Panel eyebrow="Period summary" title={`Expenses total ${formatCurrency(total)}`}>

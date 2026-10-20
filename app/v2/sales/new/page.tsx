@@ -510,7 +510,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
                   <label>Loading rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.husk_loading_rate_per_1000} onChange={(event) => setField("husk_loading_rate_per_1000", event.target.value)} placeholder={String(settings.husk_loading_rate_per_1000)} /><span className="field-hint">Default from Settings. Loading cost = pieces ÷ 1,000 × this rate.</span></label>
                   <label>Vehicle fuel cost (INR)<input type="number" min="0" step="0.01" value={form.husk_fuel_cost} onChange={(event) => setField("husk_fuel_cost", event.target.value)} /></label>
                   <label>Other expenses (INR)<input type="number" min="0" step="0.01" value={form.husk_other_expense} onChange={(event) => setField("husk_other_expense", event.target.value)} /></label>
-                  <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value)} placeholder="TN 00 AB 0000" /></label>
+                  <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
                 </div>
                 {addingLoader ? <div className="inline-form"><label>New husk loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
               </> : null}
@@ -524,9 +524,10 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             {calculation.deduction > 0 ? <label>Deduction reason<input value={form.deduction_reason} onChange={(event) => setField("deduction_reason", event.target.value)} placeholder="Quality, shortage, damage..." /></label> : null}
             <label>Other charges to buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.other_charge_amount} onChange={(event) => setField("other_charge_amount", event.target.value)} /><span className="field-hint">Money you paid that the buyer repays you (e.g. weighbridge fee). Added to what the buyer pays.</span></label>
             {calculation.otherCharge > 0 ? <label>Other charge reason<input value={form.other_charge_reason} onChange={(event) => setField("other_charge_reason", event.target.value)} placeholder="Weighbridge fee, other purchase..." /></label> : null}
-            <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value)} placeholder="TN 00 AB 0000" /></label>
+            <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
           </div>}
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Quality, market, delivery note" /></label>
+          {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update sale" : "Save sale"}</button>
         </form>
         <aside className="side-stack">

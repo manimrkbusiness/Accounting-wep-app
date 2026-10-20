@@ -117,6 +117,7 @@ export default function CashPage() {
             </> : null}
           </div>
           <label>Note <span className="optional">Optional</span><input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="What this money was for" /></label>
+          {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : "Save entry"}</button>
         </form>
         <Panel eyebrow="Period movement" title={range ? `${formatDate(range.from)} to ${formatDate(range.to)}` : "All time"}>

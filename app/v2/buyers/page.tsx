@@ -59,6 +59,18 @@ export default function BuyersPage() {
     if (returnTo === "sale") router.push(savedBuyerId ? `/v2/sales/new?buyer=${savedBuyerId}` : "/v2/sales/new");
   }
 
+  async function deleteBuyer(buyer: Buyer) {
+    if (ws.sales.some((sale) => sale.buyer_id === buyer.id) || ws.cashEntries.some((entry) => entry.buyer_id === buyer.id)) { ws.fail(`${buyer.name} has sales or receipts recorded and cannot be deleted. Mark them inactive instead.`); return; }
+    if (!window.confirm(`Delete ${buyer.name}?`)) return;
+    if (!ws.session) return;
+    ws.setSaving(true);
+    const { error } = await supabase.from("buyers").delete().eq("id", buyer.id).eq("trader_id", ws.session.user.id);
+    ws.setSaving(false);
+    if (error) { ws.fail(error.message); return; }
+    ws.notify(`${buyer.name} deleted.`);
+    await ws.refresh();
+  }
+
   return (
     <>
     <DraftNotice show={draft.restored} what="buyer entry" onDiscard={() => draft.clear(blank)} />
@@ -75,6 +87,7 @@ export default function BuyersPage() {
         <fieldset className="deduction-options"><legend>What this buyer purchases</legend><div className="checkbox-grid"><label className="checkbox-field"><input type="checkbox" checked={form.buys_coconut} onChange={(event) => setForm((current) => ({ ...current, buys_coconut: event.target.checked }))} /><span><strong>Coconut loads</strong><small>Appears when creating a coconut sale.</small></span></label><label className="checkbox-field"><input type="checkbox" checked={form.buys_husk} onChange={(event) => setForm((current) => ({ ...current, buys_husk: event.target.checked }))} /><span><strong>Husk</strong><small>Appears when creating a husk sale.</small></span></label></div></fieldset>
         <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Payment habits, preferred quality, contact person" /></label>
         {form.id ? <label className="checkbox-field"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} /><span><strong>Active buyer</strong><small>Inactive buyers stay in history but are hidden from new sales.</small></span></label> : null}
+        {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
         <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update buyer" : "Add buyer"}</button>
       </form>
       <Panel eyebrow="Your buyers" title="Find a buyer" action={<strong>{ws.buyers.length}</strong>}>
@@ -86,7 +99,7 @@ export default function BuyersPage() {
             return <article key={buyer.id}>
               <div><strong>{buyer.name}{!buyer.active ? " (inactive)" : ""}</strong><span>{[buyer.business_name, buyer.phone, buyer.city].filter(Boolean).join(" · ") || "No contact details"}</span></div>
               <div className="chip-row">{buyer.buys_coconut ? <span className="chip">Coconut</span> : null}{buyer.buys_husk ? <span className="chip">Husk</span> : null}<span className="chip">{buyerSales.length} sales · {formatCurrency(sumBy(buyerSales, (sale) => sale.total_amount))}</span>{due > 0.005 ? <span className="chip warn">Due {formatCurrency(due)}</span> : null}</div>
-              <div className="row-actions"><button className="secondary-button" onClick={() => edit(buyer)} type="button">Edit buyer</button></div>
+              <div className="row-actions"><button className="secondary-button" onClick={() => edit(buyer)} type="button">Edit buyer</button>{(() => { const locked = buyerSales.length > 0 || ws.cashEntries.some((entry) => entry.buyer_id === buyer.id); return <button className="danger-button" disabled={ws.saving || locked} title={locked ? "Has sales or receipts; cannot delete" : undefined} onClick={() => deleteBuyer(buyer)} type="button">Delete</button>; })()}</div>
             </article>;
           })}
           {visible.length === 0 ? <EmptyState>No buyers yet. Add the merchants you sell loads to.</EmptyState> : null}

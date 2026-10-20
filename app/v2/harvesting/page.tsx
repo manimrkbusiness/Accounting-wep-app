@@ -172,6 +172,7 @@ export default function HarvestingPage() {
             </label>
           </div>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))} placeholder="Trees, area, quality note" /></label>
+          {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update harvest" : "Save harvest"}</button>
         </form>
         <aside className="side-stack">

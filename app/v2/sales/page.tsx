@@ -102,8 +102,9 @@ export default function SalesPage() {
   return (
     <div className="stack">
     <ResumeBanner form="sale" newPath="/v2/sales/new" what="sale" />
+    {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
     <section className="ledger-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Sales history</h2></div><div className="page-actions"><Link className="primary-button" href="/v2/sales/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New coconut sale</Link><Link className="secondary-button" href="/v2/sales/new?kind=husk">Husk sale</Link></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Sales history</h2></div><div className="page-actions"><Link className="primary-button" href="/v2/sales/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New coconut sale</Link><Link className="secondary-button" href="/v2/husk-sales">Husk sale</Link></div></div>
       <div className="filter-bar">
         <label className="search-field">Search sale ID, buyer, lorry or purchase ID<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="SAL-000001, buyer name, PUR-000003..." /></label>
         <label>Type<select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as typeof kindFilter)}><option value="all">Coconut and husk</option><option value="coconut">Coconut loads</option><option value="husk">Husk sales</option></select></label>
