@@ -83,6 +83,8 @@ export type Purchase = {
   husk_price_total: number;
   /** Whether the trader is buying the husk from the farmer on this purchase (weight-based only). */
   buys_husk: boolean;
+  /** Weight purchase bought with the husk on: no dehusking charge, husk kept free (buys_husk true, price 0). */
+  husk_included: boolean;
   husk_color: HuskColor | null;
   /** Husk pieces being bought; null means the dehusked count (dehusking_pieces, else coconut_quantity). */
   husk_pieces: number | null;

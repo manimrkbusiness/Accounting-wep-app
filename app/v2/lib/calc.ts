@@ -22,6 +22,8 @@ export type PurchaseCalcInput = {
   husk_price_per_piece: string;
   /** Whether the trader is buying the husk from the farmer (weight-based only). */
   buys_husk: boolean;
+  /** Weight purchase bought with the husk on: no dehusking charge, husk kept free. */
+  husk_included?: boolean;
   /** Husk pieces being bought; blank means the dehusked count. */
   husk_pieces?: string;
   deduct_dehusking: boolean;
@@ -44,12 +46,16 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   // Dehusking and harvesting can only be deducted from the farmer on weight-based
   // purchases. On per-nut purchases the trader bears those costs, so no deduction applies.
   const canDeduct = purchaseMode === "weight";
-  const huskRemovalCost = canDeduct && form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
+  // "Including husk": the coconut is bought with the husk on, so there is no separate dehusking
+  // charge and the husk is kept free. Harvesting can still be deducted.
+  const huskIncluded = purchaseMode === "weight" && !!form.husk_included;
+  const huskRemovalCost = canDeduct && !huskIncluded && form.deduct_dehusking ? dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
   const treeCollectionCost = canDeduct && form.deduct_harvesting ? harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
-  // Husk credit: only when the trader is buying the husk, on the husk pieces (default the dehusked count).
-  const buysHusk = purchaseMode === "weight" && form.buys_husk;
-  const huskPieces = form.husk_pieces?.trim() ? Math.max(toNumber(form.husk_pieces), 0) : dehuskingPieces;
-  const huskPriceIncome = buysHusk ? huskPieces * toNumber(form.husk_price_per_piece) : 0;
+  // Husk is tracked when buying it (a farmer credit) or when it is included (free). Included husk adds nothing.
+  const buysHusk = purchaseMode === "weight" && (form.buys_husk || huskIncluded);
+  const huskPieces = form.husk_pieces?.trim() ? Math.max(toNumber(form.husk_pieces), 0) : (huskIncluded ? quantity : dehuskingPieces);
+  const huskPrice = huskIncluded ? 0 : toNumber(form.husk_price_per_piece);
+  const huskPriceIncome = buysHusk ? huskPieces * huskPrice : 0;
   const laborTotal = huskRemovalCost + treeCollectionCost;
   const total = Math.max(coconutTotal + huskPriceIncome - laborTotal, 0);
   const advance = toNumber(form.advance_amount);
@@ -58,7 +64,7 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const averageWeightGrams = purchaseMode === "weight" && quantity > 0 ? net / quantity * 1000 : 0;
   const averagePricePerPiece = quantity > 0 ? total / quantity : 0;
   const balance = total - advance + additionalCredit - additionalDebit;
-  return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, huskPieces, buysHusk, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
+  return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, huskPieces, buysHusk, huskIncluded, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };
 }
 
 // ---------------------------------------------------------------------------
