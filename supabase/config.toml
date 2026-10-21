@@ -3,13 +3,22 @@ project_id = "accounting-wep-app"
 [auth]
 enabled = true
 site_url = "https://accounting-wep-app.vercel.app"
-additional_redirect_urls = []
+additional_redirect_urls = ["https://accounting-wep-app.vercel.app/auth/callback", "http://localhost:3000/auth/callback"]
 
 [auth.email]
 enable_signup = true
-enable_confirmations = false
+# Email verification (OTP code). The hosted project's dashboard setting is authoritative for the live
+# site; the app adapts either way (if confirmation is OFF, signup signs in immediately as before).
+enable_confirmations = true
 max_frequency = "1m"
 otp_length = 8
+
+# Google sign-in is configured in the Supabase dashboard (Auth > Providers > Google) with the OAuth
+# client id/secret from Google Cloud. Enable here too only if you run `supabase start` locally.
+# [auth.external.google]
+# enabled = true
+# client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+# secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
 
 [auth.mfa.totp]
 enroll_enabled = true
