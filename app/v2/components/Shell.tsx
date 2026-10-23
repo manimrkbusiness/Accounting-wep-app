@@ -6,8 +6,26 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
+import { useLang } from "../../lib/i18n";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; description: string };
+
+const navLabelKey: Record<string, string> = {
+  "/v2": "nav.dashboard",
+  "/v2/harvesting": "nav.harvesting",
+  "/v2/purchases": "nav.purchases",
+  "/v2/stock": "nav.stock",
+  "/v2/sales": "nav.sales",
+  "/v2/husk-purchases": "nav.huskPurchase",
+  "/v2/husk-sales": "nav.huskSale",
+  "/v2/farmers": "nav.farmers",
+  "/v2/buyers": "nav.buyers",
+  "/v2/team": "nav.team",
+  "/v2/expenses": "nav.expenses",
+  "/v2/transactions": "nav.transactions",
+  "/v2/cash": "nav.cash",
+  "/v2/settings": "nav.settings"
+};
 
 export const navItems: NavItem[] = [
   { href: "/v2", label: "Dashboard", short: "Home", icon: LayoutDashboard, description: "Profit, stock, cash and outstanding balances at a glance." },
@@ -36,7 +54,7 @@ const subPages: Record<string, { label: string; description: string }> = {
 function pageMeta(pathname: string) {
   if (subPages[pathname]) return subPages[pathname];
   const match = navItems.find((item) => item.href !== "/v2" && pathname.startsWith(item.href)) ?? navItems[0];
-  return { label: match.label, description: match.description };
+  return { label: match.label, description: match.description, href: match.href };
 }
 
 function isActive(pathname: string, href: string) {
@@ -49,6 +67,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const workspace = useWorkspace();
   const { status, profile, message, signOut } = workspace;
   const drafts = useDraftIndex(workspace.session?.user.id);
+  const { t } = useLang();
+  const navLabel = (item: NavItem) => (navLabelKey[item.href] ? t(navLabelKey[item.href]) : item.label);
 
   // While an entry is unsaved, its sidebar item reopens that entry instead of the list.
   const resumeTargets: Record<string, string | null> = {
@@ -65,10 +85,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Loading workspace</h1><p>Connecting to your private trader records.</p></section></main>;
   }
   if (status === "signed-out") {
-    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Sign in required</h1><p>Sign in on the home page to open your private trader workspace.</p><a className="primary-button" href="/">Go to sign in</a></section></main>;
+    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Sign in required</h1><p>Sign in to open your private trader workspace.</p><a className="primary-button" href="/login">Go to sign in</a></section></main>;
   }
   if (status === "no-profile") {
-    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Finish your profile first</h1><p>Choose your workspace type on the home page to continue.</p><a className="primary-button" href="/">Go to home</a></section></main>;
+    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Finish your profile first</h1><p>Choose your workspace type to continue.</p><a className="primary-button" href="/login">Continue</a></section></main>;
   }
   if (status === "not-trader") {
     return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Trader workspace only</h1><p>This workspace is for trader accounts.</p><button className="primary-button" onClick={() => void signOut()} type="button">Sign out</button></section></main>;
@@ -81,7 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className="desktop-sidebar">
         <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Trader workspace</span></div></div></div>
         <nav className="sidebar-nav" aria-label="Main navigation">
-          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
+          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
         </nav>
         <div className="sidebar-account"><span className="eyebrow">Signed in as</span><strong>{profile?.business_name || profile?.full_name}</strong><span>{profile?.email}</span></div>
         <button className="secondary-button sidebar-signout" onClick={() => void signOut()} type="button"><LogOut size={17} strokeWidth={2.2} aria-hidden="true" />Sign out</button>
@@ -89,11 +109,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <section className="app-main">
         <header className="topbar">
-          <div><span className="eyebrow">Coconut Trade Desk</span><h1>{meta.label}</h1><p>{meta.description}</p></div>
+          <div><span className="eyebrow">Coconut Trade Desk</span><h1>{"href" in meta && meta.href && navLabelKey[meta.href] ? t(navLabelKey[meta.href]) : meta.label}</h1><p>{meta.description}</p></div>
           <div className="topbar-actions"><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
         </header>
         <nav className="mobile-section-nav" aria-label="Mobile navigation">
-          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{item.label}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
+          {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}
         </nav>
         {message ? <p className="status-message">{message}</p> : null}
         {children}

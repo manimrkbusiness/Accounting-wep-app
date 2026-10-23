@@ -22,7 +22,7 @@ export default function AuthCallbackPage() {
     const described = params.get("error_description") || params.get("error");
     if (described) { setError(described); return; }
 
-    const go = () => { if (active) router.replace(recovered ? "/?reset=1" : "/"); };
+    const go = () => { if (active) router.replace(recovered ? "/login?reset=1" : "/login"); };
     supabase.auth.getSession().then(({ data }) => { if (active && data.session) go(); });
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;

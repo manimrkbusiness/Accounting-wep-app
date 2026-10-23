@@ -257,6 +257,59 @@ p {
   margin-top: -8px;
 }
 
+.auth-panel-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.consent-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.consent-line {
+  align-items: flex-start;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.86rem;
+  gap: 9px;
+  line-height: 1.45;
+}
+
+.consent-line input { margin-top: 2px; width: auto; }
+.consent-line a { color: var(--ink); font-weight: 600; text-decoration: underline; }
+.consent-line .optional { font-style: normal; opacity: 0.7; }
+
+.lang-toggle {
+  background: var(--surface-muted, #eef3ee);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.lang-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-height: 26px;
+  padding: 3px 11px;
+}
+
+.lang-toggle button.active {
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 4px rgba(20, 50, 30, 0.14);
+  color: var(--ink);
+}
+
 form,
 .auth-form {
   display: grid;

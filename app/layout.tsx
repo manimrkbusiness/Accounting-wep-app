@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { NumberInputGuard } from "./NumberInputGuard";
+import { LanguageProvider } from "./lib/i18n";
+import { Analytics } from "./Analytics";
 
 export const metadata: Metadata = {
-  title: "Coconut Trade Desk",
-  description: "Private farmer and coconut trader purchase records"
+  title: "Coconut Trade Desk — Coconut trading, organised",
+  description: "The simplest way for coconut traders to record purchases, stock, sales, husk and cash — and know their profit. Built for South Indian coconut traders."
 };
 
 export default function RootLayout({
@@ -14,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body><NumberInputGuard />{children}</body>
+      <body><NumberInputGuard /><Analytics /><LanguageProvider>{children}</LanguageProvider></body>
     </html>
   );
 }
