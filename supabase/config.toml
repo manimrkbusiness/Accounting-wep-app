@@ -1,9 +1,11 @@
 project_id = "accounting-wep-app"
 
+# Production domain is bizztrack.in. The hosted Supabase dashboard (Auth > URL Configuration) is
+# authoritative for the live site — set Site URL and the Redirect allow-list there to match.
 [auth]
 enabled = true
-site_url = "https://accounting-wep-app.vercel.app"
-additional_redirect_urls = ["https://accounting-wep-app.vercel.app/auth/callback", "http://localhost:3000/auth/callback"]
+site_url = "https://bizztrack.in"
+additional_redirect_urls = ["https://bizztrack.in/auth/callback", "https://www.bizztrack.in/auth/callback", "https://accounting-wep-app.vercel.app/auth/callback", "http://localhost:3000/auth/callback"]
 
 [auth.email]
 enable_signup = true
