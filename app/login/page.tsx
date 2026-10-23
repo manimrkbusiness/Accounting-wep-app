@@ -265,8 +265,8 @@ export default function LoginPage() {
   const feedback = <>{error ? <p className="error-message">{error}</p> : null}{message ? <p className="status-message">{message}</p> : null}</>;
   const consentBlock = (
     <div className="consent-block">
-      <label className="consent-line"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>{L("I agree to the", "நான் ஏற்கிறேன்")} <Link href="/terms" target="_blank">{L("Terms & Conditions", "விதிமுறைகள்")}</Link> {L("and", "மற்றும்")} <Link href="/privacy" target="_blank">{L("Privacy Policy", "தனியுரிமைக் கொள்கை")}</Link>.</span></label>
       <label className="consent-line"><input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} /><span>{L("Send me product updates, tips and offers by email or message.", "தயாரிப்பு புதுப்பிப்புகள், குறிப்புகள், சலுகைகளை மின்னஞ்சல்/செய்தி மூலம் அனுப்பவும்.")} <em className="optional">{L("Optional", "விருப்பம்")}</em></span></label>
+      <label className="consent-line"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>{L("I agree to the", "நான் ஏற்கிறேன்")} <Link href="/terms" target="_blank">{L("Terms & Conditions", "விதிமுறைகள்")}</Link> {L("and", "மற்றும்")} <Link href="/privacy" target="_blank">{L("Privacy Policy", "தனியுரிமைக் கொள்கை")}</Link>. <em className="required-tag">{L("Required", "அவசியம்")}</em></span></label>
     </div>
   );
 
