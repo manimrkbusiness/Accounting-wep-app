@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ADMIN_CONFIGURED, adminBase, isAuthed, serviceClient } from "./lib/service";
-import { login, logout } from "./actions";
+import { logout } from "./actions";
+import { AdminLogin } from "./AdminLogin";
 import { money, num, dateTime } from "./lib/format";
 
 export const dynamic = "force-dynamic";
@@ -8,34 +9,22 @@ export const dynamic = "force-dynamic";
 type Profile = { id: string; full_name: string | null; phone: string | null; email: string | null; account_type: string | null; business_name: string | null; created_at: string };
 type Row = { trader_id: string };
 
-export default async function AdminHome({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
+export default async function AdminHome() {
   const base = await adminBase();
-  const sp = await searchParams;
 
   if (!ADMIN_CONFIGURED) {
     return (
       <main className="admin-shell">
         <div className="admin-card">
           <h1>Control panel not configured</h1>
-          <p>Set <code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>ADMIN_PASSWORD</code> and (optionally) <code>ADMIN_SECRET_PATH</code> in the Vercel environment, then redeploy.</p>
+          <p>Set <code>SUPABASE_SERVICE_ROLE_KEY</code> (and optionally <code>ADMIN_EMAILS</code>) in the Vercel environment, then redeploy.</p>
         </div>
       </main>
     );
   }
 
   if (!(await isAuthed())) {
-    return (
-      <main className="admin-shell admin-login">
-        <form className="admin-card" action={login}>
-          <h1>Control panel</h1>
-          <p>Enter the admin password to continue.</p>
-          <input type="hidden" name="base" value={base} />
-          <label>Password<input type="password" name="password" autoComplete="off" autoFocus required /></label>
-          {sp?.e ? <p className="admin-error">Incorrect password.</p> : null}
-          <button className="admin-primary" type="submit">Unlock</button>
-        </form>
-      </main>
-    );
+    return <AdminLogin base={base} />;
   }
 
   const supabase = serviceClient();

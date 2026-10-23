@@ -1,16 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { checkPassword, clearAuthCookie, setAuthCookie } from "./lib/service";
+import { clearAuthCookie, setAuthCookie, verifyAdminToken } from "./lib/service";
 
-export async function login(formData: FormData) {
-  const password = String(formData.get("password") || "");
-  const base = String(formData.get("base") || "/admin");
-  if (!checkPassword(password)) {
-    redirect(`${base}?e=1`);
-  }
+/**
+ * Called from the admin sign-in card with the signed-in user's Supabase access token.
+ * The token is verified on the server and only an allow-listed admin email is let in.
+ */
+export async function adminLogin(token: string): Promise<{ ok: boolean; error?: string }> {
+  const email = await verifyAdminToken(token);
+  if (!email) return { ok: false, error: "This account is not allowed into the control panel." };
   await setAuthCookie();
-  redirect(base);
+  return { ok: true };
 }
 
 export async function logout(formData: FormData) {

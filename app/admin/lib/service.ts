@@ -3,11 +3,15 @@ import { cookies, headers } from "next/headers";
 import crypto from "crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const adminPassword = process.env.ADMIN_PASSWORD;
 
-/** True only when every server-side admin secret is present. */
-export const ADMIN_CONFIGURED = Boolean(supabaseUrl && serviceKey && adminPassword);
+/** Emails allowed into the control panel. From ADMIN_EMAILS (comma-separated), else the owner. */
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "01madmad@gmail.com")
+  .split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
+
+/** True only when the server can reach Supabase with the service-role key. */
+export const ADMIN_CONFIGURED = Boolean(supabaseUrl && serviceKey);
 
 const COOKIE = "mrk_admin_session";
 
@@ -21,7 +25,7 @@ export function serviceClient() {
 }
 
 function sessionToken() {
-  return crypto.createHmac("sha256", adminPassword || "unset").update("mrk-admin-session-v1").digest("hex");
+  return crypto.createHmac("sha256", serviceKey || "unset").update("mrk-admin-session-v2").digest("hex");
 }
 
 function equals(a: string, b: string) {
@@ -30,8 +34,18 @@ function equals(a: string, b: string) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
-export function checkPassword(input: string) {
-  return Boolean(adminPassword) && equals(input, adminPassword as string);
+/** Verifies a Supabase access token and returns the email when it belongs to an allowed admin. */
+export async function verifyAdminToken(token: string): Promise<string | null> {
+  if (!token || !supabaseUrl || !anonKey) return null;
+  try {
+    const client = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data, error } = await client.auth.getUser(token);
+    const email = data.user?.email?.toLowerCase() ?? "";
+    if (error || !email) return null;
+    return ADMIN_EMAILS.includes(email) ? email : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function isAuthed() {
