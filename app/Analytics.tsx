@@ -18,7 +18,7 @@ declare global {
 /**
  * Sends a GA4 page_view on every client-side route change. The gtag `config` already sends the
  * first page_view on load, so this skips its initial run and covers SPA navigations after that —
- * which is what makes every /v2/* view (and query-string change) show up in Analytics.
+ * which is what makes every /dashboard/* view (and query-string change) show up in Analytics.
  */
 function GaRouteTracker({ gaId }: { gaId: string }) {
   const pathname = usePathname();

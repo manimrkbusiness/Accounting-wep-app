@@ -127,9 +127,9 @@ export default function FarmersPage() {
     draft.clear(blank);
     setShowForm(false);
     await ws.refresh();
-    if (returnTo === "purchase") router.push(savedFarmerId ? `/v2/purchases/new?farmer=${savedFarmerId}` : "/v2/purchases/new");
-    else if (returnTo === "harvesting") router.push(savedFarmerId ? `/v2/harvesting?farmer=${savedFarmerId}` : "/v2/harvesting");
-    else if (returnTo === "husk-purchase") router.push(savedFarmerId ? `/v2/husk-purchases?farmer=${savedFarmerId}` : "/v2/husk-purchases");
+    if (returnTo === "purchase") router.push(savedFarmerId ? `/dashboard/purchases/new?farmer=${savedFarmerId}` : "/dashboard/purchases/new");
+    else if (returnTo === "harvesting") router.push(savedFarmerId ? `/dashboard/harvesting?farmer=${savedFarmerId}` : "/dashboard/harvesting");
+    else if (returnTo === "husk-purchase") router.push(savedFarmerId ? `/dashboard/husk-purchases?farmer=${savedFarmerId}` : "/dashboard/husk-purchases");
   }
 
   return (

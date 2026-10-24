@@ -90,7 +90,7 @@ export default function TransactionsPage() {
       </section>
 
       <section className="ledger-panel">
-        <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Transaction history</h2></div><div className="page-actions"><Link className="secondary-button" href="/v2/expenses">Add expense</Link><Link className="secondary-button" href="/v2/cash">Add cash entry</Link></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Transaction history</h2></div><div className="page-actions"><Link className="secondary-button" href="/dashboard/expenses">Add expense</Link><Link className="secondary-button" href="/dashboard/cash">Add cash entry</Link></div></div>
         <div className="filter-bar">
           <label>Direction<select value={direction} onChange={(event) => setDirection(event.target.value as typeof direction)}><option value="all">In and out</option><option value="in">Money in</option><option value="out">Money out</option></select></label>
           <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="">All types</option>{transactionKinds.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>

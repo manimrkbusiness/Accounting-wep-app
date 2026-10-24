@@ -142,7 +142,7 @@ export default function HuskPurchasesPage() {
     ws.notify(form.id ? "Husk purchase updated." : `Husk purchase recorded. ${formatNumber(huskPieces, 0)} ${form.husk_color} husk pieces are ready for a husk sale.`);
     resetForm();
     await ws.refresh();
-    if (returnTo === "husk-sale") router.push("/v2/husk-sales");
+    if (returnTo === "husk-sale") router.push("/dashboard/husk-sales");
   }
 
   async function deletePurchase(purchase: Purchase) {
@@ -166,7 +166,7 @@ export default function HuskPurchasesPage() {
         <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit husk purchase" : "Record husk purchase"}</h2></div><div className="row-actions">{form.id || form.farmer_id || form.husk_pieces ? <button className="secondary-button" onClick={resetForm} type="button">{form.id ? "Cancel edit" : "Clear"}</button> : null}</div></div>
         <p className="muted-text">Husk bought straight from a farmer, without any coconut. It goes into your husk stock and can be sold on the Husk sale page.</p>
         <div className="form-grid">
-          <label>Farmer<select value={form.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/v2/farmers?returnTo=husk-purchase"); return; } setForm((current) => value === current.farmer_id ? current : ({ ...current, farmer_id: value, location_id: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label>
+          <label>Farmer<select value={form.farmer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/dashboard/farmers?returnTo=husk-purchase"); return; } setForm((current) => value === current.farmer_id ? current : ({ ...current, farmer_id: value, location_id: "" })); }} required><option value="__add__">+ Add farmer</option><option value="">Select a farmer</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name} - {farmer.phone}</option>)}</select></label>
           <label>Farming location <span className="optional">Optional</span><select value={form.location_id} onChange={(event) => setField("location_id", event.target.value)}><option value="">No location</option>{farmerLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name}{location.city ? `, ${location.city}` : ""}</option>)}</select></label>
           <label>Purchase date<input type="date" value={form.trade_date} onChange={(event) => setField("trade_date", event.target.value)} required /></label>
           <label>Husk colour<select value={form.husk_color} onChange={(event) => { const color = event.target.value as HuskColor; setForm((current) => ({ ...current, husk_color: color, husk_price_per_piece: huskDefaultPrice(color) > 0 ? String(huskDefaultPrice(color)) : current.husk_price_per_piece })); }}>{huskColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>

@@ -57,7 +57,7 @@ export function buildTransactions(args: {
         amount: Number(purchase.advance_amount),
         counterparty: farmerById.get(purchase.farmer_id)?.name ?? "Farmer",
         reference: formatPurchaseId(purchase.id),
-        href: `/v2/purchases?focus=${purchase.id}`,
+        href: `/dashboard/purchases?focus=${purchase.id}`,
         method: null,
         description: "Paid when the purchase was recorded",
         order: purchase.id
@@ -76,7 +76,7 @@ export function buildTransactions(args: {
         amount: Number(sale.advance_amount),
         counterparty: buyerById.get(sale.buyer_id)?.name ?? "Buyer",
         reference: formatSaleId(sale.id),
-        href: "/v2/sales",
+        href: "/dashboard/sales",
         method: null,
         description: "Received when the sale was recorded",
         order: sale.id
@@ -95,7 +95,7 @@ export function buildTransactions(args: {
       amount: Number(expense.amount),
       counterparty: expense.employee_id ? employeeById.get(expense.employee_id)?.name ?? "Worker" : category?.label ?? "Expense",
       reference: expense.purchase_id ? formatPurchaseId(expense.purchase_id) : expense.sale_id ? formatSaleId(expense.sale_id) : null,
-      href: "/v2/expenses",
+      href: "/dashboard/expenses",
       method: null,
       description: expense.description,
       order: expense.id
@@ -114,7 +114,7 @@ export function buildTransactions(args: {
       amount: Number(entry.amount),
       counterparty,
       reference: entry.purchase_id ? formatPurchaseId(entry.purchase_id) : entry.sale_id ? formatSaleId(entry.sale_id) : null,
-      href: entry.purchase_id ? `/v2/purchases?focus=${entry.purchase_id}` : entry.sale_id ? "/v2/sales" : "/v2/cash",
+      href: entry.purchase_id ? `/dashboard/purchases?focus=${entry.purchase_id}` : entry.sale_id ? "/dashboard/sales" : "/dashboard/cash",
       method: methodLabel(entry.method),
       description: entry.description,
       order: entry.id

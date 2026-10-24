@@ -40,7 +40,7 @@ export default function DashboardPage() {
     <div className="stack">
       <section className="welcome-band">
         <div><span className="eyebrow">Trader overview</span><h2>Buy from farmers, sell by the load, keep every rupee tracked.</h2><p>Record purchases, group them into loads for buyers, log expenses and payments, and the profit is calculated for you.</p></div>
-        <div className="page-actions"><Link className="primary-button" href="/v2/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />Record purchase</Link><Link className="secondary-button" href="/v2/sales/new"><Truck size={18} strokeWidth={2.2} aria-hidden="true" />Record sale</Link></div>
+        <div className="page-actions"><Link className="primary-button" href="/dashboard/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />Record purchase</Link><Link className="secondary-button" href="/dashboard/sales/new"><Truck size={18} strokeWidth={2.2} aria-hidden="true" />Record sale</Link></div>
       </section>
 
       <PeriodPicker preset={period.preset} from={period.from} to={period.to} onChange={setPeriod} />
@@ -79,7 +79,7 @@ export default function DashboardPage() {
         <div className="side-stack">
           <Panel eyebrow="Where money went" title="Expenses by type">
             {summary.expensesByCategory.length ? <KeyValueList rows={summary.expensesByCategory.map((entry) => ({ label: entry.label, value: formatCurrency(entry.amount) }))} /> : <EmptyState>No expenses recorded for this period.</EmptyState>}
-            <Link className="secondary-button" href="/v2/expenses"><Receipt size={16} strokeWidth={2.2} aria-hidden="true" />Add expense</Link>
+            <Link className="secondary-button" href="/dashboard/expenses"><Receipt size={16} strokeWidth={2.2} aria-hidden="true" />Add expense</Link>
           </Panel>
           <Panel eyebrow="Latest" title="Recent sales">
             {recentSales.length ? <div className="summary-list">{recentSales.map((sale) => <div key={sale.id}><span>{formatSaleId(sale.id)}</span><strong>{ws.buyerById.get(sale.buyer_id)?.name ?? "Buyer"}</strong><span>{formatCurrency(Number(sale.total_amount))}</span></div>)}</div> : <EmptyState>No sales yet. Create a load from your purchases.</EmptyState>}
@@ -88,21 +88,21 @@ export default function DashboardPage() {
       </section>
 
       <section className="ledger-panel">
-        <div className="panel-heading"><div><span className="eyebrow">Stock ageing</span><h2>Purchases still in stock</h2></div><Link className="secondary-button" href="/v2/sales/new">Sell from stock</Link></div>
+        <div className="panel-heading"><div><span className="eyebrow">Stock ageing</span><h2>Purchases still in stock</h2></div><Link className="secondary-button" href="/dashboard/sales/new">Sell from stock</Link></div>
         <p className="muted-text">Coconut waits here until it is allocated to a sale. Older stock is listed first.</p>
         <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Farmer</th><th>Bought on</th><th>Days in stock</th><th>Remaining</th><th>Value at cost</th></tr></thead><tbody>
-          {stockRows.map((info) => <tr key={info.purchase.id}><td><Link href={`/v2/purchases?focus=${info.purchase.id}`}>{formatPurchaseId(info.purchase.id)}</Link><span className="muted-text">{info.purchase.coconut_color} · {info.purchase.purchase_mode === "quantity" ? "Per nut" : info.purchase.processing_type}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatDate(info.purchase.trade_date)}</td><td>{daysBetween(info.purchase.trade_date, now)} days</td><td>{formatNumber(info.remainingPieces, 0)} / {formatNumber(Number(info.purchase.coconut_quantity), 0)} pieces{info.remainingKg > 0 ? <span className="muted-text">about {formatNumber(info.remainingKg, 0)} kg</span> : null}{info.awaitingStockPieces > 0.5 ? <Link className="chip warn" href={`/v2/stock?purchase=${info.purchase.id}`}>{formatNumber(info.awaitingStockPieces, 0)} to weigh</Link> : null}</td><td className="amount-cell">{formatCurrency(info.remainingValue)}</td></tr>)}
+          {stockRows.map((info) => <tr key={info.purchase.id}><td><Link href={`/dashboard/purchases?focus=${info.purchase.id}`}>{formatPurchaseId(info.purchase.id)}</Link><span className="muted-text">{info.purchase.coconut_color} · {info.purchase.purchase_mode === "quantity" ? "Per nut" : info.purchase.processing_type}</span></td><td>{ws.farmerById.get(info.purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatDate(info.purchase.trade_date)}</td><td>{daysBetween(info.purchase.trade_date, now)} days</td><td>{formatNumber(info.remainingPieces, 0)} / {formatNumber(Number(info.purchase.coconut_quantity), 0)} pieces{info.remainingKg > 0 ? <span className="muted-text">about {formatNumber(info.remainingKg, 0)} kg</span> : null}{info.awaitingStockPieces > 0.5 ? <Link className="chip warn" href={`/dashboard/stock?purchase=${info.purchase.id}`}>{formatNumber(info.awaitingStockPieces, 0)} to weigh</Link> : null}</td><td className="amount-cell">{formatCurrency(info.remainingValue)}</td></tr>)}
         </tbody></table>{stockRows.length === 0 ? <EmptyState>Everything purchased has been sold.</EmptyState> : null}</div>
       </section>
 
       <section className="dashboard-grid">
         <Panel eyebrow="Outstanding" title="Farmers to pay">
           {farmerDues.length ? <div className="summary-list">{farmerDues.map(([farmerId, due]) => <div key={farmerId}><span>Farmer</span><strong>{ws.farmerById.get(farmerId)?.name ?? "Farmer"}</strong><span className="balance-cell">{formatCurrency(due)}</span></div>)}</div> : <EmptyState>All farmer balances are settled.</EmptyState>}
-          <Link className="secondary-button" href="/v2/purchases">Record a farmer payment</Link>
+          <Link className="secondary-button" href="/dashboard/purchases">Record a farmer payment</Link>
         </Panel>
         <Panel eyebrow="Outstanding" title="Buyers to collect from">
           {buyerDues.length ? <div className="summary-list">{buyerDues.map(([buyerId, due]) => <div key={buyerId}><span>Buyer</span><strong>{ws.buyerById.get(buyerId)?.name ?? "Buyer"}</strong><span className="positive">{formatCurrency(due)}</span></div>)}</div> : <EmptyState>No money pending from buyers.</EmptyState>}
-          <Link className="secondary-button" href="/v2/sales">Record a buyer receipt</Link>
+          <Link className="secondary-button" href="/dashboard/sales">Record a buyer receipt</Link>
         </Panel>
       </section>
     </div>

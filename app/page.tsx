@@ -140,7 +140,7 @@ export default function LandingPage() {
   }, [lang]);
 
   const primaryCta = session
-    ? { href: "/v2", label: L("Open workspace", "பணியிடத்தைத் திறக்க") }
+    ? { href: "/dashboard", label: L("Open workspace", "பணியிடத்தைத் திறக்க") }
     : { href: "/login", label: L("Start free — 14-day trial", "இலவசம் — 14 நாள் சோதனை") };
 
   const features = [
@@ -166,7 +166,7 @@ export default function LandingPage() {
         <nav className="landing-top-actions">
           <LanguageToggle />
           {session
-            ? <Link className="landing-btn ghost" href="/v2">{L("Open workspace", "பணியிடம்")}</Link>
+            ? <Link className="landing-btn ghost" href="/dashboard">{L("Open workspace", "பணியிடம்")}</Link>
             : <><Link className="landing-btn ghost" href="/login">{L("Sign in", "உள்நுழைக")}</Link><Link className="landing-btn solid" href="/login">{L("Get started", "தொடங்குங்கள்")}</Link></>}
         </nav>
       </header>
@@ -251,7 +251,7 @@ export default function LandingPage() {
             <li>{L("English and Tamil", "ஆங்கிலம் மற்றும் தமிழ்")}</li>
             <li>{L("Your data stays private to you", "உங்கள் தரவு உங்களுக்கு மட்டுமே தனிப்பட்டது")}</li>
           </ul>
-          <Link className="landing-btn solid big full" href={session ? "/v2" : "/login"}>{session ? L("Open workspace", "பணியிடம்") : L("Start your free trial", "இலவச சோதனையைத் தொடங்குங்கள்")}</Link>
+          <Link className="landing-btn solid big full" href={session ? "/dashboard" : "/login"}>{session ? L("Open workspace", "பணியிடம்") : L("Start your free trial", "இலவச சோதனையைத் தொடங்குங்கள்")}</Link>
         </div>
       </section>
 
@@ -268,7 +268,7 @@ export default function LandingPage() {
       <section className="landing-final reveal">
         <h2>{L("Ready to know your real profit?", "உங்கள் உண்மையான லாபத்தை அறியத் தயாரா?")}</h2>
         <p>{L("Set up your trader workspace in minutes — free for 14 days.", "நிமிடங்களில் உங்கள் வியாபாரி பணியிடத்தை அமைக்கவும் — 14 நாட்களுக்கு இலவசம்.")}</p>
-        <Link className="landing-btn solid big" href={session ? "/v2" : "/login"}>{primaryCta.label}</Link>
+        <Link className="landing-btn solid big" href={session ? "/dashboard" : "/login"}>{primaryCta.label}</Link>
       </section>
 
       <footer className="landing-foot">

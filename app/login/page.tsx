@@ -126,7 +126,7 @@ export default function LoginPage() {
   }, [cooldown]);
 
   useEffect(() => {
-    if (session && profile?.account_type && flow === "auth" && !recoverySession) router.replace("/v2");
+    if (session && profile?.account_type && flow === "auth" && !recoverySession) router.replace("/dashboard");
   }, [profile?.account_type, router, session, flow, recoverySession]);
 
   function clearFeedback() { setMessage(""); setError(""); }
@@ -215,7 +215,8 @@ export default function LoginPage() {
 
   async function handleGoogle() {
     clearFeedback();
-    if (!termsAccepted) { setError("Please accept the Terms and Privacy Policy before continuing."); return; }
+    // No terms gate here: Google users accept the Terms on the "finish your profile" step,
+    // which also collects their phone number and workspace before the dashboard opens.
     rememberConsent();
     setSaving(true);
     try {
@@ -269,6 +270,15 @@ export default function LoginPage() {
       <label className="consent-line"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>{L("I agree to the", "நான் ஏற்கிறேன்")} <Link href="/terms" target="_blank">{L("Terms & Conditions", "விதிமுறைகள்")}</Link> {L("and", "மற்றும்")} <Link href="/privacy" target="_blank">{L("Privacy Policy", "தனியுரிமைக் கொள்கை")}</Link>. <em className="required-tag">{L("Required", "அவசியம்")}</em></span></label>
     </div>
   );
+  const roleSelect = (
+    <label>{L("Workspace", "பணியிடம்")}
+      <select value={roleChoice} onChange={(event) => setRoleChoice(event.target.value as Role | "")} required>
+        <option value="" disabled>{L("Choose Trader or Farmer", "வியாபாரி அல்லது விவசாயியைத் தேர்வுசெய்க")}</option>
+        {roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+      </select>
+      {roleChoice ? <span className="field-hint">{roleOptions.find((role) => role.value === roleChoice)?.description}</span> : null}
+    </label>
+  );
 
   if (loading) {
     return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">COCONUT TRADE DESK</span><h1>{L("Loading", "ஏற்றுகிறது")}</h1><p>{L("Connecting to your private account.", "உங்கள் தனிப்பட்ட கணக்குடன் இணைக்கிறது.")}</p></section></main>;
@@ -294,10 +304,7 @@ export default function LoginPage() {
                 <label>{L("Full name", "முழுப் பெயர்")}<input value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" required /></label>
                 <label>{L("Phone number", "தொலைபேசி எண்")}<div className="phone-input"><span>{"🇮🇳 +91"}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))} placeholder={L("10-digit mobile number", "10 இலக்க எண்")} required /></div></label>
                 <label>{L("Business or farm name", "வணிக/பண்ணை பெயர்")} <span className="optional">{L("Optional", "விருப்பம்")}</span><input value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
-                <span className="form-section-label">{L("Workspace", "பணியிடம்")}</span>
-                <div className="role-grid">
-                  {roleOptions.map((role) => <button aria-pressed={roleChoice === role.value} className={`role-choice ${roleChoice === role.value ? "selected" : ""}`} key={role.value} onClick={() => setRoleChoice(role.value)} type="button"><span className="role-title">{role.label}</span><span>{role.description}</span></button>)}
-                </div>
+                {roleSelect}
               </> : null}
               <label>{L("Email", "மின்னஞ்சல்")}<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
               <label>{L("Password", "கடவுச்சொல்")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={6} required /></label>
@@ -353,9 +360,7 @@ export default function LoginPage() {
           <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>{L("Set up your workspace", "உங்கள் பணியிடத்தை அமைக்கவும்")}</span></div></div>
           <div className="auth-copy"><span className="eyebrow">{L("One last step", "கடைசி படி")}</span><h1>{L("Finish your profile", "உங்கள் சுயவிவரத்தை முடிக்கவும்")}</h1><p>{L("Choose your workspace and confirm your mobile number.", "உங்கள் பணியிடத்தைத் தேர்ந்தெடுத்து தொலைபேசி எண்ணை உறுதிப்படுத்தவும்.")}</p></div>
           <form onSubmit={saveProfile}>
-            <div className="role-grid">
-              {roleOptions.map((role) => <button className={`role-choice ${roleChoice === role.value ? "selected" : ""}`} key={role.value} onClick={() => setRoleChoice(role.value)} type="button"><span className="role-title">{role.label}</span><span>{role.description}</span></button>)}
-            </div>
+            {roleSelect}
             <div className="form-grid">
               <label>{L("Full name", "முழுப் பெயர்")}<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
               <label>{L("Phone number", "தொலைபேசி எண்")}<div className="phone-input"><span>{"🇮🇳 +91"}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(getIndianPhoneValue(event.target.value))} required /></div></label>

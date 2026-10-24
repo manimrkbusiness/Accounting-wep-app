@@ -14,7 +14,7 @@ export function DefaultsSummary({ note }: { note?: string }) {
   const settings = ws.settings ?? defaultSettings;
   return (
     <section className="tool-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Defaults in use</h2></div><Link className="secondary-button" href="/v2/settings">Settings</Link></div>
+      <div className="panel-heading"><div><span className="eyebrow">Protected defaults</span><h2>Defaults in use</h2></div><Link className="secondary-button" href="/dashboard/settings">Settings</Link></div>
       <KeyValueList rows={[
         { label: "Default purchase method", value: settings.purchase_mode === "quantity" ? "Per nut" : "Weight-based" },
         { label: "Dehusking deduction", value: `${formatCurrency(Number(settings.husk_removal_rate_per_1000))} / 1,000` },

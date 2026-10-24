@@ -136,7 +136,7 @@ export default function StockPage() {
     ws.notify(editingId ? `${formatStockId(Number(data))} updated.` : `${formatNumber(loaded, 0)} pieces weighed into stock as ${formatStockId(Number(data))}.${wasted > 0 ? ` ${formatNumber(wasted, 0)} wasted.` : ""} They can now be added to a sale.${dehuskingCost > 0 ? ` Dehusking of ${formatCurrency(dehuskingCost)} was booked under Expenses.` : ""}`);
     discardDrafts(ws.session.user.id, "stock");
     resetForm();
-    router.push("/v2/stock");
+    router.push("/dashboard/stock");
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
     await ws.refresh();
   }
@@ -167,7 +167,7 @@ export default function StockPage() {
     selectionDraft.clear(new Map(ws.stockEntryItems.filter((item) => item.stock_entry_id === entry.id).map((item) => [item.purchase_id, String(item.quantity_pieces)])));
     setLoadedEdit(entry.id);
     if (typeof window !== "undefined") {
-      if (new URLSearchParams(window.location.search).get("edit")) router.replace("/v2/stock");
+      if (new URLSearchParams(window.location.search).get("edit")) router.replace("/dashboard/stock");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
@@ -214,7 +214,7 @@ export default function StockPage() {
 
       <section className="workspace-grid">
         <form className="tool-panel" onSubmit={saveEntry}>
-          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="secondary-button" onClick={() => { resetForm(); router.push("/v2/stock"); }} type="button">Cancel edit</button> : (formDraft.restored || selectionDraft.restored || selection.size > 0 || toNumber(form.net_weight_kg) > 0 || form.notes.trim() !== "") ? <button className="secondary-button" onClick={resetForm} type="button">Discard</button> : null}</div>
+          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="secondary-button" onClick={() => { resetForm(); router.push("/dashboard/stock"); }} type="button">Cancel edit</button> : (formDraft.restored || selectionDraft.restored || selection.size > 0 || toNumber(form.net_weight_kg) > 0 || form.notes.trim() !== "") ? <button className="secondary-button" onClick={resetForm} type="button">Discard</button> : null}</div>
           <div className="form-grid">
             <label>Weighed on<input type="date" value={form.entry_date} onChange={(event) => setForm((current) => ({ ...current, entry_date: event.target.value }))} required /></label>
             <label>Coconuts loaded (pieces)<input type="number" min="1" step="1" value={form.coconuts_loaded} onChange={(event) => setForm((current) => ({ ...current, coconuts_loaded: event.target.value }))} placeholder={pieces > 0 ? formatNumber(pieces, 0) : "How many went on the lorry"} /><span className="field-hint">{wasted > 0 ? `${formatNumber(wasted, 0)} of the ${formatNumber(pieces, 0)} picked are wasted (a loss).` : `Blank = all ${formatNumber(pieces, 0)} picked. Enter fewer if some were wasted while weighing.`}</span></label>
@@ -255,7 +255,7 @@ export default function StockPage() {
             <div><dt>Average cost per kg<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(payable)} kg</small></dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
             <div className={expectedMargin >= 0 ? "calculation-total" : "calculation-deduction calculation-spent"}><dt>Expected margin<small className="formula">{formatCurrency(expectedValue)} + {formatCurrency(expectedHuskValue)} − {formatCurrency(totalCost)}</small></dt><dd>{formatCurrency(expectedMargin)}</dd></div>
           </dl><p className="field-hint">Red lines are money you spent: paid to farmers (from the purchase entries, after deductions) plus dehusking at stock time. Green lines are what you expect back from the coconut and the husk. Transport and other expenses are not included here.</p></section>
-          <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/v2/sales/new">Go to New sale</Link></section>
+          <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/dashboard/sales/new">Go to New sale</Link></section>
         </aside>
       </section>
 
@@ -279,7 +279,7 @@ export default function StockPage() {
               <td className="balance-cell">{formatCurrency(dehusking)}{dehusking > 0 ? <span className="muted-text">{formatCurrency(Number(entry.dehusking_rate_per_1000))} / 1,000</span> : null}</td>
               <td className="amount-cell">{formatCurrency(paid + dehusking)}{Number(entry.payable_weight_kg) > 0 ? <span className="muted-text">{formatCurrency((paid + dehusking) / Number(entry.payable_weight_kg))} / kg</span> : null}</td>
               <td>{Number(entry.sale_rate_per_kg) > 0 ? `${formatCurrency(Number(entry.sale_rate_per_kg))} / kg` : <span className="muted-text">-</span>}</td>
-              <td><div className="chip-row">{items.map((item) => <Link className="chip" href={`/v2/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div></td>
+              <td><div className="chip-row">{items.map((item) => <Link className="chip" href={`/dashboard/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}</div></td>
               <td><div className="row-actions"><button className="secondary-button" onClick={() => editEntry(entry)} type="button">Edit</button><button className="secondary-button" disabled={ws.saving} onClick={() => removeEntry(entry, "undo")} type="button">Undo</button><button className="danger-button" disabled={ws.saving} onClick={() => removeEntry(entry, "delete")} type="button">Delete</button></div></td>
             </tr>;
           })}
@@ -291,7 +291,7 @@ export default function StockPage() {
           {perNutPurchases.map((purchase) => {
             const info = ws.stock.get(purchase.id);
             if (!info) return null;
-            return <tr key={purchase.id}><td><Link href={`/v2/purchases?focus=${purchase.id}`}>{formatPurchaseId(purchase.id)}</Link><span className="muted-text">{formatDate(purchase.trade_date)}</span></td><td>{ws.farmerById.get(purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(Number(purchase.coconut_quantity), 0)}</td><td>{formatNumber(info.stockedPieces, 0)}{info.kgPerPiece > 0 ? <span className="muted-text">{formatNumber(info.kgPerPiece * 1000, 1)} g / nut</span> : null}</td><td>{info.awaitingStockPieces > 0.5 ? <span className="chip warn">{formatNumber(info.awaitingStockPieces, 0)}</span> : <span className="muted-text">0</span>}</td><td>{formatNumber(info.soldPieces, 0)}</td><td>{info.sellablePieces > 0.5 ? <span className="chip good">{formatNumber(info.sellablePieces, 0)}</span> : <span className="muted-text">0</span>}</td></tr>;
+            return <tr key={purchase.id}><td><Link href={`/dashboard/purchases?focus=${purchase.id}`}>{formatPurchaseId(purchase.id)}</Link><span className="muted-text">{formatDate(purchase.trade_date)}</span></td><td>{ws.farmerById.get(purchase.farmer_id)?.name ?? "Farmer"}</td><td>{formatNumber(Number(purchase.coconut_quantity), 0)}</td><td>{formatNumber(info.stockedPieces, 0)}{info.kgPerPiece > 0 ? <span className="muted-text">{formatNumber(info.kgPerPiece * 1000, 1)} g / nut</span> : null}</td><td>{info.awaitingStockPieces > 0.5 ? <span className="chip warn">{formatNumber(info.awaitingStockPieces, 0)}</span> : <span className="muted-text">0</span>}</td><td>{formatNumber(info.soldPieces, 0)}</td><td>{info.sellablePieces > 0.5 ? <span className="chip good">{formatNumber(info.sellablePieces, 0)}</span> : <span className="muted-text">0</span>}</td></tr>;
           })}
         </tbody></table>{perNutPurchases.length === 0 ? <EmptyState>No per-nut purchases recorded yet.</EmptyState> : null}</div>
       </Panel>

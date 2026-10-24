@@ -56,7 +56,7 @@ export default function BuyersPage() {
     ws.notify(form.id ? "Buyer updated." : "Buyer added.");
     draft.clear(blank);
     await ws.refresh();
-    if (returnTo === "sale") router.push(savedBuyerId ? `/v2/sales/new?buyer=${savedBuyerId}` : "/v2/sales/new");
+    if (returnTo === "sale") router.push(savedBuyerId ? `/dashboard/sales/new?buyer=${savedBuyerId}` : "/dashboard/sales/new");
   }
 
   async function deleteBuyer(buyer: Buyer) {

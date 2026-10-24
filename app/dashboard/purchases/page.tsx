@@ -114,10 +114,10 @@ export default function PurchasesPage() {
 
   return (
     <div className="stack">
-    <ResumeBanner form="purchase" newPath="/v2/purchases/new" what="purchase" />
+    <ResumeBanner form="purchase" newPath="/dashboard/purchases/new" what="purchase" />
     {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
     <section className="ledger-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div><Link className="primary-button" href="/v2/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New purchase</Link></div>
+      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Purchase history</h2></div><Link className="primary-button" href="/dashboard/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New purchase</Link></div>
       <div className="filter-bar">
         <label className="search-field">Search purchase ID, farmer, phone or location<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="PUR-000001 or +91..." /></label>
         <label>Farmer<select value={farmerFilter} onChange={(event) => setFarmerFilter(event.target.value)}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
@@ -138,14 +138,14 @@ export default function PurchasesPage() {
             <td><strong>{farmer?.name ?? "Unknown farmer"}</strong><span className="muted-text">{farmer?.phone}</span></td>
             <td><span className={`coconut-dot ${purchase.coconut_color}`}></span>{purchase.coconut_color}<span className="muted-text">{purchase.purchase_mode === "quantity" ? "Per nut" : purchase.processing_type === "mottai" ? "Mottai" : "Kudume"}</span></td>
             <td>{formatNumber(Number(purchase.coconut_quantity), 0)}<span className="muted-text">{formatCurrency(Number(purchase.average_price_per_piece))} / nut</span></td>
-            <td>{info && info.remainingPieces > 0.5 ? <span className="chip good">{formatNumber(info.remainingPieces, 0)} left</span> : <span className="chip">Sold out</span>}{info && info.awaitingStockPieces > 0.5 ? <Link className="chip warn" href={`/v2/stock?purchase=${purchase.id}`}>{formatNumber(info.awaitingStockPieces, 0)} to weigh</Link> : null}{info && info.soldPieces > 0 ? <span className="muted-text">{formatNumber(info.soldPieces, 0)} sold</span> : null}{info && info.wastedPieces > 0 ? <span className="muted-text">{formatNumber(info.wastedPieces, 0)} wasted</span> : null}</td>
+            <td>{info && info.remainingPieces > 0.5 ? <span className="chip good">{formatNumber(info.remainingPieces, 0)} left</span> : <span className="chip">Sold out</span>}{info && info.awaitingStockPieces > 0.5 ? <Link className="chip warn" href={`/dashboard/stock?purchase=${purchase.id}`}>{formatNumber(info.awaitingStockPieces, 0)} to weigh</Link> : null}{info && info.soldPieces > 0 ? <span className="muted-text">{formatNumber(info.soldPieces, 0)} sold</span> : null}{info && info.wastedPieces > 0 ? <span className="muted-text">{formatNumber(info.wastedPieces, 0)} wasted</span> : null}</td>
             <td>{purchase.purchase_mode === "quantity" ? "Per nut" : `${formatNumber(Number(purchase.payable_weight_kg))} kg`}{purchase.purchase_mode === "weight" ? <span className="muted-text">Net {formatNumber(Number(purchase.net_weight_kg))} kg</span> : null}</td>
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoPayment(purchase, entry)} type="button">Undo</button></span>)}</div> : null}</td>
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) })} type="button">PDF</button>
-              <button className="secondary-button" onClick={() => router.push(`/v2/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>
+              <button className="secondary-button" onClick={() => router.push(`/dashboard/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>
               {due > 0.005 ? <button className="secondary-button" onClick={() => openPayment(purchase)} type="button">Pay</button> : null}
               <button className="danger-button" disabled={ws.saving} onClick={() => deletePurchase(purchase)} type="button">Delete</button>
             </div>
