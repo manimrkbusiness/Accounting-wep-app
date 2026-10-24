@@ -3,8 +3,9 @@ import { adminClient, billingConfigured, getUserId, razorpayFetch, RZP_KEY_ID, R
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Creates a Razorpay subscription for the ₹499/month plan and stores its id on the trader's row.
-// The subscription stays "trialing" until /verify confirms the authorized payment.
+// Creates a Razorpay subscription for the configured plan (RAZORPAY_PLAN_ID) and stores its id on the
+// trader's row. The row is only marked "active" once /verify or the webhook confirms the paid charge.
+// Resubscribing resets any leftover cancellation fields so a fresh subscription starts clean.
 export async function POST(request: Request) {
   if (!billingConfigured() || !RZP_PLAN_ID) {
     return Response.json({ error: "Billing is not configured yet. Please try again shortly." }, { status: 503 });
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const subscriptionId = subscription.id as string;
     const admin = adminClient();
     await admin.from("subscriptions").upsert(
-      { trader_id: userId, razorpay_subscription_id: subscriptionId, updated_at: new Date().toISOString() },
+      { trader_id: userId, razorpay_subscription_id: subscriptionId, cancel_at_period_end: false, current_period_end: null, updated_at: new Date().toISOString() },
       { onConflict: "trader_id" }
     );
     return Response.json({ subscriptionId, keyId: RZP_KEY_ID });
