@@ -43,6 +43,11 @@ function GaRouteTracker({ gaId }: { gaId: string }) {
 
 /** Google Analytics (GA4) + Microsoft Clarity, mounted once in the root layout. */
 export function Analytics() {
+  const pathname = usePathname();
+  // The /admin control panel is an internal tool — never load analytics or session
+  // recording there. This also keeps admin visits out of GA and Clarity numbers.
+  if (pathname && pathname.startsWith("/admin")) return null;
+
   return (
     <>
       {GA_ID ? (
