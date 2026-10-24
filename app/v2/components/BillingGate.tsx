@@ -32,7 +32,7 @@ function daysLeft(iso: string) {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
-/** Gates the workspace behind a 14-day trial, then a ₹499/month Razorpay subscription. Fails open. */
+/** Gates the workspace behind a 14-day trial, then a ₹519/month Razorpay subscription. Fails open. */
 export function BillingGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<BillingState | null>(null); // null = still checking
   const [busy, setBusy] = useState(false);
@@ -67,7 +67,7 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
         key: json.keyId,
         subscription_id: json.subscriptionId,
         name: "BizzzTrack",
-        description: "Coconut Trade Desk — ₹499 / month",
+        description: "Coconut Trade Desk — ₹519 / month",
         theme: { color: "#1f7a4d" },
         handler: async (resp) => {
           try {
@@ -100,14 +100,14 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
         <section className="auth-panel" style={{ maxWidth: 560, width: "100%", textAlign: "left", display: "grid", gap: 14 }}>
           <span className="eyebrow">BizzzTrack</span>
           <h1 style={{ margin: 0 }}>{expiredTrial ? "Your free trial has ended" : "Subscription needed"}</h1>
-          <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>₹499 / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
+          <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>₹519 / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
           <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6, color: "var(--muted)", fontSize: "0.9rem" }}>
             <li>Everything you already use, nothing removed</li>
             <li>Automatic monthly billing after you authorize once</li>
             <li>Your data stays exactly where it is</li>
           </ul>
           {error ? <p className="error-message" role="alert">{error}</p> : null}
-          <button className="primary-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening payment…" : "Subscribe — ₹499 / month"}</button>
+          <button className="primary-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening payment…" : "Subscribe — ₹519 / month"}</button>
           <button className="link-button" onClick={() => void check()} type="button">I already paid — refresh</button>
         </section>
       </div>
@@ -118,7 +118,7 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
     <>
       {state?.status === "trialing" && state.trialEndsAt ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "10px 14px", marginBottom: 14, borderRadius: 8, background: "rgba(31, 122, 77, 0.10)", border: "1px solid rgba(31, 122, 77, 0.25)", fontSize: "0.9rem" }}>
-          <span>Free trial — <strong>{daysLeft(state.trialEndsAt)} day{daysLeft(state.trialEndsAt) === 1 ? "" : "s"} left</strong>. ₹499 / month after that.</span>
+          <span>Free trial — <strong>{daysLeft(state.trialEndsAt)} day{daysLeft(state.trialEndsAt) === 1 ? "" : "s"} left</strong>. ₹519 / month after that.</span>
           <button className="link-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening…" : "Subscribe now"}</button>
         </div>
       ) : null}
