@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UserCog, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
 import { useLang } from "../../lib/i18n";
+import { NotificationsBell } from "./NotificationsBell";
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon; description: string };
 
@@ -104,14 +105,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
         </nav>
-        <div className="sidebar-account" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><div style={{ display: "grid", gap: 2, minWidth: 0 }}><span className="eyebrow">Signed in as</span><strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.business_name || profile?.full_name}</strong><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.email}</span></div><Link href="/v2/account" title="Account & subscription" aria-label="Account settings" style={{ flexShrink: 0, color: "inherit", display: "inline-flex", padding: 6, borderRadius: 8 }}><Settings size={18} strokeWidth={2.2} aria-hidden="true" /></Link></div>
+        <div className="sidebar-account" style={{ display: "grid", gap: 8 }}><div style={{ display: "grid", gap: 2, minWidth: 0 }}><span className="eyebrow">Signed in as</span><strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.business_name || profile?.full_name}</strong><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.email}</span></div><Link href="/v2/account" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line-strong)", color: "inherit", fontWeight: 600, fontSize: "0.85rem", textDecoration: "none" }}><UserCog size={16} strokeWidth={2.2} aria-hidden="true" />Account &amp; settings</Link></div>
         <button className="secondary-button sidebar-signout" onClick={() => void signOut()} type="button"><LogOut size={17} strokeWidth={2.2} aria-hidden="true" />Sign out</button>
       </aside>
 
       <section className="app-main">
         <header className="topbar">
           <div><span className="eyebrow">Coconut Trade Desk</span><h1>{"href" in meta && meta.href && navLabelKey[meta.href] ? t(navLabelKey[meta.href]) : meta.label}</h1><p>{meta.description}</p></div>
-          <div className="topbar-actions"><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
+          <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}><NotificationsBell /><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
         </header>
         <nav className="mobile-section-nav" aria-label="Mobile navigation">
           {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">•</em> : null}</Link>; })}

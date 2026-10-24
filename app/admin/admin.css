@@ -141,6 +141,50 @@
   border-color: var(--a-muted);
 }
 
+/* Compose form (notifications) */
+.admin-form {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.admin-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--a-ink-2);
+}
+
+.admin-field input,
+.admin-field textarea {
+  background: var(--a-surface);
+  border: 1px solid var(--a-line-strong);
+  border-radius: 9px;
+  color: var(--a-ink);
+  font: inherit;
+  font-weight: 500;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.admin-field textarea {
+  resize: vertical;
+}
+
+.admin-field input:focus,
+.admin-field textarea:focus {
+  border-color: var(--a-accent);
+  box-shadow: 0 0 0 3px var(--a-accent-soft);
+  outline: none;
+}
+
+.admin-ok {
+  color: var(--a-accent-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* Sidebar layout */
 .admin-layout {
   display: flex;

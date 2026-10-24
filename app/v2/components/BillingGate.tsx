@@ -1,105 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../../supabaseClient";
-
-type BillingState = { access: boolean; status: string | null; trialEndsAt: string | null; currentPeriodEnd: string | null };
-
-type RazorpayInstance = { open: () => void; on: (event: string, handler: () => void) => void };
-type RazorpayOptions = {
-  key: string;
-  subscription_id: string;
-  name: string;
-  description: string;
-  theme?: { color?: string };
-  handler: (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => void;
-  modal?: { ondismiss?: () => void };
-};
-
-function loadRazorpay(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined") return reject(new Error("No window."));
-    if ((window as unknown as { Razorpay?: unknown }).Razorpay) return resolve();
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Could not load the payment window. Check your connection."));
-    document.body.appendChild(script);
-  });
-}
+import type { ReactNode } from "react";
+import { useBilling } from "../lib/useBilling";
+import { formatDate } from "../lib/format";
 
 function daysLeft(iso: string) {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
-/** Gates the workspace behind a 14-day trial, then a ₹519/month Razorpay subscription. Fails open. */
-export function BillingGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<BillingState | null>(null); // null = still checking
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+type Notice = { tone: "info" | "warn"; text: ReactNode; action: string };
 
-  const check = useCallback(async () => {
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) { setState({ access: true, status: "unknown", trialEndsAt: null, currentPeriodEnd: null }); return; }
-      const response = await fetch("/api/razorpay/status", { headers: { Authorization: `Bearer ${token}` } });
-      setState(await response.json());
-    } catch {
-      setState({ access: true, status: "error", trialEndsAt: null, currentPeriodEnd: null });
-    }
-  }, []);
-
-  useEffect(() => { void check(); }, [check]);
-
-  const subscribe = useCallback(async () => {
-    setBusy(true); setError("");
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("Please sign in again.");
-      const response = await fetch("/api/razorpay/subscription", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Could not start the subscription.");
-      await loadRazorpay();
-      const RazorpayCtor = (window as unknown as { Razorpay: new (options: RazorpayOptions) => RazorpayInstance }).Razorpay;
-      const checkout = new RazorpayCtor({
-        key: json.keyId,
-        subscription_id: json.subscriptionId,
-        name: "BizzzTrack",
-        description: "Coconut Trade Desk — ₹519 / month",
-        theme: { color: "#1f7a4d" },
-        handler: async (resp) => {
-          try {
-            const verify = await fetch("/api/razorpay/verify", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-              body: JSON.stringify(resp)
-            });
-            if (verify.ok) { await check(); } else { const vj = await verify.json().catch(() => ({})); setError(vj.error || "We could not confirm the payment yet. If money was deducted it will reflect shortly — refresh in a minute."); }
-          } catch {
-            setError("We could not confirm the payment yet. Refresh in a minute.");
-          } finally { setBusy(false); }
-        },
-        modal: { ondismiss: () => setBusy(false) }
-      });
-      checkout.on("payment.failed", () => { setError("Payment failed. Please try again."); setBusy(false); });
-      checkout.open();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-      setBusy(false);
-    }
-  }, [check]);
-
+/**
+ * Gates the workspace behind a 14-day trial, then a ₹519/month Razorpay subscription, and surfaces a
+ * banner for every in-between state (trial ending, cancellation scheduled, payment due, paused).
+ * Fails open: it only blocks when the server explicitly says access is false.
+ */
+export function BillingGate({ children }: { children: ReactNode }) {
+  const { state, busy, error, subscribe, refresh } = useBilling();
   const blocked = state !== null && state.access === false;
 
   if (blocked) {
-    const expiredTrial = state?.status === "trialing" || state?.status === null;
+    const expiredTrial = state?.status === "trialing" || state?.status == null;
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: "40px 16px" }}>
         <section className="auth-panel" style={{ maxWidth: 560, width: "100%", textAlign: "left", display: "grid", gap: 14 }}>
           <span className="eyebrow">BizzzTrack</span>
-          <h1 style={{ margin: 0 }}>{expiredTrial ? "Your free trial has ended" : "Subscription needed"}</h1>
+          <h1 style={{ margin: 0 }}>{expiredTrial ? "Your free trial has ended" : state?.status === "halted" ? "Your subscription is paused" : "Subscription needed"}</h1>
           <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>₹519 / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
           <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6, color: "var(--muted)", fontSize: "0.9rem" }}>
             <li>Everything you already use, nothing removed</li>
@@ -108,21 +34,39 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
           </ul>
           {error ? <p className="error-message" role="alert">{error}</p> : null}
           <button className="primary-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening payment…" : "Subscribe — ₹519 / month"}</button>
-          <button className="link-button" onClick={() => void check()} type="button">I already paid — refresh</button>
+          <button className="link-button" onClick={() => void refresh()} type="button">I already paid — refresh</button>
         </section>
       </div>
     );
   }
 
+  const notice: Notice | null = (() => {
+    if (!state) return null;
+    if (state.status === "trialing" && state.trialEndsAt) {
+      const d = daysLeft(state.trialEndsAt);
+      return { tone: d <= 3 ? "warn" : "info", text: <>Free trial — <strong>{d} day{d === 1 ? "" : "s"} left</strong>. ₹519 / month after that.</>, action: "Subscribe now" };
+    }
+    if (state.status === "active" && state.cancelAtPeriodEnd) {
+      return { tone: "info", text: <>Your subscription is cancelled and will end {state.currentPeriodEnd ? <>on <strong>{formatDate(state.currentPeriodEnd)}</strong></> : "soon"}. You keep full access until then — resubscribe to stay on.</>, action: "Resubscribe" };
+    }
+    if (state.status === "past_due") {
+      return { tone: "warn", text: <>We couldn&apos;t take this month&apos;s <strong>₹519</strong> payment. Pay now to keep your account active.</>, action: "Pay now" };
+    }
+    if (state.status === "halted") {
+      return { tone: "warn", text: <>Your subscription is paused after a failed payment. Reactivate to keep using BizzzTrack.</>, action: "Reactivate" };
+    }
+    return null;
+  })();
+
   return (
     <>
-      {state?.status === "trialing" && state.trialEndsAt ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "10px 14px", marginBottom: 14, borderRadius: 8, background: "rgba(31, 122, 77, 0.10)", border: "1px solid rgba(31, 122, 77, 0.25)", fontSize: "0.9rem" }}>
-          <span>Free trial — <strong>{daysLeft(state.trialEndsAt)} day{daysLeft(state.trialEndsAt) === 1 ? "" : "s"} left</strong>. ₹519 / month after that.</span>
-          <button className="link-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening…" : "Subscribe now"}</button>
+      {notice ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "10px 14px", marginBottom: 14, borderRadius: 8, fontSize: "0.9rem", background: notice.tone === "warn" ? "var(--danger-soft)" : "rgba(0, 122, 94, 0.10)", border: notice.tone === "warn" ? "1px solid rgba(193, 59, 53, 0.30)" : "1px solid rgba(0, 122, 94, 0.25)", color: notice.tone === "warn" ? "var(--danger)" : "inherit" }}>
+          <span>{notice.text}</span>
+          <button className="link-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening…" : notice.action}</button>
         </div>
       ) : null}
-      {error && state?.status === "trialing" ? <p className="error-message" role="alert">{error}</p> : null}
+      {error ? <p className="error-message" role="alert">{error}</p> : null}
       {children}
     </>
   );

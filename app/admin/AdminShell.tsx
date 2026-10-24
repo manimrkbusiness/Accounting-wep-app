@@ -8,9 +8,11 @@ import { logout } from "./actions";
 export function AdminShell({ base, children }: { base: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const usersHref = `${base}/users`;
+  const notifHref = `${base}/notifications`;
   const items = [
     { href: base, label: "Dashboard", active: pathname === base },
-    { href: usersHref, label: "Users", active: pathname === usersHref || pathname.startsWith(`${usersHref}/`) }
+    { href: usersHref, label: "Users", active: pathname === usersHref || pathname.startsWith(`${usersHref}/`) },
+    { href: notifHref, label: "Notifications", active: pathname === notifHref || pathname.startsWith(`${notifHref}/`) }
   ];
   return (
     <div className="admin-layout">

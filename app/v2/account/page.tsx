@@ -41,16 +41,17 @@ export default function AccountPage() {
     ws.clearFeedback();
     if (!ws.session) return;
     if (form.full_name.trim().length < 2) { ws.fail("Enter your name."); return; }
-    if (form.phone && !isValidIndianPhone(form.phone)) { ws.fail("Enter a valid 10-digit mobile number, or leave it empty."); return; }
+    if (!isValidIndianPhone(form.phone)) { ws.fail("Enter a valid 10-digit mobile number."); return; }
+    const newEmail = form.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { ws.fail("Enter a valid email address."); return; }
     setSavingProfile(true);
     const { error } = await supabase.from("profiles").update({
       full_name: form.full_name.trim(),
       business_name: form.business_name.trim() || null,
-      phone: form.phone ? getStoredIndianPhone(form.phone) : null
+      phone: getStoredIndianPhone(form.phone)
     }).eq("id", ws.session.user.id);
     if (error) { setSavingProfile(false); ws.fail(error.message); return; }
     let emailNote = "";
-    const newEmail = form.email.trim();
     if (newEmail && newEmail !== (ws.profile?.email ?? "")) {
       const { error: emailError } = await supabase.auth.updateUser({ email: newEmail });
       if (emailError) { setSavingProfile(false); ws.fail(emailError.message); return; }
@@ -78,8 +79,8 @@ export default function AccountPage() {
           <div className="form-grid">
             <label>Your name<input value={form.full_name} onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))} required /></label>
             <label>Business / trading name<input value={form.business_name} onChange={(event) => setForm((current) => ({ ...current, business_name: event.target.value }))} placeholder="e.g. MRK Traders" /></label>
-            <label>Phone <span className="optional">Optional</span><div className="phone-input"><span>{"🇮🇳 +91"}</span><input inputMode="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: getIndianPhoneValue(event.target.value) }))} /></div></label>
-            <label>Login email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><span className="field-hint">Changing this sends a confirmation link to the new address; your login updates once you click it.</span></label>
+            <label>Phone<div className="phone-input"><span>{"🇮🇳 +91"}</span><input inputMode="tel" required value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: getIndianPhoneValue(event.target.value) }))} /></div></label>
+            <label>Login email<input type="email" required value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /><span className="field-hint">Changing this sends a confirmation link to the new address; your login updates once you click it.</span></label>
           </div>
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={savingProfile} type="submit">{savingProfile ? "Saving…" : "Save profile"}</button>
