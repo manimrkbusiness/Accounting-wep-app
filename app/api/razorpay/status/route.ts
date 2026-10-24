@@ -12,12 +12,13 @@ export async function GET(request: Request) {
   try {
     const admin = adminClient();
     await admin.from("subscriptions").upsert({ trader_id: userId }, { onConflict: "trader_id", ignoreDuplicates: true });
-    const { data: row } = await admin.from("subscriptions").select("status, trial_ends_at, current_period_end").eq("trader_id", userId).maybeSingle();
+    const { data: row } = await admin.from("subscriptions").select("status, trial_ends_at, current_period_end, cancel_at_period_end").eq("trader_id", userId).maybeSingle();
     return Response.json({
       access: hasAccess(row),
       status: row?.status ?? null,
       trialEndsAt: row?.trial_ends_at ?? null,
-      currentPeriodEnd: row?.current_period_end ?? null
+      currentPeriodEnd: row?.current_period_end ?? null,
+      cancelAtPeriodEnd: row?.cancel_at_period_end ?? false
     });
   } catch {
     return Response.json({ access: true, status: "error" });

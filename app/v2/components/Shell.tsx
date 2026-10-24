@@ -48,7 +48,8 @@ const subPages: Record<string, { label: string; description: string }> = {
   "/v2/purchases/new": { label: "New purchase", description: "Record coconut bought from a farmer. Costs are calculated for you." },
   "/v2/sales/new": { label: "New sale", description: "Pick the purchases going in this load, then enter the buyer and weighbridge details." },
   "/v2/husk-sales": { label: "Husk sale", description: "Pick the husk you are selling, then enter the buyer, rate and any delivery costs." },
-  "/v2/husk-purchases": { label: "Husk purchase", description: "Record husk bought straight from a farmer, without any coconut." }
+  "/v2/husk-purchases": { label: "Husk purchase", description: "Record husk bought straight from a farmer, without any coconut." },
+  "/v2/account": { label: "Account", description: "Your profile, business details and subscription." }
 };
 
 function pageMeta(pathname: string) {
@@ -103,7 +104,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
         </nav>
-        <div className="sidebar-account"><span className="eyebrow">Signed in as</span><strong>{profile?.business_name || profile?.full_name}</strong><span>{profile?.email}</span></div>
+        <div className="sidebar-account" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}><div style={{ display: "grid", gap: 2, minWidth: 0 }}><span className="eyebrow">Signed in as</span><strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.business_name || profile?.full_name}</strong><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile?.email}</span></div><Link href="/v2/account" title="Account & subscription" aria-label="Account settings" style={{ flexShrink: 0, color: "inherit", display: "inline-flex", padding: 6, borderRadius: 8 }}><Settings size={18} strokeWidth={2.2} aria-hidden="true" /></Link></div>
         <button className="secondary-button sidebar-signout" onClick={() => void signOut()} type="button"><LogOut size={17} strokeWidth={2.2} aria-hidden="true" />Sign out</button>
       </aside>
 
