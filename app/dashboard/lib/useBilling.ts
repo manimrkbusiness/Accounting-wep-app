@@ -12,7 +12,26 @@ export type BillingState = {
   cancelAtPeriodEnd: boolean;
 };
 
-type RazorpayInstance = { open: () => void; on: (event: string, handler: () => void) => void };
+type RazorpayPaymentFailure = {
+  error?: {
+    code?: string;
+    description?: string;
+    reason?: string;
+    source?: string;
+    step?: string;
+  };
+};
+
+type RazorpayInstance = { open: () => void; on: (event: string, handler: (failure?: RazorpayPaymentFailure) => void) => void };
+
+function paymentFailureMessage(failure?: RazorpayPaymentFailure) {
+  const error = failure?.error;
+  if (!error) return "Payment failed. Please try again.";
+  const details = [error.description, error.reason].filter(Boolean).join(" — ");
+  const context = [error.source, error.step].filter(Boolean).join(" / ");
+  const code = error.code ? ` [${error.code}]` : "";
+  return `Payment failed${code}: ${details || "Razorpay could not complete this payment."}${context ? ` (${context})` : ""}`;
+}
 
 async function authToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
@@ -80,7 +99,7 @@ export function useBilling() {
         },
         modal: { ondismiss: () => setBusy(false) }
       });
-      checkout.on("payment.failed", () => { setError("Payment failed. Please try again."); setBusy(false); });
+      checkout.on("payment.failed", (failure) => { setError(paymentFailureMessage(failure)); setBusy(false); });
       checkout.open();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
