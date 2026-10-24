@@ -1,4 +1,4 @@
-import { adminClient, billingConfigured, getUserId, verifySubscriptionSignature } from "../shared";
+import { adminClient, billingConfigured, getUserId, razorpayFetch, verifySubscriptionSignature } from "../shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +23,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "This payment does not match your subscription." }, { status: 400 });
     }
     await admin.from("subscriptions").update({ status: "active", updated_at: new Date().toISOString() }).eq("trader_id", userId);
+    // Pull the real next-charge date from Razorpay so the renewal date shows immediately, rather than
+    // waiting for the first webhook. Best-effort: the webhook keeps it in step afterwards.
+    try {
+      const sub = await razorpayFetch(`/subscriptions/${subscriptionId}`);
+      const end = Number(sub.current_end || sub.charge_at || 0);
+      if (end > 0) await admin.from("subscriptions").update({ current_period_end: new Date(end * 1000).toISOString() }).eq("trader_id", userId);
+    } catch {
+      // Leave current_period_end for the webhook to fill in.
+    }
     return Response.json({ access: true, status: "active" });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Could not activate the subscription." }, { status: 500 });

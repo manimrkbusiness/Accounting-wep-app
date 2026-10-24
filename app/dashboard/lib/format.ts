@@ -10,7 +10,10 @@ export function formatNumber(value: number, digits = 3) {
 
 export function formatDate(value: string) {
   if (!value) return "-";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  // Accept both a date-only string ("2026-11-23") and a full ISO timestamp ("2026-11-23T18:30:00Z").
+  const date = value.includes("T") ? new Date(value) : new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function formatPurchaseId(id: number) {

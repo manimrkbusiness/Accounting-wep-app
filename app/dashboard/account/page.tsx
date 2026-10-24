@@ -6,6 +6,7 @@ import { useWorkspace } from "../lib/workspace";
 import { useBilling } from "../lib/useBilling";
 import { formatDate, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
 import { PLAN_PRICE_LABEL } from "../lib/plan";
+import { BillingHistory } from "../components/BillingHistory";
 
 function billingSummary(s: ReturnType<typeof useBilling>["state"]) {
   if (!s) return "Checking…";
@@ -103,6 +104,8 @@ export default function AccountPage() {
         </div>
         {isActive && s?.cancelAtPeriodEnd ? <p className="field-hint">Your subscription is set to cancel at the end of the current cycle. To keep it, just subscribe again after it ends.</p> : null}
       </section>
+
+      <BillingHistory refreshKey={`${s?.status ?? "x"}|${s?.currentPeriodEnd ?? ""}`} />
     </div>
   );
 }
