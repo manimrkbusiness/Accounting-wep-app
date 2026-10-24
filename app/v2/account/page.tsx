@@ -5,13 +5,14 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { useBilling } from "../lib/useBilling";
 import { formatDate, getIndianPhoneValue, getStoredIndianPhone, isValidIndianPhone } from "../lib/format";
+import { PLAN_PRICE_LABEL } from "../lib/plan";
 
 function billingSummary(s: ReturnType<typeof useBilling>["state"]) {
   if (!s) return "Checking…";
   if (s.status === "trialing") return s.trialEndsAt ? `Free trial — ends ${formatDate(s.trialEndsAt)}` : "Free trial";
   if (s.status === "active") {
     if (s.cancelAtPeriodEnd) return s.currentPeriodEnd ? `Active — ends ${formatDate(s.currentPeriodEnd)} (cancellation scheduled)` : "Active — cancellation scheduled";
-    return s.currentPeriodEnd ? `Active — ₹519 / month, renews ${formatDate(s.currentPeriodEnd)}` : "Active — ₹519 / month";
+    return s.currentPeriodEnd ? `Active — ${PLAN_PRICE_LABEL} / month, renews ${formatDate(s.currentPeriodEnd)}` : `Active — ${PLAN_PRICE_LABEL} / month`;
   }
   if (s.status === "past_due") return "Payment pending — please pay to keep access";
   if (s.status === "halted") return "Paused — last payment failed";
@@ -90,13 +91,13 @@ export default function AccountPage() {
       <section className="tool-panel">
         <div className="panel-heading"><div><span className="eyebrow">Billing</span><h2>Subscription &amp; plan</h2></div></div>
         <dl className="calculation-list">
-          <div><dt>Plan</dt><dd>Coconut Trade Desk — ₹519 / month</dd></div>
+          <div><dt>Plan</dt><dd>Coconut Trade Desk — {PLAN_PRICE_LABEL} / month</dd></div>
           <div><dt>Status</dt><dd>{billingSummary(s)}</dd></div>
         </dl>
-        <p className="field-hint">After the trial, ₹519 is charged every month automatically (UPI AutoPay, card or net-banking). You can cancel anytime — you keep access until the end of the period you already paid for.</p>
+        <p className="field-hint">After the trial, {PLAN_PRICE_LABEL} is charged every month automatically (UPI AutoPay, card or net-banking). You can cancel anytime — you keep access until the end of the period you already paid for.</p>
         {billing.error ? <p className="error-message form-error" role="alert">{billing.error}</p> : null}
         <div className="row-actions">
-          {canSubscribe ? <button className="primary-button" disabled={billing.busy} onClick={() => void billing.subscribe()} type="button">{billing.busy ? "Opening payment…" : "Subscribe — ₹519 / month"}</button> : null}
+          {canSubscribe ? <button className="primary-button" disabled={billing.busy} onClick={() => void billing.subscribe()} type="button">{billing.busy ? "Opening payment…" : `Subscribe — ${PLAN_PRICE_LABEL} / month`}</button> : null}
           {canCancel ? <button className="danger-button" disabled={billing.busy} onClick={() => { if (window.confirm("Cancel your subscription? You'll keep access until the end of the current paid period.")) void billing.cancel(); }} type="button">{billing.busy ? "Please wait…" : "Cancel subscription"}</button> : null}
           <button className="secondary-button" disabled={billing.busy} onClick={() => void billing.refresh()} type="button">Refresh</button>
         </div>

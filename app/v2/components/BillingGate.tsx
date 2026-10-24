@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useBilling } from "../lib/useBilling";
 import { formatDate } from "../lib/format";
+import { PLAN_PRICE_LABEL } from "../lib/plan";
 
 function daysLeft(iso: string) {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
@@ -26,14 +27,14 @@ export function BillingGate({ children }: { children: ReactNode }) {
         <section className="auth-panel" style={{ maxWidth: 560, width: "100%", textAlign: "left", display: "grid", gap: 14 }}>
           <span className="eyebrow">BizzzTrack</span>
           <h1 style={{ margin: 0 }}>{expiredTrial ? "Your free trial has ended" : state?.status === "halted" ? "Your subscription is paused" : "Subscription needed"}</h1>
-          <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>₹519 / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
+          <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>{PLAN_PRICE_LABEL} / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
           <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6, color: "var(--muted)", fontSize: "0.9rem" }}>
             <li>Everything you already use, nothing removed</li>
             <li>Automatic monthly billing after you authorize once</li>
             <li>Your data stays exactly where it is</li>
           </ul>
           {error ? <p className="error-message" role="alert">{error}</p> : null}
-          <button className="primary-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening payment…" : "Subscribe — ₹519 / month"}</button>
+          <button className="primary-button" disabled={busy} onClick={() => void subscribe()} type="button">{busy ? "Opening payment…" : `Subscribe — ${PLAN_PRICE_LABEL} / month`}</button>
           <button className="link-button" onClick={() => void refresh()} type="button">I already paid — refresh</button>
         </section>
       </div>
@@ -44,13 +45,13 @@ export function BillingGate({ children }: { children: ReactNode }) {
     if (!state) return null;
     if (state.status === "trialing" && state.trialEndsAt) {
       const d = daysLeft(state.trialEndsAt);
-      return { tone: d <= 3 ? "warn" : "info", text: <>Free trial — <strong>{d} day{d === 1 ? "" : "s"} left</strong>. ₹519 / month after that.</>, action: "Subscribe now" };
+      return { tone: d <= 3 ? "warn" : "info", text: <>Free trial — <strong>{d} day{d === 1 ? "" : "s"} left</strong>. {PLAN_PRICE_LABEL} / month after that.</>, action: "Subscribe now" };
     }
     if (state.status === "active" && state.cancelAtPeriodEnd) {
       return { tone: "info", text: <>Your subscription is cancelled and will end {state.currentPeriodEnd ? <>on <strong>{formatDate(state.currentPeriodEnd)}</strong></> : "soon"}. You keep full access until then — resubscribe to stay on.</>, action: "Resubscribe" };
     }
     if (state.status === "past_due") {
-      return { tone: "warn", text: <>We couldn&apos;t take this month&apos;s <strong>₹519</strong> payment. Pay now to keep your account active.</>, action: "Pay now" };
+      return { tone: "warn", text: <>We couldn&apos;t take this month&apos;s <strong>{PLAN_PRICE_LABEL}</strong> payment. Pay now to keep your account active.</>, action: "Pay now" };
     }
     if (state.status === "halted") {
       return { tone: "warn", text: <>Your subscription is paused after a failed payment. Reactivate to keep using BizzzTrack.</>, action: "Reactivate" };
