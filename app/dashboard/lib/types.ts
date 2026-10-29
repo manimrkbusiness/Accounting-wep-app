@@ -261,6 +261,9 @@ export type Expense = {
   stock_entry_id: number | null;
   harvesting_entry_id: number | null;
   description: string | null;
+  /** Whether this wage/cost has actually been paid out to the team or vendor. */
+  paid: boolean;
+  paid_at: string | null;
   created_at: string;
 };
 

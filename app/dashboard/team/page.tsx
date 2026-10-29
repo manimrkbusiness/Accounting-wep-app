@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { draftKey, useDraft } from "../lib/useDraft";
@@ -183,9 +184,11 @@ export default function TeamPage() {
               <div className="box-heading"><strong>{sectionLabel[role.value]}</strong><div className="box-heading-actions"><span className="chip">{group.length}</span><button className="link-button" onClick={() => openEmployeeForm(role.value)} type="button">+ Add</button></div></div>
               {group.length ? <div className="card-list">
                 {group.map((employee) => {
-                  const paid = sumBy(ws.expenses.filter((expense) => expense.employee_id === employee.id), (expense) => expense.amount);
+                  const entries = ws.expenses.filter((expense) => expense.employee_id === employee.id);
+                  const total = sumBy(entries, (expense) => expense.amount);
+                  const pending = sumBy(entries.filter((expense) => !expense.paid), (expense) => expense.amount);
                   const locked = employeeHasEntries(employee);
-                  return <article key={employee.id}><div><strong>{employee.name}{!employee.active ? " (inactive)" : ""}</strong><span>{[employee.phone, Number(employee.daily_wage) > 0 ? `${formatCurrency(Number(employee.daily_wage))} / day` : null].filter(Boolean).join(" · ") || "—"}</span></div><div className="chip-row"><span className="chip">Paid {formatCurrency(paid)} so far</span></div><div className="row-actions"><button className="secondary-button" onClick={() => editEmployee(employee)} type="button">Edit</button><button className="danger-button" disabled={ws.saving || locked} title={locked ? "Has wages or records; cannot delete" : undefined} onClick={() => deleteEmployee(employee)} type="button">Delete</button></div></article>;
+                  return <article key={employee.id}><div><Link className="card-title-link" href={`/dashboard/team/${employee.id}`}><strong>{employee.name}{!employee.active ? " (inactive)" : ""}</strong></Link><span>{[employee.phone, Number(employee.daily_wage) > 0 ? `${formatCurrency(Number(employee.daily_wage))} / day` : null].filter(Boolean).join(" · ") || "—"}</span></div><div className="chip-row"><span className="chip">Paid {formatCurrency(total - pending)}</span>{pending > 0 ? <span className="chip warn">Pending {formatCurrency(pending)}</span> : null}</div><div className="row-actions"><Link className="secondary-button" href={`/dashboard/team/${employee.id}`}>View &amp; pay</Link><button className="secondary-button" onClick={() => editEmployee(employee)} type="button">Edit</button><button className="danger-button" disabled={ws.saving || locked} title={locked ? "Has wages or records; cannot delete" : undefined} onClick={() => deleteEmployee(employee)} type="button">Delete</button></div></article>;
                 })}
               </div> : <p className="muted-text box-empty">None yet — use + Add.</p>}
             </div>;

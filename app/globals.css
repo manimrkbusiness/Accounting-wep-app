@@ -1936,6 +1936,19 @@ td > .muted-text {
   font-size: 0.8rem;
 }
 
+.card-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-title-link:hover {
+  text-decoration: underline;
+}
+
+.save-actions {
+  flex-wrap: wrap;
+}
+
 .page-actions {
   display: flex;
   flex-wrap: wrap;
