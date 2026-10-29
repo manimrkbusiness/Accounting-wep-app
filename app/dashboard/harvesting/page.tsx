@@ -87,14 +87,14 @@ export default function HarvestingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function saveEntry(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    ws.clearFeedback();
-    if (!ws.session) return;
-    if (!form.farmer_id) { ws.fail("Choose the farmer whose coconuts were harvested."); return; }
-    if (!form.location_id) { ws.fail("Choose the farming location."); return; }
-    if (quantity <= 0) { ws.fail("Enter how many coconuts were harvested."); return; }
-    if (rate < 0) { ws.fail("Enter a valid harvesting rate."); return; }
+  // Validate and write the harvest. Returns the harvest id (new or edited) on success,
+  // or null when validation or the save failed. Shared by "Save" and "Save & record purchase".
+  async function persistEntry(): Promise<number | null> {
+    if (!ws.session) return null;
+    if (!form.farmer_id) { ws.fail("Choose the farmer whose coconuts were harvested."); return null; }
+    if (!form.location_id) { ws.fail("Choose the farming location."); return null; }
+    if (quantity <= 0) { ws.fail("Enter how many coconuts were harvested."); return null; }
+    if (rate < 0) { ws.fail("Enter a valid harvesting rate."); return null; }
     ws.setSaving(true);
     const payload = {
       trader_id: ws.session.user.id,
@@ -107,15 +107,40 @@ export default function HarvestingPage() {
       purchase_id: form.purchase_id ? Number(form.purchase_id) : null,
       notes: form.notes.trim() || null
     };
-    const result = form.id
-      ? await supabase.from("harvesting_entries").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id)
-      : await supabase.from("harvesting_entries").insert(payload);
-    ws.setSaving(false);
-    if (result.error) { ws.fail(result.error.message); return; }
+    let savedId: number | null = form.id ?? null;
+    if (form.id) {
+      const { error } = await supabase.from("harvesting_entries").update(payload).eq("id", form.id).eq("trader_id", ws.session.user.id);
+      ws.setSaving(false);
+      if (error) { ws.fail(error.message); return null; }
+    } else {
+      const { data, error } = await supabase.from("harvesting_entries").insert(payload).select("id").single();
+      ws.setSaving(false);
+      if (error) { ws.fail(error.message); return null; }
+      savedId = (data as { id: number } | null)?.id ?? null;
+    }
+    return savedId;
+  }
+
+  async function saveEntry(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    ws.clearFeedback();
+    const savedId = await persistEntry();
+    if (savedId === null) return;
     ws.notify(form.id ? "Harvesting entry updated." : `Harvesting recorded.${cost > 0 ? ` ${formatCurrency(cost)} booked under Expenses to pay ${head?.name ?? "the worker"}.` : ""}`);
     draft.clear(blankEntry(defaultRate));
     setEditingRate(false);
     await ws.refresh();
+  }
+
+  // Save the harvest, then jump straight to a new purchase pre-filled from it.
+  async function saveAndRecordPurchase() {
+    ws.clearFeedback();
+    const savedId = await persistEntry();
+    if (savedId === null) return;
+    draft.clear(blankEntry(defaultRate));
+    setEditingRate(false);
+    await ws.refresh();
+    router.push(`/dashboard/purchases/new?harvest=${savedId}`);
   }
 
   async function deleteEntry(entry: HarvestingEntry) {
@@ -173,7 +198,11 @@ export default function HarvestingPage() {
           </div>
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))} placeholder="Trees, area, quality note" /></label>
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
-          <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update harvest" : "Save harvest"}</button>
+          <div className="row-actions save-actions">
+            <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update harvest" : "Save harvest"}</button>
+            {!form.purchase_id ? <button className="secondary-button" disabled={ws.saving} onClick={saveAndRecordPurchase} type="button">Save &amp; record purchase</button> : null}
+          </div>
+          <span className="field-hint">&quot;Save &amp; record purchase&quot; saves this harvest and opens a new purchase with the farmer, location and quantity already filled from it.</span>
         </form>
         <aside className="side-stack">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Harvest summary</h2><dl className="calculation-list">

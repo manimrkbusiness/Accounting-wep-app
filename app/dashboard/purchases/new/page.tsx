@@ -141,6 +141,23 @@ export default function NewPurchasePage() {
   const [rateEditor, setRateEditor] = useState<"dehusking" | "harvesting" | "husk" | null>(null);
   const [rateDraft, setRateDraft] = useState("");
   const farmerParamApplied = useRef(false);
+  const harvestParamApplied = useRef(false);
+
+  // Arriving from "Save & record purchase" on Coconut Harvesting: start a fresh purchase
+  // pre-filled from that harvest (farmer, location and the harvest itself). The existing
+  // effects then fill the coconut quantity and harvesting pay from the picked harvest.
+  useEffect(() => {
+    if (harvestParamApplied.current) return;
+    const harvestId = Number(new URLSearchParams(window.location.search).get("harvest"));
+    if (!harvestId) return;
+    const entry = ws.harvestingEntries.find((e) => e.id === harvestId);
+    if (!entry) return; // harvests may still be loading; apply once they are here
+    harvestParamApplied.current = true;
+    if (entry.purchase_id) { ws.fail("That harvest is already linked to a purchase."); return; }
+    const base = blankForm(ws.settings ?? defaultSettings);
+    draft.clear({ ...base, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", harvest_ids: [harvestId] });
+    router.replace("/dashboard/purchases/new");
+  }, [ws.harvestingEntries, ws.settings, draft, router, ws]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
