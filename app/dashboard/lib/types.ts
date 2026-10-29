@@ -88,6 +88,10 @@ export type Purchase = {
   husk_pieces: number | null;
   /** A husk-only purchase (husk bought from a farmer, no coconut); reuses this table with coconut_quantity 0. */
   husk_only: boolean;
+  /** "Weight + husk": bought with husk by weight; farmer paid in full, trader dehusks and keeps the husk. */
+  husk_included: boolean;
+  /** Trader-paid dehusking rate per 1,000 pieces for a weight+husk purchase (booked as an expense, not deducted). */
+  trader_dehusking_rate_per_1000: number;
   average_weight_kg: number;
   average_price_per_piece: number;
   additional_credit_amount: number;
