@@ -247,6 +247,19 @@ export type StockWastage = {
   reason: string | null;
 };
 
+export type WastageSale = {
+  id: number;
+  trader_id: string;
+  sale_date: string;
+  buyer_id: number | null;
+  buyer_name: string | null;
+  quantity_pieces: number;
+  rate_per_piece: number;
+  amount: number;
+  notes: string | null;
+  created_at: string;
+};
+
 export type Expense = {
   id: number;
   trader_id: string;

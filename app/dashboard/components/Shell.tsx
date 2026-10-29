@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UserCog, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeftRight, Boxes, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Recycle, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UserCog, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
 import { useLang } from "../../lib/i18n";
@@ -42,6 +42,7 @@ export const navItems: NavItem[] = [
   { href: "/dashboard/expenses", label: "Expenses", short: "Spend", icon: Receipt, description: "Labor, transport, diesel, food and other costs." },
   { href: "/dashboard/transactions", label: "Transactions", short: "Money", icon: ArrowLeftRight, description: "Every rupee in and out, day by day, across purchases, sales, expenses and the cash book." },
   { href: "/dashboard/cash", label: "Cash book", short: "Cash", icon: Wallet, description: "Capital, payments to farmers and receipts from buyers." },
+  { href: "/dashboard/wastage", label: "Wastage coconuts", short: "Wastage", icon: Recycle, description: "Coconuts wasted at the weighing stage, and selling them off at a small rate." },
   { href: "/dashboard/settings", label: "Settings", short: "Settings", icon: Settings, description: "Default purchase method, deduction rates, husk price and Kudume wastage." }
 ];
 

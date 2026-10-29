@@ -1,4 +1,4 @@
-import type { CashEntry, Expense, ExpenseCategory, HuskColor, HuskSaleItem, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage } from "./types";
+import type { CashEntry, Expense, ExpenseCategory, HuskColor, HuskSaleItem, ProcessingType, Purchase, PurchaseMode, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, WastageSale } from "./types";
 import { cashKinds, expenseCategories } from "./types";
 import { toNumber } from "./format";
 
@@ -358,6 +358,8 @@ export type FinancialSummary = {
   soldKg: number;
   wastedPieces: number;
   wastageLoss: number;
+  wastageSalesIncome: number;
+  wastageSoldPieces: number;
   laborDeductedFromFarmers: number;
   expensesTotal: number;
   expensesByCategory: Array<{ category: ExpenseCategory; label: string; amount: number }>;
@@ -380,8 +382,9 @@ export function summarizeFinancials(args: {
   stockEntries?: StockEntry[];
   stockEntryItems?: StockEntryItem[];
   stockWastage?: StockWastage[];
+  wastageSales?: WastageSale[];
 }): FinancialSummary {
-  const { purchases, sales, saleItems, expenses, cashEntries, range, stockEntries = [], stockEntryItems = [], stockWastage = [] } = args;
+  const { purchases, sales, saleItems, expenses, cashEntries, range, stockEntries = [], stockEntryItems = [], stockWastage = [], wastageSales = [] } = args;
   const stock = buildStockMap(purchases, saleItems, stockEntries, stockEntryItems, stockWastage);
   // Stock-stage wastage (nuts lost before loading) is absorbed into coconutCostPerPiece and recovered
   // through the cost of goods sold as pieces sell, so counting it here too would charge it twice. The
@@ -390,6 +393,11 @@ export function summarizeFinancials(args: {
   const periodWastage = stockWastage.filter((row) => inRange(row.wastage_date, range) && row.stock_entry_id == null);
   const wastedPieces = sumBy(periodWastage, (row) => row.quantity_pieces);
   const wastageLoss = periodWastage.reduce((sum, row) => sum + Number(row.quantity_pieces) * (stock.get(row.purchase_id)?.coconutCostPerPiece ?? 0), 0);
+  // Wasted nuts sold to someone are pure profit — their cost is already absorbed into the
+  // survivors at the stock stage, so this income is added straight to the bottom line.
+  const periodWastageSales = wastageSales.filter((row) => inRange(row.sale_date, range));
+  const wastageSalesIncome = sumBy(periodWastageSales, (row) => Number(row.amount));
+  const wastageSoldPieces = sumBy(periodWastageSales, (row) => Number(row.quantity_pieces));
   const periodPurchases = purchases.filter((purchase) => inRange(purchase.trade_date, range));
   const periodSales = sales.filter((sale) => inRange(sale.sale_date, range));
   const periodSaleIds = new Set(periodSales.map((sale) => sale.id));
@@ -427,11 +435,13 @@ export function summarizeFinancials(args: {
     soldKg,
     wastedPieces,
     wastageLoss,
+    wastageSalesIncome,
+    wastageSoldPieces,
     laborDeductedFromFarmers: sumBy(periodPurchases, (purchase) => purchase.labor_cost_total),
     expensesTotal: operatingExpenses + huskExpenses,
     expensesByCategory,
     operatingExpenses,
-    netProfit: coconutRevenue - coconutCostOfSold - wastageLoss + huskRevenue - huskCreditPaid - huskExpenses - operatingExpenses,
+    netProfit: coconutRevenue - coconutCostOfSold - wastageLoss + wastageSalesIncome + huskRevenue - huskCreditPaid - huskExpenses - operatingExpenses,
     stockPieces: sumBy(stockValues, (info) => info.remainingPieces),
     stockValue: sumBy(stockValues, (info) => info.remainingValue),
     stockKg: sumBy(stockValues, (info) => info.remainingKg),
