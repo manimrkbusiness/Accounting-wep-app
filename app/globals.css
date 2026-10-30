@@ -503,13 +503,15 @@ textarea:focus {
 }
 
 .desktop-sidebar {
+  align-self: start; /* don't stretch to content height, or sticky has nothing to pin within */
   background: var(--surface);
   border-right: 1px solid var(--line);
   color: var(--ink);
   display: flex;
   flex-direction: column;
   gap: 25px;
-  min-height: 100vh;
+  height: 100vh; /* fixed to the viewport so the nav + account block stay put */
+  overflow-y: auto; /* a long nav scrolls inside the fixed sidebar */
   padding: 23px 18px;
   position: sticky;
   top: 0;
