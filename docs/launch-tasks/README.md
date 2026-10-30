@@ -39,7 +39,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started · 💤 later (deferred 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | C1 | Phase 1 — Google + email/password + email OTP + forgot password | ✅ done | Live on bizztrack.in. |
-| C2 | Custom SMTP for auth emails (Brevo/Resend — free tier) | ⬜ not started | Supabase's built-in email sender is rate-limited (~a few/hour). Needed before real customer volume so OTP/reset emails deliver. |
+| C2 | Email system built (Resend) — needs config | 🟡 needs setup | Code shipped 2026-10-30 (welcome, login alert, subscription receipt; `app/lib/email.ts` + `/api/account/notify`). **To turn on:** (1) verify `bizztrack.in` in Resend (add DKIM/SPF at GoDaddy), (2) add `RESEND_API_KEY` + `EMAIL_FROM` in Vercel (Production) and redeploy, (3) set Resend as Supabase **Custom SMTP** (Auth→SMTP) so signup/reset **code** emails deliver reliably. Inert until the key is set. |
 | C3 | Phase 2 — phone / SMS OTP | 💤 later | Paid in India (DLT registration + per-SMS cost). Prerequisite for farmer phone login. |
 | C4 | Phase 3 — farmer self-serve login | 💤 later | Reuse existing DB scaffolding (`farmer_access_requests`, phone-match triggers, farmer-read RLS). |
 
