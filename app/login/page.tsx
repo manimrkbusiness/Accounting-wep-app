@@ -10,7 +10,7 @@ import { useLang, LanguageToggle } from "../lib/i18n";
 
 type Mode = "signup" | "signin";
 type Role = "farmer" | "trader";
-type Flow = "auth" | "verify" | "forgot-request" | "forgot-reset";
+type Flow = "auth" | "verify" | "forgot-request" | "forgot-verify" | "forgot-reset";
 
 type Profile = {
   id: string;
@@ -197,12 +197,30 @@ export default function LoginPage() {
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectTo() });
       if (resetError) throw resetError;
-      setPassword(""); setConfirmPassword(""); setOtp(""); setRecoverySession(false); setCooldown(30); setFlow("forgot-reset");
-      setMessage(`We emailed a reset code to ${email.trim()}. Enter it with your new password.`);
+      setPassword(""); setConfirmPassword(""); setOtp(""); setRecoverySession(false); setCooldown(30); setFlow("forgot-verify");
+      setMessage(`We emailed a reset code to ${email.trim()}. Enter it to continue.`);
     } catch (caughtError) { setError(getAuthErrorMessage(caughtError)); }
     finally { setSaving(false); }
   }
 
+  // Step 1 of the code reset: verify the emailed code. Only on success do we move to the
+  // "set a new password" step, so the user never types a password against an invalid code.
+  async function handleForgotVerify(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    clearFeedback();
+    if (otp.trim().length < 4) { setError("Enter the reset code from your email."); return; }
+    setSaving(true);
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({ email: email.trim(), token: otp.trim(), type: "recovery" });
+      if (verifyError) throw verifyError;
+      setRecoverySession(true); setOtp(""); setFlow("forgot-reset");
+      setMessage("Code verified. Now set your new password.");
+    } catch (caughtError) { setError(getAuthErrorMessage(caughtError)); }
+    finally { setSaving(false); }
+  }
+
+  // Step 2: set the new password. Reached only after a verified code (above) or a reset link, so a
+  // recovery session already exists. On success we sign out so the user signs in with the new password.
   async function handleForgotReset(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearFeedback();
@@ -210,15 +228,12 @@ export default function LoginPage() {
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     setSaving(true);
     try {
-      if (!recoverySession) {
-        if (otp.trim().length < 4) { setError("Enter the reset code from your email."); setSaving(false); return; }
-        const { error: verifyError } = await supabase.auth.verifyOtp({ email: email.trim(), token: otp.trim(), type: "recovery" });
-        if (verifyError) throw verifyError;
-      }
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      setMessage("Password updated. Taking you in…");
-      setRecoverySession(false); setPassword(""); setConfirmPassword(""); setOtp(""); setFlow("auth");
+      await supabase.auth.signOut();
+      setRecoverySession(false); setPassword(""); setConfirmPassword(""); setOtp("");
+      setMode("signin"); setFlow("auth");
+      setMessage("Password updated. Please sign in with your new password.");
     } catch (caughtError) { setError(getAuthErrorMessage(caughtError)); }
     finally { setSaving(false); }
   }
@@ -239,7 +254,7 @@ export default function LoginPage() {
     if (cooldown > 0) return;
     clearFeedback();
     try {
-      if (flow === "forgot-reset") { const { error: e } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectTo() }); if (e) throw e; }
+      if (flow === "forgot-reset" || flow === "forgot-verify") { const { error: e } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectTo() }); if (e) throw e; }
       else { const { error: e } = await supabase.auth.resend({ type: "signup", email: email.trim() }); if (e) throw e; }
       setCooldown(30); setMessage("We sent a new code.");
     } catch (caughtError) { setError(getAuthErrorMessage(caughtError)); }
@@ -347,15 +362,24 @@ export default function LoginPage() {
             </form>
           </> : null}
 
+          {flow === "forgot-verify" ? <>
+            <div className="auth-copy"><span className="eyebrow">{L("Reset password", "கடவுச்சொல் மீட்டமை")}</span><h1>{L("Enter the reset code", "மீட்டமைப்புக் குறியீட்டை உள்ளிடவும்")}</h1><p>{L("Enter the reset code we emailed to", "நாங்கள் அனுப்பிய மீட்டமைப்புக் குறியீட்டை உள்ளிடவும்")} <strong>{email}</strong>.</p></div>
+            <form className="auth-form" onSubmit={handleForgotVerify}>
+              <label>{L("Reset code", "மீட்டமைப்புக் குறியீடு")}<input inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))} required /></label>
+              {feedback}
+              <button className="primary-button" disabled={saving} type="submit">{saving ? L("Verifying...", "சரிபார்க்கிறது...") : L("Verify code", "குறியீட்டைச் சரிபார்")}</button>
+              <div className="auth-actions"><button className="link-button" disabled={cooldown > 0} onClick={handleResend} type="button">{cooldown > 0 ? L(`Resend in ${cooldown}s`, `${cooldown}வி இல் மீண்டும்`) : L("Resend code", "மீண்டும் அனுப்பு")}</button><button className="link-button" onClick={() => switchMode("signin")} type="button">{L("Back to sign in", "உள்நுழைவுக்குத் திரும்பு")}</button></div>
+            </form>
+          </> : null}
+
           {flow === "forgot-reset" ? <>
-            <div className="auth-copy"><span className="eyebrow">{L("Reset password", "கடவுச்சொல் மீட்டமை")}</span><h1>{L("Set a new password", "புதிய கடவுச்சொல் அமைக்கவும்")}</h1><p>{recoverySession ? L("Choose a new password for your account.", "உங்கள் கணக்கிற்கு புதிய கடவுச்சொல்லைத் தேர்வுசெய்யவும்.") : <>{L("Enter the reset code emailed to", "அனுப்பப்பட்ட மீட்டமைப்புக் குறியீட்டை உள்ளிடவும்")} <strong>{email}</strong>.</>}</p></div>
+            <div className="auth-copy"><span className="eyebrow">{L("Reset password", "கடவுச்சொல் மீட்டமை")}</span><h1>{L("Set a new password", "புதிய கடவுச்சொல் அமைக்கவும்")}</h1><p>{L("Choose a new password for your account.", "உங்கள் கணக்கிற்கு புதிய கடவுச்சொல்லைத் தேர்வுசெய்யவும்.")}</p></div>
             <form className="auth-form" onSubmit={handleForgotReset}>
-              {!recoverySession ? <label>{L("Reset code", "மீட்டமைப்புக் குறியீடு")}<input inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))} required /></label> : null}
               <label>{L("New password", "புதிய கடவுச்சொல்")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
               <label>{L("Confirm new password", "புதிய கடவுச்சொல்லை உறுதிப்படுத்து")}<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
               {feedback}
               <button className="primary-button" disabled={saving} type="submit">{saving ? L("Updating...", "புதுப்பிக்கிறது...") : L("Update password", "கடவுச்சொல்லைப் புதுப்பி")}</button>
-              <div className="auth-actions">{!recoverySession ? <button className="link-button" disabled={cooldown > 0} onClick={handleResend} type="button">{cooldown > 0 ? L(`Resend in ${cooldown}s`, `${cooldown}வி இல் மீண்டும்`) : L("Resend code", "மீண்டும் அனுப்பு")}</button> : null}<button className="link-button" onClick={() => switchMode("signin")} type="button">{L("Back to sign in", "உள்நுழைவுக்குத் திரும்பு")}</button></div>
+              <div className="auth-actions"><button className="link-button" onClick={() => switchMode("signin")} type="button">{L("Back to sign in", "உள்நுழைவுக்குத் திரும்பு")}</button></div>
             </form>
           </> : null}
         </section>
