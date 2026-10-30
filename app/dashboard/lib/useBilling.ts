@@ -26,11 +26,14 @@ type RazorpayInstance = { open: () => void; on: (event: string, handler: (failur
 
 function paymentFailureMessage(failure?: RazorpayPaymentFailure) {
   const error = failure?.error;
-  if (!error) return "Payment failed. Please try again.";
-  const details = [error.description, error.reason].filter(Boolean).join(" — ");
-  const context = [error.source, error.step].filter(Boolean).join(" / ");
-  const code = error.code ? ` [${error.code}]` : "";
-  return `Payment failed${code}: ${details || "Razorpay could not complete this payment."}${context ? ` (${context})` : ""}`;
+  // The customer's own bank caps how many UPI AutoPay mandates an account can have — not our account.
+  if (error?.reason === "mandate_creation_limit_exceeded") {
+    return "Your bank has reached its limit for UPI AutoPay set-ups on this account. Please use a different bank account, or pay by card instead.";
+  }
+  // Show Razorpay's own plain-English description when it's short; never the raw gateway/source codes.
+  const desc = error?.description?.trim();
+  const base = desc && desc.length <= 160 ? desc : "Payment could not be completed.";
+  return `${base} If UPI keeps failing, you can pay by card instead.`;
 }
 
 async function authToken(): Promise<string | null> {
@@ -92,7 +95,7 @@ export function useBilling() {
               headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
               body: JSON.stringify(resp)
             });
-            if (verify.ok) { await refresh(); } else { const vj = await verify.json().catch(() => ({})); setError(vj.error || "We could not confirm the payment yet. If money was deducted it will reflect shortly — refresh in a minute."); }
+            if (verify.ok) { setError(""); await refresh(); } else { const vj = await verify.json().catch(() => ({})); setError(vj.error || "We could not confirm the payment yet. If money was deducted it will reflect shortly — refresh in a minute."); }
           } catch {
             setError("We could not confirm the payment yet. Refresh in a minute.");
           } finally { setBusy(false); }
