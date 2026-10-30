@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../supabaseClient";
 import { formatDate } from "../lib/format";
 
-type Invoice = { id: string; amount: number | null; status: string; paymentId: string | null; date: string | null; receiptUrl: string | null };
+type Invoice = { id: string; amount: number | null; status: string; paymentId: string | null; date: string | null; periodStart: string | null; periodEnd: string | null; receiptUrl: string | null };
 type HistoryData = { invoices: Invoice[]; nextChargeAt: string | null; status: string | null };
 
 function rupees(amount: number | null) {
@@ -62,6 +62,7 @@ export function BillingHistory({ refreshKey = 0 }: { refreshKey?: number | strin
               <tr style={{ textAlign: "left", color: "var(--muted)", borderBottom: "1px solid var(--line)" }}>
                 <th style={{ padding: "8px 10px", fontWeight: 600 }}>Date</th>
                 <th style={{ padding: "8px 10px", fontWeight: 600 }}>Amount</th>
+                <th style={{ padding: "8px 10px", fontWeight: 600 }}>Billing period</th>
                 <th style={{ padding: "8px 10px", fontWeight: 600 }}>Status</th>
                 <th style={{ padding: "8px 10px", fontWeight: 600 }}>Transaction ID</th>
                 <th style={{ padding: "8px 10px", fontWeight: 600 }}>Receipt</th>
@@ -74,6 +75,7 @@ export function BillingHistory({ refreshKey = 0 }: { refreshKey?: number | strin
                   <tr key={inv.id} style={{ borderBottom: "1px solid var(--line)" }}>
                     <td style={{ padding: "10px" }}>{inv.date ? formatDate(inv.date) : "—"}</td>
                     <td style={{ padding: "10px", fontWeight: 600 }}>{rupees(inv.amount)}</td>
+                    <td style={{ padding: "10px", color: "var(--muted)", whiteSpace: "nowrap" }}>{inv.periodStart && inv.periodEnd ? `${formatDate(inv.periodStart)} – ${formatDate(inv.periodEnd)}` : "—"}</td>
                     <td style={{ padding: "10px" }}>
                       <span style={{ color: paid ? "var(--green)" : "var(--muted)", fontWeight: 600, textTransform: "capitalize" }}>{inv.status || "—"}</span>
                     </td>
