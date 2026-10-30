@@ -98,6 +98,11 @@ export type Purchase = {
   dehusking_team_id: number | null;
   /** Team paid for harvesting when the trader bears it. */
   harvesting_team_id: number | null;
+  /** Expected sale (planning): rate/buyer the trader expects to sell the coconut and husk for. */
+  expected_sale_rate_per_kg: number;
+  expected_buyer_id: number | null;
+  expected_husk_price_per_piece: number;
+  expected_husk_buyer_id: number | null;
   average_weight_kg: number;
   average_price_per_piece: number;
   additional_credit_amount: number;
