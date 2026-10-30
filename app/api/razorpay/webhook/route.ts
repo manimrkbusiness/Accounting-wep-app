@@ -1,4 +1,5 @@
 import { adminClient, verifyWebhookSignature } from "../shared";
+import { sendSubscriptionEmail } from "../../../lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   if (!verifyWebhookSignature(raw, signature)) {
     return Response.json({ ok: false }, { status: 400 });
   }
-  let event: { event?: string; payload?: { subscription?: { entity?: { id?: string; current_end?: number } } } };
+  let event: { event?: string; payload?: { subscription?: { entity?: { id?: string; current_end?: number } }; payment?: { entity?: { amount?: number } } } };
   try {
     event = JSON.parse(raw);
   } catch {
@@ -39,6 +40,20 @@ export async function POST(request: Request) {
   try {
     const admin = adminClient();
     await admin.from("subscriptions").update(update).eq("razorpay_subscription_id", subscriptionId);
+
+    // On a successful charge, email a payment receipt to the subscriber (no-op until Resend is set up).
+    if (type === "subscription.charged") {
+      const { data: sub } = await admin.from("subscriptions").select("trader_id, current_period_end").eq("razorpay_subscription_id", subscriptionId).maybeSingle();
+      if (sub?.trader_id) {
+        const { data: prof } = await admin.from("profiles").select("email, full_name").eq("id", sub.trader_id).maybeSingle();
+        if (prof?.email) {
+          const paise = event.payload?.payment?.entity?.amount;
+          const amount = typeof paise === "number" ? `₹${(paise / 100).toLocaleString("en-IN")}` : undefined;
+          const nextRenewal = sub.current_period_end ? new Date(sub.current_period_end as string).toLocaleDateString("en-IN", { dateStyle: "medium" }) : undefined;
+          await sendSubscriptionEmail(prof.email as string, (prof.full_name as string) ?? null, { amount, nextRenewal });
+        }
+      }
+    }
   } catch {
     // Acknowledge anyway; Razorpay retries, and a transient failure shouldn't 500 the webhook.
   }

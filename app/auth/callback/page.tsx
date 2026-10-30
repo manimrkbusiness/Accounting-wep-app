@@ -22,11 +22,22 @@ export default function AuthCallbackPage() {
     const described = params.get("error_description") || params.get("error");
     if (described) { setError(described); return; }
 
+    let notified = false;
+    // On a genuine Google sign-in (SIGNED_IN, not a password-reset), ask the server to send the
+    // welcome / new-sign-in email. keepalive lets the request finish through the redirect.
+    const notify = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (token) await fetch("/api/account/notify", { method: "POST", headers: { Authorization: `Bearer ${token}` }, keepalive: true });
+      } catch { /* non-blocking */ }
+    };
     const go = () => { if (active) router.replace(recovered ? "/login?reset=1" : "/login"); };
     supabase.auth.getSession().then(({ data }) => { if (active && data.session) go(); });
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;
       if (event === "PASSWORD_RECOVERY") recovered = true;
+      if (event === "SIGNED_IN" && !notified) { notified = true; void notify(); }
       if (nextSession) go();
     });
     const timeout = setTimeout(() => {

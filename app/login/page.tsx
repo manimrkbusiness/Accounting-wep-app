@@ -132,6 +132,15 @@ export default function LoginPage() {
   function clearFeedback() { setMessage(""); setError(""); }
   function switchMode(next: Mode) { setMode(next); setFlow("auth"); clearFeedback(); }
   function rememberConsent() { try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ terms: termsAccepted, marketing: marketingConsent })); } catch { /* ignore */ } }
+  // Fire-and-forget: the server sends the welcome / new-sign-in email (it decides which, and throttles).
+  async function notifyAuthEvent() {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+      await fetch("/api/account/notify", { method: "POST", headers: { Authorization: `Bearer ${token}` }, keepalive: true });
+    } catch { /* non-blocking */ }
+  }
 
   async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -157,6 +166,7 @@ export default function LoginPage() {
         if (signinError) throw signinError;
         setSession(data.session);
         setMessage("Signed in.");
+        void notifyAuthEvent();
       }
     } catch (caughtError) {
       const raw = caughtError instanceof Error ? caughtError.message.toLowerCase() : "";
@@ -256,6 +266,7 @@ export default function LoginPage() {
     if (profileError) { setError(profileError.message.includes("already linked") || profileError.code === "23505" ? "This mobile number is already linked to another account." : profileError.message); return; }
     try { localStorage.removeItem(CONSENT_KEY); } catch { /* ignore */ }
     setProfile(data as Profile);
+    void notifyAuthEvent();
   }
 
   async function signOut() {
