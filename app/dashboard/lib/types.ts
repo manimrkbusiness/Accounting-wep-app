@@ -90,8 +90,14 @@ export type Purchase = {
   husk_only: boolean;
   /** "Weight + husk": bought with husk by weight; farmer paid in full, trader dehusks and keeps the husk. */
   husk_included: boolean;
-  /** Trader-paid dehusking rate per 1,000 pieces for a weight+husk purchase (booked as an expense, not deducted). */
+  /** Trader-paid dehusking rate per 1,000 pieces (booked as an expense to the dehusking team, not deducted). */
   trader_dehusking_rate_per_1000: number;
+  /** Trader-paid harvesting rate per 1,000 pieces (booked as an expense to the harvesting team, not deducted). */
+  trader_harvesting_rate_per_1000: number;
+  /** Team paid for dehusking when the trader bears it. */
+  dehusking_team_id: number | null;
+  /** Team paid for harvesting when the trader bears it. */
+  harvesting_team_id: number | null;
   average_weight_kg: number;
   average_price_per_piece: number;
   additional_credit_amount: number;

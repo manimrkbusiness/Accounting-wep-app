@@ -13,6 +13,8 @@ import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNu
 import { coconutColors, huskColors, huskColorForCoconut, processingTypes, type CoconutColor, type HuskColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
 import { defaultSettings } from "../../components/CostSettingsPanel";
 
+type LaborMode = "none" | "farmer" | "trader";
+
 type PurchaseForm = {
   id?: number;
   farmer_id: string;
@@ -50,6 +52,11 @@ type PurchaseForm = {
   // "Weight + husk" method: farmer paid full weight, trader dehusks and keeps the husk.
   husk_included: boolean;
   trader_dehusking_rate_per_1000: string;
+  // Who bears dehusking / harvesting: the farmer (deducted) or the trader (paid to a team).
+  dehusking_mode: LaborMode;
+  harvesting_mode: LaborMode;
+  dehusking_team_id: string;
+  harvesting_team_id: string;
 };
 
 function blankForm(settings: TraderSettings): PurchaseForm {
@@ -86,15 +93,21 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     additional_head_id: "",
     additional_rate: String(settings.tree_collection_rate_per_1000),
     husk_included: false,
-    trader_dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000)
+    trader_dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000),
+    dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
+    harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
+    dehusking_team_id: "",
+    harvesting_team_id: ""
   };
 }
 
 function formFromPurchase(purchase: Purchase, settings: TraderSettings): PurchaseForm {
   // A deduction that was unchecked is stored as a 0 rate. Load the current default
   // instead, so ticking the box on edit applies a real deduction.
-  const dehuskingRate = Number(purchase.husk_removal_rate_per_1000) > 0 ? purchase.husk_removal_rate_per_1000 : settings.husk_removal_rate_per_1000;
-  const harvestingRate = Number(purchase.tree_collection_rate_per_1000) > 0 ? purchase.tree_collection_rate_per_1000 : settings.tree_collection_rate_per_1000;
+  const dehuskingRate = Number(purchase.husk_removal_rate_per_1000) > 0 ? purchase.husk_removal_rate_per_1000 : Number(purchase.trader_dehusking_rate_per_1000) > 0 ? purchase.trader_dehusking_rate_per_1000 : settings.husk_removal_rate_per_1000;
+  const harvestingRate = Number(purchase.tree_collection_rate_per_1000) > 0 ? purchase.tree_collection_rate_per_1000 : Number(purchase.trader_harvesting_rate_per_1000) > 0 ? purchase.trader_harvesting_rate_per_1000 : settings.tree_collection_rate_per_1000;
+  const dehuskingMode: LaborMode = Number(purchase.husk_removal_rate_per_1000) > 0 ? "farmer" : Number(purchase.trader_dehusking_rate_per_1000) > 0 ? "trader" : "none";
+  const harvestingMode: LaborMode = Number(purchase.tree_collection_rate_per_1000) > 0 ? "farmer" : Number(purchase.trader_harvesting_rate_per_1000) > 0 ? "trader" : "none";
   return {
     id: purchase.id,
     farmer_id: String(purchase.farmer_id),
@@ -129,7 +142,11 @@ function formFromPurchase(purchase: Purchase, settings: TraderSettings): Purchas
     additional_head_id: "",
     additional_rate: String(harvestingRate),
     husk_included: purchase.husk_included,
-    trader_dehusking_rate_per_1000: Number(purchase.trader_dehusking_rate_per_1000) > 0 ? String(purchase.trader_dehusking_rate_per_1000) : String(settings.husk_removal_rate_per_1000)
+    trader_dehusking_rate_per_1000: Number(purchase.trader_dehusking_rate_per_1000) > 0 ? String(purchase.trader_dehusking_rate_per_1000) : String(settings.husk_removal_rate_per_1000),
+    dehusking_mode: dehuskingMode,
+    harvesting_mode: harvestingMode,
+    dehusking_team_id: purchase.dehusking_team_id ? String(purchase.dehusking_team_id) : "",
+    harvesting_team_id: purchase.harvesting_team_id ? String(purchase.harvesting_team_id) : ""
   };
 }
 
@@ -211,6 +228,7 @@ export default function NewPurchasePage() {
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   // Only the harvesting team can be named as who harvested; dehuskers and loaders are their own teams.
   const harvesters = useMemo(() => ws.employees.filter((emp) => emp.active && emp.role === "harvester"), [ws.employees]);
+  const dehuskers = useMemo(() => ws.employees.filter((emp) => emp.active && emp.role === "dehusker"), [ws.employees]);
   const allocated = form.id ? ws.stock.get(form.id)?.soldPieces ?? 0 : 0;
   const purchaseHasContent = Boolean(form.farmer_id || form.coconut_quantity || form.net_weight_kg || form.rate_per_kg || form.rate_per_piece || form.harvest_ids.length || form.notes.trim());
 
@@ -277,6 +295,8 @@ export default function NewPurchasePage() {
     if (calculation.purchaseMode === "weight") {
       if (calculation.net <= 0) { ws.fail("Enter the net weight in kilograms from the weighbridge."); return; }
       if (!form.rate_per_kg || toNumber(form.rate_per_kg) < 0) { ws.fail("Enter the purchase rate per kilogram."); return; }
+      if (form.dehusking_mode === "trader" && !form.dehusking_team_id) { ws.fail("Pick the team you pay for dehusking, or switch it to Farmer pays."); return; }
+      if (form.harvesting_mode === "trader" && !form.harvesting_team_id) { ws.fail("Pick the team you pay for harvesting, or switch it to Farmer pays."); return; }
     } else if (!form.rate_per_piece || toNumber(form.rate_per_piece) < 0) { ws.fail("Enter the purchase rate per coconut."); return; }
     if (calculation.advance > calculation.total) { ws.fail("Advance cannot be greater than the calculated purchase amount."); return; }
     const creditReason = form.additional_credit_reason.trim();
@@ -295,20 +315,23 @@ export default function NewPurchasePage() {
       purchase_mode: calculation.purchaseMode,
       processing_type: calculation.purchaseMode === "quantity" ? "mottai" : form.processing_type,
       coconut_quantity: calculation.quantity,
-      dehusking_pieces: calculation.purchaseMode === "weight" && form.deduct_dehusking && form.dehusking_pieces.trim() ? calculation.dehuskingPieces : null,
-      harvesting_pieces: calculation.purchaseMode === "weight" && form.deduct_harvesting && form.harvesting_pieces.trim() ? calculation.harvestingPieces : null,
+      dehusking_pieces: calculation.purchaseMode === "weight" && form.dehusking_mode !== "none" && form.dehusking_pieces.trim() ? calculation.dehuskingPieces : null,
+      harvesting_pieces: calculation.purchaseMode === "weight" && form.harvesting_mode !== "none" && form.harvesting_pieces.trim() ? calculation.harvestingPieces : null,
       net_weight_kg: calculation.purchaseMode === "weight" ? calculation.net : 0,
       wastage_percent: calculation.purchaseMode === "weight" && form.processing_type === "kudume" ? calculation.wastagePercent : 0,
       rate_per_kg: calculation.purchaseMode === "weight" ? toNumber(form.rate_per_kg) : 0,
       rate_per_piece: calculation.purchaseMode === "quantity" ? toNumber(form.rate_per_piece) : 0,
-      husk_removal_rate_per_1000: calculation.purchaseMode === "weight" && form.deduct_dehusking ? toNumber(form.husk_removal_rate_per_1000) : 0,
-      tree_collection_rate_per_1000: calculation.purchaseMode === "weight" && form.deduct_harvesting ? toNumber(form.tree_collection_rate_per_1000) : 0,
+      husk_removal_rate_per_1000: calculation.purchaseMode === "weight" && form.dehusking_mode === "farmer" ? toNumber(form.husk_removal_rate_per_1000) : 0,
+      tree_collection_rate_per_1000: calculation.purchaseMode === "weight" && form.harvesting_mode === "farmer" ? toNumber(form.tree_collection_rate_per_1000) : 0,
       husk_price_per_piece: calculation.purchaseMode === "weight" && form.buys_husk ? toNumber(form.husk_price_per_piece) : 0,
       buys_husk: calculation.purchaseMode === "weight" ? form.buys_husk : false,
       husk_color: calculation.purchaseMode === "weight" && form.buys_husk ? form.husk_color : null,
       husk_pieces: calculation.purchaseMode === "weight" && form.buys_husk && form.husk_pieces.trim() ? calculation.huskPieces : null,
       husk_included: calculation.purchaseMode === "weight" && form.husk_included,
-      trader_dehusking_rate_per_1000: 0,
+      trader_dehusking_rate_per_1000: calculation.purchaseMode === "weight" && form.dehusking_mode === "trader" ? toNumber(form.husk_removal_rate_per_1000) : 0,
+      trader_harvesting_rate_per_1000: calculation.purchaseMode === "weight" && form.harvesting_mode === "trader" ? toNumber(form.tree_collection_rate_per_1000) : 0,
+      dehusking_team_id: calculation.purchaseMode === "weight" && form.dehusking_mode === "trader" && form.dehusking_team_id ? Number(form.dehusking_team_id) : null,
+      harvesting_team_id: calculation.purchaseMode === "weight" && form.harvesting_mode === "trader" && form.harvesting_team_id ? Number(form.harvesting_team_id) : null,
       advance_amount: calculation.advance,
       additional_credit_amount: calculation.additionalCredit,
       additional_credit_reason: calculation.additionalCredit > 0 ? creditReason : null,
@@ -355,6 +378,16 @@ export default function NewPurchasePage() {
 
   const setField = <K extends keyof PurchaseForm>(key: K, value: PurchaseForm[K]) => setForm((current) => ({ ...current, [key]: value }));
 
+  // Who bears a labor: none / farmer (deducted) / trader (paid to a team). Keep the legacy
+  // deduct_* flag in sync so the live calc still deducts only for farmer-borne labor.
+  function setLaborMode(kind: "dehusking" | "harvesting", mode: LaborMode) {
+    setForm((current) => kind === "dehusking"
+      ? { ...current, dehusking_mode: mode, deduct_dehusking: mode === "farmer" }
+      : { ...current, harvesting_mode: mode, deduct_harvesting: mode === "farmer" });
+  }
+  const traderDehuskCost = form.dehusking_mode === "trader" ? calculation.dehuskingPieces / 1000 * toNumber(form.husk_removal_rate_per_1000) : 0;
+  const traderHarvestCost = form.harvesting_mode === "trader" ? calculation.harvestingPieces / 1000 * toNumber(form.tree_collection_rate_per_1000) : 0;
+
   /** Default husk price for a colour, from Settings. */
   const huskDefaultPrice = (color: HuskColor) => color === "green" ? Number(settings.husk_price_green_per_piece) : Number(settings.husk_price_brown_per_piece);
 
@@ -362,7 +395,7 @@ export default function NewPurchasePage() {
   function applyMethod(value: "weight" | "weight_husk" | "quantity") {
     setForm((current) => {
       if (value === "quantity") {
-        return { ...current, purchase_mode: "quantity", husk_included: false, processing_type: "mottai", wastage_percent: "0" };
+        return { ...current, purchase_mode: "quantity", husk_included: false, processing_type: "mottai", wastage_percent: "0", dehusking_mode: "none", harvesting_mode: "none" };
       }
       if (value === "weight_husk") {
         // Same options as weight-based; the one difference is the husk is kept by the trader at
@@ -373,6 +406,8 @@ export default function NewPurchasePage() {
           husk_included: true,
           deduct_dehusking: Number(settings.husk_removal_rate_per_1000) > 0,
           deduct_harvesting: Number(settings.tree_collection_rate_per_1000) > 0,
+          dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
+          harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
           buys_husk: true,
           husk_color: huskColorForCoconut(current.coconut_color),
           husk_price_per_piece: "0",
@@ -387,6 +422,8 @@ export default function NewPurchasePage() {
         husk_included: false,
         deduct_dehusking: Number(settings.husk_removal_rate_per_1000) > 0,
         deduct_harvesting: Number(settings.tree_collection_rate_per_1000) > 0,
+        dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
+        harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
         buys_husk: Number(settings.husk_price_green_per_piece) > 0,
         husk_price_per_piece: String(settings.husk_price_green_per_piece),
         wastage_percent: current.processing_type === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0"
@@ -403,26 +440,36 @@ export default function NewPurchasePage() {
   function saveRate(kind: "dehusking" | "harvesting" | "husk") {
     const value = toNumber(rateDraft);
     if (value < 0) { ws.fail("Enter a rate of 0 or more."); return; }
-    if (kind === "dehusking") setForm((current) => ({ ...current, husk_removal_rate_per_1000: String(value), deduct_dehusking: value > 0 }));
-    else if (kind === "harvesting") setForm((current) => ({ ...current, tree_collection_rate_per_1000: String(value), deduct_harvesting: value > 0 }));
+    if (kind === "dehusking") setForm((current) => ({ ...current, husk_removal_rate_per_1000: String(value) }));
+    else if (kind === "harvesting") setForm((current) => ({ ...current, tree_collection_rate_per_1000: String(value) }));
     else setForm((current) => ({ ...current, husk_price_per_piece: String(value) }));
     setRateEditor(null);
     ws.notify(`${kind === "dehusking" ? "Dehusking" : kind === "harvesting" ? "Coconut harvesting" : "Husk"} ${kind === "husk" ? "price" : "rate"} changed for this purchase only. Your default in Settings is unchanged.`);
   }
 
   const deductionCard = (kind: "dehusking" | "harvesting") => {
-    const checked = kind === "dehusking" ? form.deduct_dehusking : form.deduct_harvesting;
+    const mode = kind === "dehusking" ? form.dehusking_mode : form.harvesting_mode;
     const rate = toNumber(kind === "dehusking" ? form.husk_removal_rate_per_1000 : form.tree_collection_rate_per_1000);
-    const label = kind === "dehusking" ? "Deduct dehusking" : "Deduct coconut harvesting";
+    const title = kind === "dehusking" ? "Dehusking" : "Coconut harvesting";
     const piecesField = kind === "dehusking" ? "dehusking_pieces" : "harvesting_pieces";
+    const teamField = kind === "dehusking" ? "dehusking_team_id" : "harvesting_team_id";
+    const teams = kind === "dehusking" ? dehuskers : harvesters;
     const laborPieces = kind === "dehusking" ? calculation.dehuskingPieces : calculation.harvestingPieces;
-    const cost = kind === "dehusking" ? calculation.huskRemovalCost : calculation.treeCollectionCost;
+    const shownCost = mode === "trader" ? (kind === "dehusking" ? traderDehuskCost : traderHarvestCost) : (kind === "dehusking" ? calculation.huskRemovalCost : calculation.treeCollectionCost);
     return (
       <div className="deduction-card" key={kind}>
-        <label className="checkbox-field"><input type="checkbox" checked={checked} onChange={(event) => setField(kind === "dehusking" ? "deduct_dehusking" : "deduct_harvesting", event.target.checked)} /><span><strong>{label}</strong><small>Trader pays this labor and subtracts it from the farmer amount.</small></span></label>
-        {checked ? <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /><span className="field-hint">{kind === "dehusking" ? "Pieces the dehusking team handled, including any dropped coconuts the farmer added. The husk credit and your husk in hand follow this count." : "Only the pieces the harvesting team took from the trees. Naturally dropped coconuts are not counted here."}</span></label> : null}
-        <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{checked && laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(cost)} deducted` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
-        {rateEditor === kind ? <div className="inline-form"><label>{label} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only, for example a special rate for this farmer. The default in Settings stays as it is.</span></div> : null}
+        <label className="checkbox-field"><input type="checkbox" checked={mode !== "none"} onChange={(event) => setLaborMode(kind, event.target.checked ? "farmer" : "none")} /><span><strong>{title}</strong><small>Who pays this labor — the farmer, or you.</small></span></label>
+        {mode !== "none" ? <>
+          <div className="segmented">
+            <button className={mode === "farmer" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "farmer")}><strong>Farmer pays</strong><span>Deducted from the farmer</span></button>
+            <button className={mode === "trader" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "trader")}><strong>You pay</strong><span>Booked to your team</span></button>
+          </div>
+          {mode === "trader" ? <label>{title} team<select value={form[teamField]} onChange={(event) => setField(teamField, event.target.value)}><option value="">Select a team</option>{teams.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{teams.length === 0 ? <span className="field-hint">No {kind === "dehusking" ? "dehusking" : "harvesting"} team yet. Add one on <Link href="/dashboard/team">Team &amp; vehicles</Link>.</span> : <span className="field-hint">The wage is booked to this team under Expenses and shows in their history with Paid / Pending.</span>}</label> : null}
+          <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /></label>
+          <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(shownCost)} ${mode === "trader" ? "you pay" : "deducted"}` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
+          {rateEditor === kind ? <div className="inline-form"><label>{title} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only. The default in Settings stays as it is.</span></div> : null}
+          {kind === "harvesting" && mode === "trader" ? <span className="field-hint">If you already recorded this load in &quot;Harvested coconuts&quot; above, leave this off so the harvesting wage is not counted twice.</span> : null}
+        </> : null}
       </div>
     );
   };
@@ -467,7 +514,7 @@ export default function NewPurchasePage() {
           {form.purchase_mode === "weight" ? <label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={form.rate_per_kg} onChange={(event) => setField("rate_per_kg", event.target.value)} required /></label> : <label>Price per coconut (INR)<input type="number" min="0" step="0.01" value={form.rate_per_piece} onChange={(event) => setField("rate_per_piece", event.target.value)} required /><span className="field-hint">The purchase total is pieces multiplied by this price.</span></label>}
           <label>Advance paid (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later settlements are recorded from Purchase history.</span></label>
         </div>
-        {form.purchase_mode === "weight" ? <fieldset className="deduction-options"><legend>Farmer deductions</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">Leave a deduction unchecked when the trader bears that cost. Each deduction is worked out on its own piece count; the main coconut quantity above is what goes into stock and the lorry. Rates come from Settings; Edit rate changes them for this purchase only.</span></fieldset> : <p className="field-hint">Per-nut purchases have no farmer deductions. You pay for dehusking (at the Stock stage) and harvesting (on Coconut Harvesting); the farmer is paid the full per-nut amount.</p>}
+        {form.purchase_mode === "weight" ? <fieldset className="deduction-options"><legend>Dehusking &amp; harvesting</legend><div className="checkbox-grid">{deductionCard("dehusking")}{deductionCard("harvesting")}</div><span className="field-hint">For each one, choose <strong>Farmer pays</strong> (taken off the farmer amount) or <strong>You pay</strong> (booked to the team you pick, under Expenses, shown in their history). Each is worked out on its own piece count; the main coconut quantity above is what goes into stock and the lorry.</span></fieldset> : <p className="field-hint">Per-nut purchases have no farmer deductions. You pay for dehusking (at the Stock stage) and harvesting (on Coconut Harvesting); the farmer is paid the full per-nut amount.</p>}
         {method === "weight" ? <fieldset className="deduction-options"><legend>Farmer credit — buying husk</legend>
           <div className="deduction-card">
             <label className="checkbox-field"><input type="checkbox" checked={form.buys_husk} onChange={(event) => setField("buys_husk", event.target.checked)} /><span><strong>Buy the husk from the farmer</strong><small>Tick when you keep the husk to resell. The husk price is credited to the farmer and the husk goes into your husk stock.</small></span></label>
@@ -503,10 +550,12 @@ export default function NewPurchasePage() {
           <div><dt>Average weight per nut{calculation.purchaseMode === "weight" ? <small className="formula">{formatNumber(calculation.net)} kg ÷ {formatNumber(calculation.quantity, 0)} pieces</small> : null}</dt><dd>{calculation.purchaseMode === "weight" ? `${formatNumber(calculation.averageWeightGrams, 1)} g / nut` : "Not used"}</dd></div>
           <div><dt>Average price per nut<small className="formula">{formatCurrency(calculation.total)} ÷ {formatNumber(calculation.quantity, 0)} pieces</small></dt><dd>{formatCurrency(calculation.averagePricePerPiece)} / nut</dd></div>
           <div className="calculation-credit"><dt>Coconut purchase<small className="formula">{calculation.purchaseMode === "weight" ? `${formatNumber(calculation.payable)} kg × ${formatCurrency(toNumber(form.rate_per_kg))} / kg` : `${formatNumber(calculation.quantity, 0)} pieces × ${formatCurrency(toNumber(form.rate_per_piece))} / nut`}</small></dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div>
-          {calculation.purchaseMode === "weight" ? <><div className="calculation-deduction"><dt>Dehusking<small className="formula">{form.deduct_dehusking ? `${formatNumber(calculation.dehuskingPieces, 0)} pieces ÷ 1,000 × ${formatCurrency(toNumber(form.husk_removal_rate_per_1000))}` : "Not deducted from the farmer"}</small></dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div>
-          <div className="calculation-deduction"><dt>Coconut harvesting<small className="formula">{form.deduct_harvesting ? `${formatNumber(calculation.harvestingPieces, 0)} pieces ÷ 1,000 × ${formatCurrency(toNumber(form.tree_collection_rate_per_1000))}` : "Not deducted from the farmer"}</small></dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div></> : null}
+          {calculation.purchaseMode === "weight" && form.dehusking_mode === "farmer" ? <div className="calculation-deduction"><dt>Dehusking (farmer)<small className="formula">{formatNumber(calculation.dehuskingPieces, 0)} pieces ÷ 1,000 × {formatCurrency(toNumber(form.husk_removal_rate_per_1000))}</small></dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div> : null}
+          {calculation.purchaseMode === "weight" && form.harvesting_mode === "farmer" ? <div className="calculation-deduction"><dt>Coconut harvesting (farmer)<small className="formula">{formatNumber(calculation.harvestingPieces, 0)} pieces ÷ 1,000 × {formatCurrency(toNumber(form.tree_collection_rate_per_1000))}</small></dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div> : null}
           {calculation.buysHusk && !form.husk_included ? <div className="calculation-credit"><dt>Husk credit ({form.husk_color} husk)<small className="formula">{formatNumber(calculation.huskPieces, 0)} husk pieces × {formatCurrency(toNumber(form.husk_price_per_piece))} / piece</small></dt><dd>{formatCurrency(calculation.huskPriceIncome)}</dd></div> : null}
           <div className="calculation-total"><dt>Net payable to farmer<small className="formula">{calculation.purchaseMode === "weight" ? `${formatCurrency(calculation.coconutTotal)}${calculation.huskPriceIncome > 0 ? ` + ${formatCurrency(calculation.huskPriceIncome)} husk` : ""} − ${formatCurrency(calculation.huskRemovalCost)} − ${formatCurrency(calculation.treeCollectionCost)}` : `${formatCurrency(calculation.coconutTotal)} (full per-nut amount, no deductions)`}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
+          {traderDehuskCost > 0 ? <div className="calculation-deduction"><dt>Your dehusking cost<small className="formula">{formatNumber(calculation.dehuskingPieces, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.husk_removal_rate_per_1000))} · booked to your team</small></dt><dd>{formatCurrency(traderDehuskCost)}</dd></div> : null}
+          {traderHarvestCost > 0 ? <div className="calculation-deduction"><dt>Your harvesting cost<small className="formula">{formatNumber(calculation.harvestingPieces, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.tree_collection_rate_per_1000))} · booked to your team</small></dt><dd>{formatCurrency(traderHarvestCost)}</dd></div> : null}
           {form.husk_included ? <div className="calculation-credit"><dt>Husk you keep<small className="formula">{formatNumber(huskKeptPieces, 0)} pieces × {formatCurrency(huskDefaultPrice(form.husk_color))} est. · yours to sell, no cost</small></dt><dd>{formatCurrency(huskKeptPieces * huskDefaultPrice(form.husk_color))}</dd></div> : null}
           <div><dt>Advance</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
           {calculation.additionalCredit > 0 ? <div className="calculation-credit"><dt>Additional credit</dt><dd>{formatCurrency(calculation.additionalCredit)}</dd></div> : null}
