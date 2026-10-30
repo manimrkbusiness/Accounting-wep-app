@@ -3,7 +3,7 @@ import { adminClient, billingConfigured, getUserId, hasAccess } from "../shared"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Returns whether the signed-in trader can use the workspace, creating their 14-day trial row the
+// Returns whether the signed-in trader can use the workspace, creating their 9-day trial row the
 // first time. Fails OPEN (access: true) on any problem, so a billing issue never locks the app.
 export async function GET(request: Request) {
   if (!billingConfigured()) return Response.json({ access: true, status: "unconfigured" });

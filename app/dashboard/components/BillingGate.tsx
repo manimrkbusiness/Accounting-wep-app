@@ -12,7 +12,7 @@ function daysLeft(iso: string) {
 type Notice = { tone: "info" | "warn"; text: ReactNode; action: string };
 
 /**
- * Gates the workspace behind a 14-day trial, then a ₹519/month Razorpay subscription, and surfaces a
+ * Gates the workspace behind a 9-day trial, then a ₹519/month Razorpay subscription, and surfaces a
  * banner for every in-between state (trial ending, cancellation scheduled, payment due, paused).
  * Fails open: it only blocks when the server explicitly says access is false.
  */
@@ -27,7 +27,7 @@ export function BillingGate({ children }: { children: ReactNode }) {
         <section className="auth-panel" style={{ maxWidth: 560, width: "100%", textAlign: "left", display: "grid", gap: 14 }}>
           <span className="eyebrow">BizzzTrack</span>
           <h1 style={{ margin: 0 }}>{expiredTrial ? "Your free trial has ended" : state?.status === "halted" ? "Your subscription is paused" : "Subscription needed"}</h1>
-          <p style={{ margin: 0 }}>Keep your full Coconut Trade Desk — purchases, stock, sales, husk, team, cash book and reports — for <strong>{PLAN_PRICE_LABEL} / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
+          <p style={{ margin: 0 }}>Your workspace is locked. To view or add any entries again — purchases, stock, sales, husk, team, cash book and reports — continue for <strong>{PLAN_PRICE_LABEL} / month</strong>. Pay with UPI, Google Pay, PhonePe, card or net-banking; it renews automatically and you can cancel anytime.</p>
           <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6, color: "var(--muted)", fontSize: "0.9rem" }}>
             <li>Everything you already use, nothing removed</li>
             <li>Automatic monthly billing after you authorize once</li>

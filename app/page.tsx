@@ -141,7 +141,7 @@ export default function LandingPage() {
 
   const primaryCta = session
     ? { href: "/dashboard", label: L("Open workspace", "பணியிடத்தைத் திறக்க") }
-    : { href: "/login", label: L("Start free — 14-day trial", "இலவசம் — 14 நாள் சோதனை") };
+    : { href: "/login", label: L("Start free — 9-day trial", "இலவசம் — 9 நாள் சோதனை") };
 
   const features = [
     { icon: ShoppingCart, title: L("Coconut purchases", "தேங்காய் கொள்முதல்"), body: L("Record every lorry from every farmer — by weight or per nut. Husk credit, labour and advances are worked out for you.", "ஒவ்வொரு விவசாயியிடமிருந்தும் ஒவ்வொரு லாரியையும் பதிவு செய்யுங்கள் — எடை அல்லது தேங்காய் எண்ணிக்கை மூலம். மட்டை விலை, கூலி, முன்பணம் தானாகக் கணக்கிடப்படும்.") },
@@ -182,7 +182,7 @@ export default function LandingPage() {
               <Link className="landing-btn solid big" href={primaryCta.href}>{primaryCta.label}</Link>
               <a className="landing-btn ghost big" href="#features">{L("See how it works", "எப்படி வேலை செய்கிறது")}</a>
             </div>
-            <p className="hero-note">{L("14-day free trial · then ₹499/month · cancel anytime", "14 நாள் இலவச சோதனை · பின் ₹499/மாதம் · எப்போது வேண்டுமானாலும் ரத்து")}</p>
+            <p className="hero-note">{L("9-day free trial · then ₹519/month · cancel anytime", "9 நாள் இலவச சோதனை · பின் ₹519/மாதம் · எப்போது வேண்டுமானாலும் ரத்து")}</p>
           </div>
           <div className="hero-visual reveal" aria-hidden="true">
             <div className="hero-card float-slow">
@@ -200,7 +200,7 @@ export default function LandingPage() {
 
       <section className="landing-strip reveal">
         <div><strong>6</strong><span>{L("stages, one app", "கட்டங்கள், ஒரே ஆப்")}</span></div>
-        <div><strong>₹0</strong><span>{L("to start — 14 days free", "தொடங்க — 14 நாட்கள் இலவசம்")}</span></div>
+        <div><strong>₹0</strong><span>{L("to start — 9 days free", "தொடங்க — 9 நாட்கள் இலவசம்")}</span></div>
         <div><strong>100%</strong><span>{L("private to you", "உங்களுக்கு மட்டுமே தனிப்பட்டது")}</span></div>
         <div><strong>EN · த</strong><span>{L("English & Tamil", "ஆங்கிலம் & தமிழ்")}</span></div>
       </section>
@@ -243,8 +243,8 @@ export default function LandingPage() {
       <section className="landing-section alt reveal" id="pricing">
         <div className="section-head"><span className="eyebrow">{L("Simple pricing", "எளிய விலை")}</span><h2>{L("Start free. Pay only when it helps.", "இலவசமாகத் தொடங்குங்கள். உதவும்போது மட்டும் செலுத்துங்கள்.")}</h2></div>
         <div className="price-card">
-          <div className="price-top"><span className="price-amount">₹499</span><span className="price-per">{L("/ month", "/ மாதம்")}</span></div>
-          <p className="price-trial">{L("14-day free trial — no card needed to start", "14 நாள் இலவச சோதனை — தொடங்க கார்டு தேவையில்லை")}</p>
+          <div className="price-top"><span className="price-amount">₹519</span><span className="price-per">{L("/ month", "/ மாதம்")}</span></div>
+          <p className="price-trial">{L("9-day free trial — no card needed to start", "9 நாள் இலவச சோதனை — தொடங்க கார்டு தேவையில்லை")}</p>
           <ul className="price-list">
             <li>{L("Every stage: purchase, stock, sales, husk, expenses, cash", "ஒவ்வொரு கட்டமும்: கொள்முதல், கையிருப்பு, விற்பனை, மட்டை, செலவு, பணம்")}</li>
             <li>{L("Live profit dashboard and reports", "நேரலை லாப டாஷ்போர்டு மற்றும் அறிக்கைகள்")}</li>
@@ -267,7 +267,7 @@ export default function LandingPage() {
 
       <section className="landing-final reveal">
         <h2>{L("Ready to know your real profit?", "உங்கள் உண்மையான லாபத்தை அறியத் தயாரா?")}</h2>
-        <p>{L("Set up your trader workspace in minutes — free for 14 days.", "நிமிடங்களில் உங்கள் வியாபாரி பணியிடத்தை அமைக்கவும் — 14 நாட்களுக்கு இலவசம்.")}</p>
+        <p>{L("Set up your trader workspace in minutes — free for 9 days.", "நிமிடங்களில் உங்கள் வியாபாரி பணியிடத்தை அமைக்கவும் — 9 நாட்களுக்கு இலவசம்.")}</p>
         <Link className="landing-btn solid big" href={session ? "/dashboard" : "/login"}>{primaryCta.label}</Link>
       </section>
 

@@ -21,8 +21,8 @@ export default function TermsPage() {
 
       <h2>{L("4. Subscription and billing", "4. சந்தா மற்றும் கட்டணம்")}</h2>
       <ul>
-        <li>{L("New traders get a 14-day free trial.", "புதிய வியாபாரிகளுக்கு 14 நாள் இலவச சோதனை.")}</li>
-        <li>{L("After the trial, the app costs ₹499 per month, charged through Razorpay.", "சோதனைக்குப் பிறகு, ஆப் மாதம் ₹499; Razorpay மூலம் வசூலிக்கப்படும்.")}</li>
+        <li>{L("New traders get a 9-day free trial.", "புதிய வியாபாரிகளுக்கு 9 நாள் இலவச சோதனை.")}</li>
+        <li>{L("After the trial, the app costs ₹519 per month, charged through Razorpay.", "சோதனைக்குப் பிறகு, ஆப் மாதம் ₹519; Razorpay மூலம் வசூலிக்கப்படும்.")}</li>
         <li>{L("The subscription renews each month until you cancel. You can cancel anytime; access continues until the end of the paid period.", "நீங்கள் ரத்து செய்யும் வரை சந்தா ஒவ்வொரு மாதமும் புதுப்பிக்கப்படும். எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்; கட்டணக் காலம் முடியும் வரை அணுகல் தொடரும்.")}</li>
         <li>{L("Fees already paid are generally non-refundable except where the law requires otherwise.", "ஏற்கனவே செலுத்திய கட்டணங்கள் பொதுவாகத் திரும்பப் பெறப்படாது; சட்டம் வேறுவிதமாகக் கோரும் இடங்களைத் தவிர.")}</li>
       </ul>
