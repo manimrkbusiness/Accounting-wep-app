@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   const L = (en: string, ta: string) => (lang === "ta" ? ta : en);
   return (
     <LegalShell title={L("Privacy Policy", "தனியுரிமைக் கொள்கை")} updated={L("Last updated: 23 October 2026", "கடைசியாகப் புதுப்பிக்கப்பட்டது: 23 அக்டோபர் 2026")}>
-      <p>{L("Coconut Trade Desk (\"we\", \"us\", \"the app\") helps coconut traders record their purchases, stock, sales, husk, expenses and cash. This policy explains what information we collect, how we use it, and your rights. We follow India's Digital Personal Data Protection Act, 2023.", "Coconut Trade Desk (\"நாங்கள்\", \"ஆப்\") தேங்காய் வியாபாரிகள் தங்கள் கொள்முதல், கையிருப்பு, விற்பனை, மட்டை, செலவு, பணத்தைப் பதிவு செய்ய உதவுகிறது. நாங்கள் எந்தத் தகவலைச் சேகரிக்கிறோம், அதை எப்படிப் பயன்படுத்துகிறோம், உங்கள் உரிமைகள் என்ன என்பதை இந்தக் கொள்கை விளக்குகிறது. நாங்கள் இந்தியாவின் டிஜிட்டல் தனிநபர் தரவுப் பாதுகாப்புச் சட்டம், 2023-ஐப் பின்பற்றுகிறோம்.")}</p>
+      <p>{L("BizzTrack (\"we\", \"us\", \"the app\") helps coconut traders record their purchases, stock, sales, husk, expenses and cash. This policy explains what information we collect, how we use it, and your rights. We follow India's Digital Personal Data Protection Act, 2023.", "BizzTrack (\"நாங்கள்\", \"ஆப்\") தேங்காய் வியாபாரிகள் தங்கள் கொள்முதல், கையிருப்பு, விற்பனை, மட்டை, செலவு, பணத்தைப் பதிவு செய்ய உதவுகிறது. நாங்கள் எந்தத் தகவலைச் சேகரிக்கிறோம், அதை எப்படிப் பயன்படுத்துகிறோம், உங்கள் உரிமைகள் என்ன என்பதை இந்தக் கொள்கை விளக்குகிறது. நாங்கள் இந்தியாவின் டிஜிட்டல் தனிநபர் தரவுப் பாதுகாப்புச் சட்டம், 2023-ஐப் பின்பற்றுகிறோம்.")}</p>
 
       <h2>{L("1. Information we collect", "1. நாங்கள் சேகரிக்கும் தகவல்")}</h2>
       <ul>

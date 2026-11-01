@@ -307,7 +307,7 @@ export default function LoginPage() {
   );
 
   if (loading) {
-    return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">COCONUT TRADE DESK</span><h1>{L("Loading", "ஏற்றுகிறது")}</h1><p>{L("Connecting to your private account.", "உங்கள் தனிப்பட்ட கணக்குடன் இணைக்கிறது.")}</p></section></main>;
+    return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">BIZZTRACK</span><h1>{L("Loading", "ஏற்றுகிறது")}</h1><p>{L("Connecting to your private account.", "உங்கள் தனிப்பட்ட கணக்குடன் இணைக்கிறது.")}</p></section></main>;
   }
 
   if (!session) {
@@ -315,7 +315,7 @@ export default function LoginPage() {
       <main className="page-shell auth-page">
         <section className="auth-panel">
           <div className="auth-panel-top"><Link className="link-button" href="/">← {L("Home", "முகப்பு")}</Link><LanguageToggle /></div>
-          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>{L("Farmer and trader records", "விவசாயி மற்றும் வியாபாரி பதிவுகள்")}</span></div></div>
+          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>BIZZTRACK</strong><span>{L("Farmer and trader records", "விவசாயி மற்றும் வியாபாரி பதிவுகள்")}</span></div></div>
 
           {flow === "auth" ? <>
             <div className="auth-copy"><span className="eyebrow">{L("Private workspace", "தனிப்பட்ட பணியிடம்")}</span><h1>{mode === "signup" ? L("Create your account", "உங்கள் கணக்கை உருவாக்கவும்") : L("Welcome back", "மீண்டும் வரவேற்கிறோம்")}</h1><p>{mode === "signup" ? L("Sign up with Google, or your phone, email and password.", "Google மூலம், அல்லது தொலைபேசி, மின்னஞ்சல், கடவுச்சொல் மூலம் பதிவு செய்யுங்கள்.") : L("Sign in to continue to your private workspace.", "உங்கள் தனிப்பட்ட பணியிடத்திற்குத் தொடர உள்நுழையவும்.")}</p></div>
@@ -392,7 +392,7 @@ export default function LoginPage() {
       <main className="page-shell onboarding-page">
         <section className="onboarding-panel">
           <div className="auth-panel-top"><span /><LanguageToggle /></div>
-          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>{L("Set up your workspace", "உங்கள் பணியிடத்தை அமைக்கவும்")}</span></div></div>
+          <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>BIZZTRACK</strong><span>{L("Set up your workspace", "உங்கள் பணியிடத்தை அமைக்கவும்")}</span></div></div>
           <div className="auth-copy"><span className="eyebrow">{L("One last step", "கடைசி படி")}</span><h1>{L("Finish your profile", "உங்கள் சுயவிவரத்தை முடிக்கவும்")}</h1><p>{L("Choose your workspace and confirm your mobile number.", "உங்கள் பணியிடத்தைத் தேர்ந்தெடுத்து தொலைபேசி எண்ணை உறுதிப்படுத்தவும்.")}</p></div>
           <form onSubmit={saveProfile}>
             {roleSelect}
@@ -411,5 +411,5 @@ export default function LoginPage() {
     );
   }
 
-  return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">COCONUT TRADE DESK</span><h1>{L("Opening your workspace", "உங்கள் பணியிடம் திறக்கிறது")}</h1><p>{L("Taking you to your dashboard.", "உங்கள் டாஷ்போர்டுக்கு அழைத்துச் செல்கிறோம்.")}</p></section></main>;
+  return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">BIZZTRACK</span><h1>{L("Opening your workspace", "உங்கள் பணியிடம் திறக்கிறது")}</h1><p>{L("Taking you to your dashboard.", "உங்கள் டாஷ்போர்டுக்கு அழைத்துச் செல்கிறோம்.")}</p></section></main>;
 }

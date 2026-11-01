@@ -53,7 +53,7 @@ export default function AuthCallbackPage() {
   return (
     <main className="page-shell">
       <section className="auth-panel loading-panel">
-        <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Signing you in</span></div></div>
+        <div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>BIZZTRACK</strong><span>Signing you in</span></div></div>
         {error
           ? <><h1>Sign-in link problem</h1><p className="error-message">{error}</p><button className="primary-button" onClick={() => router.replace("/")} type="button">Back to sign in</button></>
           : <><h1>Signing you in…</h1><p>One moment while we finish connecting your account.</p></>}

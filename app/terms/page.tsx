@@ -8,10 +8,10 @@ export default function TermsPage() {
   const L = (en: string, ta: string) => (lang === "ta" ? ta : en);
   return (
     <LegalShell title={L("Terms & Conditions", "விதிமுறைகள் & நிபந்தனைகள்")} updated={L("Last updated: 23 October 2026", "கடைசியாகப் புதுப்பிக்கப்பட்டது: 23 அக்டோபர் 2026")}>
-      <p>{L("These terms are an agreement between you and Coconut Trade Desk (\"we\", \"us\", \"the app\"). By creating an account or using the app, you agree to these terms and to our Privacy Policy.", "இந்த விதிமுறைகள் உங்களுக்கும் Coconut Trade Desk (\"நாங்கள்\", \"ஆப்\") க்கும் இடையிலான ஒப்பந்தம். கணக்கை உருவாக்குவதன் மூலம் அல்லது ஆப்பைப் பயன்படுத்துவதன் மூலம், இந்த விதிமுறைகளுக்கும் எங்கள் தனியுரிமைக் கொள்கைக்கும் நீங்கள் ஒப்புக்கொள்கிறீர்கள்.")}</p>
+      <p>{L("These terms are an agreement between you and BizzTrack (\"we\", \"us\", \"the app\"). By creating an account or using the app, you agree to these terms and to our Privacy Policy.", "இந்த விதிமுறைகள் உங்களுக்கும் BizzTrack (\"நாங்கள்\", \"ஆப்\") க்கும் இடையிலான ஒப்பந்தம். கணக்கை உருவாக்குவதன் மூலம் அல்லது ஆப்பைப் பயன்படுத்துவதன் மூலம், இந்த விதிமுறைகளுக்கும் எங்கள் தனியுரிமைக் கொள்கைக்கும் நீங்கள் ஒப்புக்கொள்கிறீர்கள்.")}</p>
 
       <h2>{L("1. The service", "1. சேவை")}</h2>
-      <p>{L("Coconut Trade Desk is a record-keeping tool that helps coconut traders track purchases, stock, sales, husk, expenses, cash and profit. It is a bookkeeping aid, not accounting, tax, or legal advice.", "Coconut Trade Desk என்பது தேங்காய் வியாபாரிகள் கொள்முதல், கையிருப்பு, விற்பனை, மட்டை, செலவு, பணம், லாபத்தைக் கண்காணிக்க உதவும் பதிவு கருவி. இது ஒரு கணக்குப் பதிவு உதவி; கணக்கியல், வரி அல்லது சட்ட ஆலோசனை அல்ல.")}</p>
+      <p>{L("BizzTrack is a record-keeping tool that helps coconut traders track purchases, stock, sales, husk, expenses, cash and profit. It is a bookkeeping aid, not accounting, tax, or legal advice.", "BizzTrack என்பது தேங்காய் வியாபாரிகள் கொள்முதல், கையிருப்பு, விற்பனை, மட்டை, செலவு, பணம், லாபத்தைக் கண்காணிக்க உதவும் பதிவு கருவி. இது ஒரு கணக்குப் பதிவு உதவி; கணக்கியல், வரி அல்லது சட்ட ஆலோசனை அல்ல.")}</p>
 
       <h2>{L("2. Eligibility", "2. தகுதி")}</h2>
       <p>{L("You must be at least 18 years old and able to enter a contract, and you must use the app only for lawful business purposes.", "நீங்கள் குறைந்தது 18 வயது நிரம்பியவராகவும், ஒப்பந்தம் செய்யத் தகுதியுடையவராகவும் இருக்க வேண்டும்; ஆப்பை சட்டப்பூர்வ வணிக நோக்கங்களுக்கு மட்டுமே பயன்படுத்த வேண்டும்.")}</p>

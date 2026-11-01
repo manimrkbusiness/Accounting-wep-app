@@ -86,7 +86,7 @@ export function useBilling() {
         key: json.keyId,
         subscription_id: json.subscriptionId,
         name: "BizzzTrack",
-        description: `Coconut Trade Desk — ${PLAN_PRICE_LABEL} / month`,
+        description: `BizzTrack — ${PLAN_PRICE_LABEL} / month`,
         theme: { color: "#1f7a4d" },
         handler: async (resp: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => {
           try {

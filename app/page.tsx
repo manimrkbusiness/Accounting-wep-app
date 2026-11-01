@@ -162,7 +162,7 @@ export default function LandingPage() {
     <main className="landing">
       <style>{landingCss}</style>
       <header className="landing-top">
-        <div className="landing-brand"><span className="brand-mark"><Sprout size={20} strokeWidth={2.4} aria-hidden="true" /></span><strong>COCONUT TRADE DESK</strong></div>
+        <div className="landing-brand"><span className="brand-mark"><Sprout size={20} strokeWidth={2.4} aria-hidden="true" /></span><strong>BIZZTRACK</strong></div>
         <nav className="landing-top-actions">
           <LanguageToggle />
           {session
@@ -231,7 +231,7 @@ export default function LandingPage() {
         <div className="who-grid">
           <div className="who-card">
             <h3>{L("For traders — today", "வியாபாரிகளுக்கு — இன்று")}</h3>
-            <p>{L("Coconut Trade Desk is built for you first. Keep your whole business — farmers, lorries, stock, buyers, husk, cash and profit — in one private workspace you can open on your phone.", "Coconut Trade Desk முதலில் உங்களுக்காகவே. உங்கள் முழு வணிகத்தையும் — விவசாயிகள், லாரிகள், கையிருப்பு, வாங்குபவர்கள், மட்டை, பணம், லாபம் — உங்கள் தொலைபேசியில் திறக்கக்கூடிய ஒரே தனிப்பட்ட பணியிடத்தில் வைத்திருங்கள்.")}</p>
+            <p>{L("BizzTrack is built for you first. Keep your whole business — farmers, lorries, stock, buyers, husk, cash and profit — in one private workspace you can open on your phone.", "BizzTrack முதலில் உங்களுக்காகவே. உங்கள் முழு வணிகத்தையும் — விவசாயிகள், லாரிகள், கையிருப்பு, வாங்குபவர்கள், மட்டை, பணம், லாபம் — உங்கள் தொலைபேசியில் திறக்கக்கூடிய ஒரே தனிப்பட்ட பணியிடத்தில் வைத்திருங்கள்.")}</p>
           </div>
           <div className="who-card soft">
             <h3>{L("For farmers — coming soon", "விவசாயிகளுக்கு — விரைவில்")}</h3>
@@ -272,14 +272,14 @@ export default function LandingPage() {
       </section>
 
       <footer className="landing-foot">
-        <div className="landing-brand"><span className="brand-mark small"><Sprout size={16} strokeWidth={2.4} aria-hidden="true" /></span><strong>COCONUT TRADE DESK</strong></div>
+        <div className="landing-brand"><span className="brand-mark small"><Sprout size={16} strokeWidth={2.4} aria-hidden="true" /></span><strong>BIZZTRACK</strong></div>
         <div className="foot-links">
           <Link href="/login">{L("Sign in", "உள்நுழைக")}</Link>
           <Link href="/privacy">{L("Privacy", "தனியுரிமை")}</Link>
           <Link href="/terms">{L("Terms", "விதிமுறைகள்")}</Link>
           <span className="foot-lang"><Languages size={15} aria-hidden="true" /><LanguageToggle /></span>
         </div>
-        <span className="foot-copy">© {new Date().getFullYear()} Coconut Trade Desk</span>
+        <span className="foot-copy">© {new Date().getFullYear()} BizzTrack</span>
       </footer>
     </main>
   );

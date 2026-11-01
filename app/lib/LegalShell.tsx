@@ -32,7 +32,7 @@ export function LegalShell({ title, updated, children }: { title: string; update
     <main className="legal">
       <style>{legalCss}</style>
       <header className="legal-top">
-        <Link className="legal-brand" href="/"><span className="brand-mark"><Sprout size={17} strokeWidth={2.4} aria-hidden="true" /></span><strong>COCONUT TRADE DESK</strong></Link>
+        <Link className="legal-brand" href="/"><span className="brand-mark"><Sprout size={17} strokeWidth={2.4} aria-hidden="true" /></span><strong>BIZZTRACK</strong></Link>
         <div className="legal-top-actions"><LanguageToggle /><Link className="legal-back" href="/">← {L("Home", "முகப்பு")}</Link></div>
       </header>
       <article className="legal-body">
@@ -42,7 +42,7 @@ export function LegalShell({ title, updated, children }: { title: string; update
         {children}
       </article>
       <footer className="legal-foot">
-        <span>© {new Date().getFullYear()} Coconut Trade Desk</span>
+        <span>© {new Date().getFullYear()} BizzTrack</span>
         <span><Link href="/privacy">{L("Privacy", "தனியுரிமை")}</Link> · <Link href="/terms">{L("Terms", "விதிமுறைகள்")}</Link> · <Link href="/login">{L("Sign in", "உள்நுழைக")}</Link></span>
       </footer>
     </main>

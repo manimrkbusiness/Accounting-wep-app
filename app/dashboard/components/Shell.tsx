@@ -31,7 +31,7 @@ const navLabelKey: Record<string, string> = {
 export const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", short: "Home", icon: LayoutDashboard, description: "Profit, stock, cash and outstanding balances at a glance." },
   { href: "/dashboard/harvesting", label: "Coconut Harvesting", short: "Harvest", icon: Trees, description: "Harvesting teams, the coconuts they harvest each day, and the labor you pay them." },
-  { href: "/dashboard/purchases", label: "Coconut purchases", short: "Buy", icon: ShoppingCart, description: "Coconut bought from farmers and what is still in stock." },
+  { href: "/dashboard/purchases", label: "Farmer purchase", short: "Buy", icon: ShoppingCart, description: "Coconut bought from farmers and what is still in stock." },
   { href: "/dashboard/stock", label: "Stock", short: "Stock", icon: Boxes, description: "Weigh per-nut purchases into stock so they can go into a lorry load." },
   { href: "/dashboard/sales", label: "Coconut sales", short: "Sell", icon: Truck, description: "Coconut loads sold to buyers." },
   { href: "/dashboard/husk-purchases", label: "Husk purchase", short: "Husk buy", icon: Leaf, description: "Husk bought straight from a farmer, without any coconut." },
@@ -85,16 +85,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const hasDraft = (item: NavItem) => Boolean(resumeTargets[item.href]);
 
   if (status === "loading") {
-    return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Loading workspace</h1><p>Connecting to your private trader records.</p></section></main>;
+    return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">BizzTrack</span><h1>Loading workspace</h1><p>Connecting to your private trader records.</p></section></main>;
   }
   if (status === "signed-out") {
-    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Sign in required</h1><p>Sign in to open your private trader workspace.</p><a className="primary-button" href="/login">Go to sign in</a></section></main>;
+    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">BizzTrack</span><h1>Sign in required</h1><p>Sign in to open your private trader workspace.</p><a className="primary-button" href="/login">Go to sign in</a></section></main>;
   }
   if (status === "no-profile") {
-    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Finish your profile first</h1><p>Choose your workspace type to continue.</p><a className="primary-button" href="/login">Continue</a></section></main>;
+    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">BizzTrack</span><h1>Finish your profile first</h1><p>Choose your workspace type to continue.</p><a className="primary-button" href="/login">Continue</a></section></main>;
   }
   if (status === "not-trader") {
-    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">Coconut Trade Desk</span><h1>Trader workspace only</h1><p>This workspace is for trader accounts.</p><button className="primary-button" onClick={() => void signOut()} type="button">Sign out</button></section></main>;
+    return <main className="page-shell"><section className="auth-panel"><span className="eyebrow">BizzTrack</span><h1>Trader workspace only</h1><p>This workspace is for trader accounts.</p><button className="primary-button" onClick={() => void signOut()} type="button">Sign out</button></section></main>;
   }
 
   const meta = pageMeta(pathname);
@@ -102,7 +102,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="authenticated-shell v2-shell">
       <aside className="desktop-sidebar">
-        <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>COCONUT TRADE DESK</strong><span>Trader workspace</span></div></div></div>
+        <div className="sidebar-brand"><div className="brand-lockup"><span className="brand-mark"><Sprout size={21} strokeWidth={2.4} aria-hidden="true" /></span><div><strong>BIZZTRACK</strong><span>Trader workspace</span></div></div></div>
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => { const Icon = item.icon; const active = isActive(pathname, item.href); return <Link className={active ? "active" : ""} href={hrefFor(item)} key={item.href} aria-current={active ? "page" : undefined} title={hasDraft(item) ? "Opens your unsaved entry" : undefined}><Icon size={18} strokeWidth={2.2} aria-hidden="true" /><span>{navLabel(item)}</span>{hasDraft(item) ? <em className="nav-draft">Unsaved</em> : null}</Link>; })}
         </nav>
@@ -112,7 +112,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <section className="app-main">
         <header className="topbar">
-          <div><span className="eyebrow">Coconut Trade Desk</span><h1>{"href" in meta && meta.href && navLabelKey[meta.href] ? t(navLabelKey[meta.href]) : meta.label}</h1><p>{meta.description}</p></div>
+          <div><span className="eyebrow">BizzTrack</span><h1>{"href" in meta && meta.href && navLabelKey[meta.href] ? t(navLabelKey[meta.href]) : meta.label}</h1><p>{meta.description}</p></div>
           <div className="topbar-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}><NotificationsBell /><button className="secondary-button topbar-signout" onClick={() => void signOut()} type="button">Sign out</button></div>
         </header>
         <nav className="mobile-section-nav" aria-label="Mobile navigation">

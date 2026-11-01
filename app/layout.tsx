@@ -6,7 +6,7 @@ import { Analytics } from "./Analytics";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://bizztrack.in"),
-  title: "Coconut Trade Desk — Coconut trading, organised",
+  title: "BizzTrack — Coconut trading, organised",
   description: "The simplest way for coconut traders to record purchases, stock, sales, husk and cash — and know their profit. Built for South Indian coconut traders."
 };
 

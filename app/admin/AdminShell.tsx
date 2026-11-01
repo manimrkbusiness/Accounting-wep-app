@@ -17,7 +17,7 @@ export function AdminShell({ base, children }: { base: string; children: React.R
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
-        <div className="admin-brand"><span className="admin-eyebrow">Coconut Trade Desk</span><strong>Control panel</strong></div>
+        <div className="admin-brand"><span className="admin-eyebrow">BizzTrack</span><strong>Control panel</strong></div>
         <nav className="admin-nav">
           {items.map((item) => <Link key={item.href} href={item.href} className={item.active ? "active" : ""}>{item.label}</Link>)}
         </nav>

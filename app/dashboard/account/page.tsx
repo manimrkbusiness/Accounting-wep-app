@@ -92,7 +92,7 @@ export default function AccountPage() {
       <section className="tool-panel">
         <div className="panel-heading"><div><span className="eyebrow">Billing</span><h2>Subscription &amp; plan</h2></div></div>
         <dl className="calculation-list">
-          <div><dt>Plan</dt><dd>Coconut Trade Desk — {PLAN_PRICE_LABEL} / month</dd></div>
+          <div><dt>Plan</dt><dd>BizzTrack — {PLAN_PRICE_LABEL} / month</dd></div>
           <div><dt>Status</dt><dd>{billingSummary(s)}</dd></div>
         </dl>
         <p className="field-hint">After the trial, {PLAN_PRICE_LABEL} is charged every month automatically (UPI AutoPay, card or net-banking). You can cancel anytime — you keep access until the end of the period you already paid for.</p>

@@ -24,7 +24,7 @@ const strings: Record<string, Entry> = {
   // Navigation (used by the workspace sidebar)
   "nav.dashboard": { en: "Dashboard", ta: "டாஷ்போர்டு" },
   "nav.harvesting": { en: "Coconut Harvesting", ta: "தென்னை அறுவடை" },
-  "nav.purchases": { en: "Coconut purchases", ta: "தேங்காய் கொள்முதல்" },
+  "nav.purchases": { en: "Farmer purchase", ta: "விவசாயி கொள்முதல்" },
   "nav.stock": { en: "Stock", ta: "கையிருப்பு" },
   "nav.sales": { en: "Coconut sales", ta: "தேங்காய் விற்பனை" },
   "nav.huskPurchase": { en: "Husk purchase", ta: "மட்டை கொள்முதல்" },

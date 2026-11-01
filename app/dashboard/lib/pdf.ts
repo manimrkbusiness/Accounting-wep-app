@@ -35,7 +35,7 @@ function createWriter(doc: jsPDF) {
   const header = (reference: string, traderName: string, subtitle: string) => {
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("COCONUT TRADE DESK", left, y);
+    doc.text("BIZZTRACK", left, y);
     y += 10;
     doc.setFontSize(14);
     doc.text(reference, left, y);
@@ -120,7 +120,7 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
     w.bump(3);
     w.line("Notes", trade.notes);
   }
-  w.footer(`Generated from Coconut Trade Desk on ${generatedStamp()}. Keep this invoice for your records.`);
+  w.footer(`Generated from BizzTrack on ${generatedStamp()}. Keep this invoice for your records.`);
   doc.save(`purchase-${String(trade.id).padStart(6, "0")}.pdf`);
 }
 
@@ -169,6 +169,6 @@ export function downloadSalePdf(sale: Sale, buyer: Buyer | undefined, items: Sal
     w.bump(3);
     w.line("Notes", sale.notes);
   }
-  w.footer(`Generated from Coconut Trade Desk on ${generatedStamp()}. Keep this invoice for your records.`);
+  w.footer(`Generated from BizzTrack on ${generatedStamp()}. Keep this invoice for your records.`);
   doc.save(`sale-${String(sale.id).padStart(6, "0")}.pdf`);
 }
