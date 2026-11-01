@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../../supabaseClient";
 import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, HarvestingEntry, HarvestingTeam, HarvestingTeamMember, HuskSaleItem, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle, WastageSale } from "./types";
 import { buildHuskMap, buildStockMap, type HuskInfo, type StockInfo } from "./calc";
+import { friendlyError } from "./errors";
 
 export type WorkspaceStatus = "loading" | "signed-out" | "no-profile" | "not-trader" | "ready";
 
@@ -98,7 +99,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }
     const profileResult = await supabase.from("profiles").select("*").eq("id", activeSession.user.id).maybeSingle();
     if (profileResult.error) {
-      setError(profileResult.error.message);
+      setError(friendlyError(profileResult.error.message));
       setStatus("ready");
       return;
     }
@@ -135,7 +136,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     ]);
     const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries, wastageSales].find((result) => result.error);
     if (failed?.error) {
-      setError(failed.error.message);
+      setError(friendlyError(failed.error.message));
     } else {
       setData({
         farmers: (farmers.data ?? []) as Farmer[],
@@ -217,7 +218,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       saving,
       setSaving,
       notify: (text: string) => { setMessage(text); setError(""); },
-      fail: (text: string) => { setError(text); setMessage(""); },
+      fail: (text: string) => { setError(friendlyError(text)); setMessage(""); },
       clearFeedback: () => { setMessage(""); setError(""); },
       refresh,
       signOut,

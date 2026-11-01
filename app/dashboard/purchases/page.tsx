@@ -101,11 +101,13 @@ export default function PurchasesPage() {
   async function deletePurchase(purchase: Purchase) {
     if (!ws.session) return;
     const info = ws.stock.get(purchase.id);
-    if (info && info.soldPieces > 0) { ws.fail("This purchase is part of a sale. Remove it from the sale before deleting."); return; }
-    if (!window.confirm(`Delete ${formatPurchaseId(purchase.id)}? Payments recorded against it stay in the cash book.`)) return;
+    const hasDerived = Boolean(info && (info.soldPieces > 0 || info.stockedPieces > 0 || info.wastedPieces > 0));
+    const warn = hasDerived ? " Its stock entries, any sales, husk sales and wastage made from it are removed too." : "";
+    if (!window.confirm(`Delete ${formatPurchaseId(purchase.id)}?${warn} Payments recorded against it stay in the cash book.`)) return;
     ws.clearFeedback();
     ws.setSaving(true);
-    const { error } = await supabase.from("coconut_trades").delete().eq("id", purchase.id).eq("trader_id", ws.session.user.id);
+    // Use the RPC so a purchase can be removed even after it has gone into stock, sales or wastage.
+    const { error } = await supabase.rpc("delete_purchase", { p_purchase_id: purchase.id });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
     ws.notify("Purchase deleted.");

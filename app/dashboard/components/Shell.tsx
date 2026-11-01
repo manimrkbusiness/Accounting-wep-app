@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -71,6 +72,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { status, profile, message, signOut } = workspace;
   const drafts = useDraftIndex(workspace.session?.user.id);
   const { t } = useLang();
+  // Clear a stale success/error message when moving to another page, so an error from one page
+  // (e.g. a failed delete) does not linger across the whole app.
+  const clearRef = useRef(workspace.clearFeedback);
+  clearRef.current = workspace.clearFeedback;
+  const firstNav = useRef(true);
+  useEffect(() => {
+    if (firstNav.current) { firstNav.current = false; return; }
+    clearRef.current();
+  }, [pathname]);
   const navLabel = (item: NavItem) => (navLabelKey[item.href] ? t(navLabelKey[item.href]) : item.label);
 
   // While an entry is unsaved, its sidebar item reopens that entry instead of the list.
