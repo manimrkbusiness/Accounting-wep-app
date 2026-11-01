@@ -105,6 +105,8 @@ export default function StockPage() {
   function resetForm() {
     formDraft.clear(blankForm());
     selectionDraft.clear(new Map());
+    // Also clear any other stock drafts (e.g. a leftover edit scope) so "Unsaved" fully goes away.
+    discardDrafts(ws.session?.user.id, "stock");
     setLoadedEdit(null);
     setDraftScope(draftKey(ws.session?.user.id, "stock", null));
   }
@@ -183,7 +185,7 @@ export default function StockPage() {
 
   return (
     <div className="stack">
-      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="stock entry" onDiscard={resetForm} showDiscard={false} />
+      <DraftNotice show={formDraft.restored || selectionDraft.restored} what="stock entry" onDiscard={resetForm} />
       <section className="ledger-panel select-table">
         <div className="panel-heading"><div className="step-heading"><span className="step-number">1</span><div><span className="eyebrow">{form.id ? `Editing ${formatStockId(form.id)}` : "Waiting to be weighed"}</span><h2>Select per-nut purchases</h2></div></div><div className="chip-row"><span className={awaitingTotal > 0 ? "chip warn" : "chip good"}>{formatNumber(awaitingTotal, 0)} pieces waiting</span><span className="chip good">{formatNumber(pieces, 0)} pieces selected</span><span className="chip">Paid to farmers {formatCurrency(farmerPaid)}</span></div></div>
         <p className="muted-text">Per-nut purchases are bought by count, so they are dehusked and weighed here before going into a sale. Weight-based purchases skip this step and can be sold straight away.</p>

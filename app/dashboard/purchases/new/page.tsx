@@ -255,6 +255,16 @@ export default function NewPurchasePage() {
   // Once a harvest is picked, the farmer and location are fixed to it; the user edits pieces
   // and labor only, and removes the harvest to change the farmer or location.
   const harvestLocked = selectedHarvests.length > 0;
+  // An edited purchase already has its harvesting booked by a linked harvest entry (to that harvest's
+  // team), so the harvesting card shows that team instead of a picker and does not book it again.
+  const purchaseHasLinkedHarvest = useMemo(() => Boolean(form.id) && ws.harvestingEntries.some((entry) => entry.purchase_id === form.id), [form.id, ws.harvestingEntries]);
+  const harvestingFixed = harvestLocked || purchaseHasLinkedHarvest;
+  // The team(s) that did the harvesting this purchase is tied to — picked harvests (new) or linked ones (edit).
+  const harvestTeamNames = useMemo(() => {
+    const entries = form.id ? ws.harvestingEntries.filter((entry) => entry.purchase_id === form.id) : selectedHarvests;
+    const names = entries.map((entry) => entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name : null).filter((name): name is string => Boolean(name));
+    return Array.from(new Set(names));
+  }, [form.id, ws.harvestingEntries, selectedHarvests, ws.employeeById, ws.harvestingTeamById]);
   // Who the picked harvests were done by, so the purchase can show it instead of asking again.
   const selectedHeadNames = useMemo(() => {
     const names = selectedHarvests.map((entry) => entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name : null).filter((name): name is string => Boolean(name));
@@ -309,7 +319,7 @@ export default function NewPurchasePage() {
       if (calculation.net <= 0) { ws.fail("Enter the net weight in kilograms from the weighbridge."); return; }
       if (!form.rate_per_kg || toNumber(form.rate_per_kg) < 0) { ws.fail("Enter the purchase rate per kilogram."); return; }
       if (form.dehusking_mode === "trader" && !form.dehusking_team_id) { ws.fail("Pick the team you pay for dehusking, or switch it to Farmer pays."); return; }
-      if (form.harvesting_mode === "trader" && !form.harvesting_team_id && !harvestLocked) { ws.fail("Pick the team you pay for harvesting, or switch it to Farmer pays."); return; }
+      if (form.harvesting_mode === "trader" && !form.harvesting_team_id && !harvestingFixed) { ws.fail("Pick the team you pay for harvesting, or switch it to Farmer pays."); return; }
     } else if (!form.rate_per_piece || toNumber(form.rate_per_piece) < 0) { ws.fail("Enter the purchase rate per coconut."); return; }
     if (calculation.advance > calculation.total) { ws.fail("Advance cannot be greater than the calculated purchase amount."); return; }
     const creditReason = form.additional_credit_reason.trim();
@@ -343,8 +353,8 @@ export default function NewPurchasePage() {
       husk_included: calculation.purchaseMode === "weight" && form.husk_included,
       trader_dehusking_rate_per_1000: calculation.purchaseMode === "weight" && form.dehusking_mode === "trader" ? toNumber(form.husk_removal_rate_per_1000) : 0,
       trader_harvesting_rate_per_1000: calculation.purchaseMode === "weight" && form.harvesting_mode === "trader" && !harvestLocked ? toNumber(form.tree_collection_rate_per_1000) : 0,
-      dehusking_team_id: calculation.purchaseMode === "weight" && form.dehusking_mode === "trader" && form.dehusking_team_id ? Number(form.dehusking_team_id) : null,
-      harvesting_team_id: calculation.purchaseMode === "weight" && form.harvesting_mode === "trader" && !harvestLocked && form.harvesting_team_id ? Number(form.harvesting_team_id) : null,
+      dehusking_team_id: calculation.purchaseMode === "weight" && form.dehusking_mode !== "none" && form.dehusking_team_id ? Number(form.dehusking_team_id) : null,
+      harvesting_team_id: calculation.purchaseMode === "weight" && form.harvesting_mode !== "none" && !harvestingFixed && form.harvesting_team_id ? Number(form.harvesting_team_id) : null,
       expected_sale_rate_per_kg: calculation.purchaseMode === "weight" ? Math.max(toNumber(form.expected_sale_rate_per_kg), 0) : 0,
       expected_buyer_id: calculation.purchaseMode === "weight" && form.expected_buyer_id ? Number(form.expected_buyer_id) : null,
       expected_husk_price_per_piece: calculation.purchaseMode === "weight" ? Math.max(toNumber(form.expected_husk_price_per_piece), 0) : 0,
@@ -492,8 +502,8 @@ export default function NewPurchasePage() {
     const teams = kind === "dehusking" ? dehuskers : harvesters;
     const laborPieces = kind === "dehusking" ? calculation.dehuskingPieces : calculation.harvestingPieces;
     const shownCost = mode === "trader" ? (kind === "dehusking" ? traderDehuskCost : traderHarvestCost) : (kind === "dehusking" ? calculation.huskRemovalCost : calculation.treeCollectionCost);
-    // Harvesting built from a linked harvest: the team is fixed to that harvest's team.
-    const harvestFixed = kind === "harvesting" && harvestLocked;
+    // Harvesting tied to a linked harvest: the team is fixed to that harvest's team.
+    const harvestFixed = kind === "harvesting" && harvestingFixed;
     return (
       <div className="deduction-card" key={kind}>
         <label className="checkbox-field"><input type="checkbox" checked={mode !== "none"} onChange={(event) => setLaborMode(kind, event.target.checked ? "farmer" : "none")} /><span><strong>{title}</strong><small>Who pays this labor — the farmer, or you.</small></span></label>
@@ -502,8 +512,8 @@ export default function NewPurchasePage() {
             <button className={mode === "farmer" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "farmer")}><strong>Farmer pays</strong><span>Deducted from the farmer</span></button>
             <button className={mode === "trader" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "trader")}><strong>You pay</strong><span>Booked to your team</span></button>
           </div>
-          {harvestFixed ? <label>Harvesting team<p className="field-hint">Fixed to <strong>{selectedHeadNames.length ? selectedHeadNames.join(", ") : "the linked harvest's team"}</strong> from the harvest you picked above — its wage is already booked there, so you don't pick a team or add it again here. &quot;You pay&quot; vs &quot;Farmer pays&quot; only decides whether it is deducted from the farmer.</p></label>
-          : mode === "trader" ? <label>{title} team<select value={form[teamField]} onChange={(event) => setField(teamField, event.target.value)}><option value="">Select a team</option>{teams.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{teams.length === 0 ? <span className="field-hint">No {kind === "dehusking" ? "dehusking" : "harvesting"} team yet. Add one on <Link href="/dashboard/team">Team &amp; vehicles</Link>.</span> : <span className="field-hint">The wage is booked to this team under Expenses and shows in their history with Paid / Pending.</span>}</label> : null}
+          {harvestFixed ? <label>Harvesting team<p className="field-hint">Done by <strong>{harvestTeamNames.length ? harvestTeamNames.join(", ") : "the linked harvest's team"}</strong>, from the harvest linked to this purchase — its wage is already booked there, so you don't pick a team here. &quot;You pay&quot; vs &quot;Farmer pays&quot; only decides whether it is deducted from the farmer.</p></label>
+          : <label>{title} team <span className="optional">{mode === "farmer" ? "Optional" : ""}</span><select value={form[teamField]} onChange={(event) => setField(teamField, event.target.value)}><option value="">{mode === "farmer" ? "Not recorded" : "Select a team"}</option>{teams.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{teams.length === 0 ? <span className="field-hint">No {kind === "dehusking" ? "dehusking" : "harvesting"} team yet. Add one on <Link href="/dashboard/team">Team &amp; vehicles</Link>.</span> : <span className="field-hint">Pick who did the {kind === "dehusking" ? "dehusking" : "harvesting"}. The wage is booked to them under Expenses and shows in their history with Paid / Pending{mode === "farmer" ? " (and is still deducted from the farmer)" : ""}.</span>}</label>}
           <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /></label>
           <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(shownCost)} ${mode === "trader" ? "you pay" : "deducted"}` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
           {rateEditor === kind ? <div className="inline-form"><label>{title} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only. The default in Settings stays as it is.</span></div> : null}
