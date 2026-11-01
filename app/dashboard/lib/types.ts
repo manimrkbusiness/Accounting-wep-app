@@ -275,6 +275,15 @@ export type WastageSale = {
   created_at: string;
 };
 
+export type WastageSaleItem = {
+  id: number;
+  trader_id: string;
+  wastage_sale_id: number;
+  purchase_id: number;
+  quantity_pieces: number;
+  created_at: string;
+};
+
 export type Expense = {
   id: number;
   trader_id: string;

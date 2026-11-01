@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../../supabaseClient";
-import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, HarvestingEntry, HarvestingTeam, HarvestingTeamMember, HuskSaleItem, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle, WastageSale } from "./types";
+import type { Buyer, CashEntry, Employee, Expense, Farmer, FarmerLocation, HarvestingEntry, HarvestingTeam, HarvestingTeamMember, HuskSaleItem, Profile, Purchase, Sale, SaleItem, StockEntry, StockEntryItem, StockWastage, TraderSettings, Vehicle, WastageSale, WastageSaleItem } from "./types";
 import { buildHuskMap, buildStockMap, type HuskInfo, type StockInfo } from "./calc";
 import { friendlyError } from "./errors";
 
@@ -29,6 +29,7 @@ type WorkspaceData = {
   expenses: Expense[];
   cashEntries: CashEntry[];
   wastageSales: WastageSale[];
+  wastageSaleItems: WastageSaleItem[];
 };
 
 const emptyData: WorkspaceData = {
@@ -50,7 +51,8 @@ const emptyData: WorkspaceData = {
   harvestingEntries: [],
   expenses: [],
   cashEntries: [],
-  wastageSales: []
+  wastageSales: [],
+  wastageSaleItems: []
 };
 
 export type Workspace = WorkspaceData & {
@@ -113,7 +115,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       setStatus("not-trader");
       return;
     }
-    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries, wastageSales] = await Promise.all([
+    const [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries, wastageSales, wastageSaleItems] = await Promise.all([
       supabase.from("trader_farmers").select("*").order("name"),
       supabase.from("farmer_locations").select("*").order("location_name"),
       supabase.from("coconut_trades").select("*").order("trade_date", { ascending: false }).order("id", { ascending: false }),
@@ -132,9 +134,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       supabase.from("harvesting_entries").select("*").order("harvest_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }).order("id", { ascending: false }),
       supabase.from("cash_entries").select("*").order("entry_date", { ascending: false }).order("id", { ascending: false }),
-      supabase.from("wastage_sales").select("*").order("sale_date", { ascending: false }).order("id", { ascending: false })
+      supabase.from("wastage_sales").select("*").order("sale_date", { ascending: false }).order("id", { ascending: false }),
+      supabase.from("wastage_sale_items").select("*")
     ]);
-    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries, wastageSales].find((result) => result.error);
+    const failed = [farmers, locations, purchases, settings, buyers, employees, vehicles, sales, saleItems, huskSaleItems, stockEntries, stockEntryItems, stockWastage, harvestingTeams, harvestingTeamMembers, harvestingEntries, expenses, cashEntries, wastageSales, wastageSaleItems].find((result) => result.error);
     if (failed?.error) {
       setError(friendlyError(failed.error.message));
     } else {
@@ -157,7 +160,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         harvestingEntries: (harvestingEntries.data ?? []) as HarvestingEntry[],
         expenses: (expenses.data ?? []) as Expense[],
         cashEntries: (cashEntries.data ?? []) as CashEntry[],
-        wastageSales: (wastageSales.data ?? []) as WastageSale[]
+        wastageSales: (wastageSales.data ?? []) as WastageSale[],
+        wastageSaleItems: (wastageSaleItems.data ?? []) as WastageSaleItem[]
       });
     }
     setStatus("ready");
