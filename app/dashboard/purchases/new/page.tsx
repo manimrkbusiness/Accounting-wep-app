@@ -525,6 +525,7 @@ export default function NewPurchasePage() {
     return (
       <div className="deduction-card" key={kind}>
         <div className="form-grid">
+          {kind === "harvesting" && !form.id && form.farmer_id ? <label>Link a recorded harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">{availableHarvests.length ? "Pick a harvest…" : "None available"}</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "No head"}</option>)}</select></label> : null}
           <label>Who pays?<select value={mode} onChange={(event) => setLaborMode(kind, event.target.value as LaborMode)}><option value="none">Select</option><option value="farmer">Farmer pays</option><option value="trader">You pay</option></select></label>
           {mode !== "none" ? (harvestFixed
             ? <label>Harvesting team<select disabled value="fixed"><option value="fixed">{harvestTeamNames.length ? harvestTeamNames.join(", ") : "Linked harvest team"}</option></select></label>
@@ -556,28 +557,25 @@ export default function NewPurchasePage() {
         {!form.id ? <fieldset className="deduction-options"><legend>Harvesting <span className="optional">Optional</span></legend>
           {!form.farmer_id
             ? <p className="field-hint">Choose a farmer first to link a recorded harvest.</p>
-            : <>
-              <div className="form-grid">
-                <label>Link a recorded harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">{availableHarvests.length ? "Pick a harvest…" : "None available"}</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "No head"}</option>)}</select></label>
-              </div>
-              {selectedHarvests.length ? <div className="chip-row">{selectedHarvests.map((entry) => <span className="chip good" key={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "team"}<button className="chip-remove" onClick={() => removeHarvest(entry.id)} type="button">Remove</button></span>)}</div> : null}
-            </>
+            : form.purchase_mode === "weight"
+              ? deductionCard("harvesting")
+              : <div className="form-grid"><label>Link a recorded harvest<select value="" onChange={(event) => { if (event.target.value) addHarvest(Number(event.target.value)); }}><option value="">{availableHarvests.length ? "Pick a harvest…" : "None available"}</option>{availableHarvests.map((entry) => <option key={entry.id} value={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "No head"}</option>)}</select></label></div>
           }
-          {form.purchase_mode === "weight" ? deductionCard("harvesting") : null}
+          {form.farmer_id && selectedHarvests.length ? <div className="chip-row">{selectedHarvests.map((entry) => <span className="chip good" key={entry.id}>{formatDate(entry.harvest_date)} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : "team"}<button className="chip-remove" onClick={() => removeHarvest(entry.id)} type="button">Remove</button></span>)}</div> : null}
         </fieldset>
         : (form.purchase_mode === "weight" || ws.harvestingEntries.some((entry) => entry.purchase_id === form.id)) ? <fieldset className="deduction-options"><legend>Harvesting</legend>{ws.harvestingEntries.some((entry) => entry.purchase_id === form.id) ? <p className="mode-note">Harvests linked to this purchase: {ws.harvestingEntries.filter((entry) => entry.purchase_id === form.id).map((entry) => `${formatNumber(Number(entry.coconut_quantity), 0)} pcs`).join(", ")}. Manage links from Purchase history.</p> : null}{form.purchase_mode === "weight" ? deductionCard("harvesting") : null}</fieldset> : null}
+        {form.purchase_mode === "weight" ? <fieldset className="deduction-options"><legend>Dehusking</legend>{deductionCard("dehusking")}</fieldset> : null}
         <fieldset className="deduction-options"><legend>Coconut purchase</legend><div className="form-grid">
           <label>Coconuts bought (pieces)<input type="number" min="1" step="1" value={form.coconut_quantity} onChange={(event) => setField("coconut_quantity", event.target.value)} required /></label>
           {form.purchase_mode === "weight" ? <label>Net weight (kg)<input type="number" min="0.001" step="0.001" value={form.net_weight_kg} onChange={(event) => setField("net_weight_kg", event.target.value)} placeholder="Weighbridge net weight" required /></label> : null}
           {form.purchase_mode === "weight" ? <label>Rate per kg (INR)<input type="number" min="0" step="0.01" value={form.rate_per_kg} onChange={(event) => setField("rate_per_kg", event.target.value)} required /></label> : <label>Price per coconut (INR)<input type="number" min="0" step="0.01" value={form.rate_per_piece} onChange={(event) => setField("rate_per_piece", event.target.value)} required /></label>}
           <label>Advance paid (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /></label>
         </div></fieldset>
-        {form.purchase_mode === "weight" ? <fieldset className="deduction-options"><legend>Dehusking</legend>{deductionCard("dehusking")}</fieldset> : null}
-        {method === "weight" ? <fieldset className="deduction-options"><legend>Farmer credit — buying husk</legend>
+        {method === "weight" ? <fieldset className="deduction-options"><legend>Husk purchase from farmer</legend>
           <div className="deduction-card">
-            <label className="checkbox-field"><input type="checkbox" checked={form.buys_husk} onChange={(event) => setField("buys_husk", event.target.checked)} /><span><strong>Buy the husk from the farmer</strong><small>Tick when you keep the husk to resell. The husk price is credited to the farmer and the husk goes into your husk stock.</small></span></label>
+            <label className="checkbox-field"><input type="checkbox" checked={form.buys_husk} onChange={(event) => setField("buys_husk", event.target.checked)} /><span><strong>Buy the husk from the farmer</strong></span></label>
             {form.buys_husk ? <>
-              <div className="checkbox-grid">
+              <div className="form-grid">
                 <label>Husk colour<select value={form.husk_color} onChange={(event) => { const color = event.target.value as HuskColor; setForm((current) => ({ ...current, husk_color: color, husk_price_per_piece: String(huskDefaultPrice(color)) })); }}>{huskColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
                 <label>Husk pieces <span className="optional">Blank = {formatNumber(calculation.dehuskingPieces, 0)} dehusked</span><input type="number" min="0" step="1" value={form.husk_pieces} onChange={(event) => setField("husk_pieces", event.target.value)} placeholder={formatNumber(calculation.dehuskingPieces, 0)} /><span className="field-hint">How many husk pieces you are buying. Defaults to the dehusked count.</span></label>
               </div>
@@ -585,25 +583,20 @@ export default function NewPurchasePage() {
               {rateEditor === "husk" ? <div className="inline-form"><label>Husk price per piece (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate("husk")} type="button">Save price</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only. The default in Settings stays as it is.</span></div> : null}
             </> : null}
           </div>
-          <span className="field-hint">When you buy the husk, this amount is added to what the farmer is paid, and the husk goes into your husk stock to sell later from the Husk sale. Leave unticked when the farmer keeps the husk.</span>
         </fieldset>
           : method === "weight_husk" ? <fieldset className="deduction-options"><legend>Husk you keep</legend>
-            <p className="field-hint">Bought with husk, so the husk is yours at no extra cost — it goes into your husk stock to sell on Husk sale. Nothing is credited to the farmer for it.</p>
-            <div className="checkbox-grid">
+            <div className="form-grid">
               <label>Husk colour<select value={form.husk_color} onChange={(event) => setField("husk_color", event.target.value as HuskColor)}>{huskColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
               <label>Husk pieces kept <span className="optional">Blank = {formatNumber(calculation.dehuskingPieces, 0)} dehusked</span><input type="number" min="0" step="1" value={form.husk_pieces} onChange={(event) => setField("husk_pieces", event.target.value)} placeholder={formatNumber(calculation.dehuskingPieces, 0)} /><span className="field-hint">Husk pieces you keep to sell. Defaults to the dehusked count.</span></label>
             </div>
           </fieldset> : null}
         {isWeight ? <fieldset className="deduction-options"><legend>Expected sale &amp; profit <span className="optional">Optional</span></legend>
-          <p className="field-hint">Enter what you expect to sell this load for, to see your projected profit on the right. These are estimates — they do not create a sale.</p>
           <div className="form-grid">
             <label>Coconut buyer<select value={form.expected_buyer_id} onChange={(event) => setField("expected_buyer_id", event.target.value)}><option value="">Not decided</option>{coconutBuyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label>
-            <label>Expected coconut rate per kg (INR)<input type="number" min="0" step="0.01" value={form.expected_sale_rate_per_kg} onChange={(event) => setField("expected_sale_rate_per_kg", event.target.value)} placeholder="Rate you expect from the buyer" /><span className="field-hint">{formatNumber(calculation.payable)} kg sellable × this rate.</span></label>
+            <label>Expected rate / kg (INR)<input type="number" min="0" step="0.01" value={form.expected_sale_rate_per_kg} onChange={(event) => setField("expected_sale_rate_per_kg", event.target.value)} placeholder="Rate from buyer" /></label>
+            {hasHuskToSell ? <label>Husk buyer<select value={form.expected_husk_buyer_id} onChange={(event) => setField("expected_husk_buyer_id", event.target.value)}><option value="">Not decided</option>{huskBuyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label> : null}
+            {hasHuskToSell ? <label>Expected husk / piece (INR)<input type="number" min="0" step="0.01" value={form.expected_husk_price_per_piece} onChange={(event) => setField("expected_husk_price_per_piece", event.target.value)} placeholder="Husk price" /></label> : null}
           </div>
-          {hasHuskToSell ? <div className="form-grid">
-            <label>Husk buyer<select value={form.expected_husk_buyer_id} onChange={(event) => setField("expected_husk_buyer_id", event.target.value)}><option value="">Not decided</option>{huskBuyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label>
-            <label>Expected husk price per piece (INR)<input type="number" min="0" step="0.01" value={form.expected_husk_price_per_piece} onChange={(event) => setField("expected_husk_price_per_piece", event.target.value)} placeholder="Husk price per piece" /><span className="field-hint">{formatNumber(huskSalePieces, 0)} husk pieces to sell × this price.</span></label>
-          </div> : null}
         </fieldset> : null}
         <div className="adjustment-actions"><button className="adjustment-toggle credit" onClick={() => { setShowCredit(true); setField("additional_credit_amount", form.additional_credit_amount === "0" ? "" : form.additional_credit_amount); }} type="button">+ Add credit to farmer</button><button className="adjustment-toggle debit" onClick={() => { setShowDebit(true); setField("additional_debit_amount", form.additional_debit_amount === "0" ? "" : form.additional_debit_amount); }} type="button">- Add debit to farmer</button></div>
         {showCredit || toNumber(form.additional_credit_amount) > 0 ? <div className="adjustment-fields credit-fields"><label>Credit amount (INR)<input type="number" min="0" step="0.01" value={form.additional_credit_amount} onChange={(event) => setField("additional_credit_amount", event.target.value)} /></label><label>Why is this being credited?<input value={form.additional_credit_reason} onChange={(event) => setField("additional_credit_reason", event.target.value)} placeholder="Reason for additional payment" /></label></div> : null}
