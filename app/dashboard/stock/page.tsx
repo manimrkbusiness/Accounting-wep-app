@@ -7,6 +7,7 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { discardDrafts, draftKey, queryNumber, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
+import { DraggablePanel } from "../components/DraggablePanel";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatStockId, today, toNumber } from "../lib/format";
 import { huskColors, processingTypes, type HuskColor, type ProcessingType, type StockEntry } from "../lib/types";
 import { EmptyState, Panel } from "../components/ui";
@@ -214,7 +215,7 @@ export default function StockPage() {
         </tbody></table>{candidates.length === 0 ? <EmptyState>No per-nut purchases are waiting to be weighed. Everything bought per nut is already in stock.</EmptyState> : null}</div>
       </section>
 
-      <section className="workspace-grid">
+      <div className="purchase-work">
         <form className="tool-panel" onSubmit={saveEntry}>
           <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">Stock entry</span><h2>{form.id ? "Edit weighbridge details" : "Weighbridge details"}</h2></div></div>{form.id ? <button className="secondary-button" onClick={() => { resetForm(); router.push("/dashboard/stock"); }} type="button">Cancel edit</button> : (formDraft.restored || selectionDraft.restored || selection.size > 0 || toNumber(form.net_weight_kg) > 0 || form.notes.trim() !== "") ? <button className="secondary-button" onClick={resetForm} type="button">Discard</button> : null}</div>
           <div className="form-grid">
@@ -241,7 +242,7 @@ export default function StockPage() {
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update stock entry" : "Add to stock"}</button>
         </form>
-        <aside className="side-stack">
+        <DraggablePanel title="Live calculation" storageKey="stock-calc">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Stock summary</h2><dl className="calculation-list">
             <div><dt>Coconuts loaded</dt><dd>{formatNumber(loaded, 0)} pieces</dd></div>
             {wasted > 0 ? <div className="calculation-deduction"><dt>Wasted (loss)<small className="formula">{formatNumber(pieces, 0)} picked − {formatNumber(loaded, 0)} loaded</small></dt><dd>{formatNumber(wasted, 0)} pieces</dd></div> : null}
@@ -258,9 +259,8 @@ export default function StockPage() {
             <div><dt>Average cost per kg<small className="formula">{formatCurrency(totalCost)} ÷ {formatNumber(payable)} kg</small></dt><dd>{payable > 0 ? `${formatCurrency(totalCost / payable)} / kg` : "-"}</dd></div>
             <div className={expectedMargin >= 0 ? "calculation-total" : "calculation-deduction calculation-spent"}><dt>Expected margin<small className="formula">{formatCurrency(expectedValue)} + {formatCurrency(expectedHuskValue)} − {formatCurrency(totalCost)}</small></dt><dd>{formatCurrency(expectedMargin)}</dd></div>
           </dl><p className="field-hint">Red lines are money you spent: paid to farmers (from the purchase entries, after deductions) plus dehusking at stock time. Green lines are what you expect back from the coconut and the husk. Transport and other expenses are not included here.</p></section>
-          <section className="tool-panel"><span className="eyebrow">Workflow</span><h2>Per-nut to lorry</h2><p className="muted-text">Buy per nut, dehusk, weigh the coconuts here, then build the lorry load in Sales. Husk you keep from these purchases is sold under Husk sale.</p><Link className="secondary-button" href="/dashboard/sales/new">Go to New sale</Link></section>
-        </aside>
-      </section>
+        </DraggablePanel>
+      </div>
 
       <section className="ledger-panel">
         <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Stock entries</h2></div></div>

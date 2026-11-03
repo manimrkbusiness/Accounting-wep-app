@@ -1146,23 +1146,48 @@ legend {
   user-select: none;
 }
 
-.floating-close {
-  background: transparent;
-  color: #cfe6da;
-  font-size: 1.2rem;
-  line-height: 1;
-  padding: 0 4px;
+.floating-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.floating-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
 }
 
-.floating-close:hover { color: #fff; }
+.floating-btn {
+  background: transparent;
+  color: #cfe6da;
+  font-size: 1rem;
+  line-height: 1;
+  min-width: 24px;
+  padding: 2px 5px;
+}
+
+.floating-btn:hover { color: #fff; }
+.floating-close { font-size: 1.2rem; }
 
 .floating-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
 .floating-body .calculation-panel {
   border: 0;
   border-radius: 0;
+}
+
+/* Resize grabber in the bottom-right corner (desktop only). */
+.floating-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, #3c6353 50%, #3c6353 62%, transparent 62%, transparent 74%, #3c6353 74%, #3c6353 86%, transparent 86%);
+  border-bottom-right-radius: 12px;
 }
 
 .floating-reopen {
@@ -1182,13 +1207,16 @@ legend {
 @media (max-width: 1024px) {
   .floating-panel {
     position: static;
-    width: auto;
+    width: auto !important;
+    height: auto !important;
+    max-width: none;
     max-height: none;
     margin-top: 16px;
     box-shadow: var(--shadow);
   }
   .floating-head { cursor: default; }
   .floating-reopen { position: static; margin-top: 12px; }
+  .floating-resize { display: none; }
 }
 
 .calculation-panel .eyebrow,

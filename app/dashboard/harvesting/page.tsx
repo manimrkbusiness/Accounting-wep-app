@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNu
 import type { Expense, HarvestingEntry } from "../lib/types";
 import { draftKey, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
+import { DraggablePanel } from "../components/DraggablePanel";
 import { EmptyState, PeriodPicker, periodToRange, type PeriodPreset } from "../components/ui";
 
 type EntryForm = { id?: number; harvest_date: string; farmer_id: string; location_id: string; head_employee_id: string; coconut_quantity: string; rate_per_1000: string; purchase_id: string; notes: string };
@@ -208,7 +209,7 @@ export default function HarvestingPage() {
     <div className="stack">
       <DraftNotice show={draft.restored} what="harvesting entry" onDiscard={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} />
 
-      <section className="workspace-grid">
+      <div className="purchase-work">
         <form className="tool-panel" onSubmit={saveEntry}>
           <div className="panel-heading"><div><span className="eyebrow">{form.id ? "Edit harvest" : "New harvest"}</span><h2>{form.id ? "Update harvesting entry" : "Record coconuts harvested"}</h2></div>{form.id ? <button className="link-button" onClick={() => { draft.clear(blankEntry(defaultRate)); setEditingRate(false); }} type="button">Cancel edit</button> : (hasContent ? <button className="secondary-button" onClick={discardEntry} type="button">Discard</button> : null)}</div>
           <p className="muted-text">Record what was harvested today and who led it. The amount you pay the team head is booked automatically under Expenses. The harvest then waits in &quot;Not linked / not used&quot; below until you link it to its purchase there or from Purchase history.</p>
@@ -231,15 +232,15 @@ export default function HarvestingPage() {
           </div>
           <span className="field-hint">&quot;Save &amp; record purchase&quot; saves this harvest and opens a new purchase with the farmer, location and quantity already filled from it.</span>
         </form>
-        <aside className="side-stack">
+        <DraggablePanel title="Live calculation" storageKey="harvest-calc">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Harvest summary</h2><dl className="calculation-list">
             <div><dt>Coconuts harvested</dt><dd>{formatNumber(quantity, 0)} pieces</dd></div>
             <div><dt>Team head</dt><dd>{head?.name ?? "No worker"}</dd></div>
             <div className="calculation-deduction"><dt>Pay for this harvest<small className="formula">{formatNumber(quantity, 0)} pieces ÷ 1,000 × {formatCurrency(rate)}</small></dt><dd>{formatCurrency(cost)}</dd></div>
           </dl><p className="field-hint">This amount is booked as a harvesting-labor expense to the team head. Whether the farmer or you ultimately bear it depends on the &quot;Deduct coconut harvesting&quot; option on the purchase.</p></section>
-          <section className="tool-panel"><span className="eyebrow">Harvesting team</span><h2>Who can lead a harvest</h2><p className="muted-text">Only workers with the Harvester role appear here. Add or edit them on Team &amp; vehicles.</p><div className="card-list">{ws.employees.filter((emp) => emp.active && emp.role === "harvester").slice(0, 12).map((emp) => <article key={emp.id}><div><strong>{emp.name}</strong><span>Harvester{emp.phone ? ` · ${emp.phone}` : ""}</span></div></article>)}{ws.employees.filter((emp) => emp.active && emp.role === "harvester").length === 0 ? <EmptyState>No harvesting team yet. Add a worker with the Harvester role.</EmptyState> : null}</div><Link className="secondary-button" href="/dashboard/team">Manage team</Link></section>
-        </aside>
-      </section>
+        </DraggablePanel>
+        <section className="tool-panel"><span className="eyebrow">Harvesting team</span><h2>Who can lead a harvest</h2><p className="muted-text">Only workers with the Harvester role appear here. Add or edit them on Team &amp; vehicles.</p><div className="card-list">{ws.employees.filter((emp) => emp.active && emp.role === "harvester").slice(0, 12).map((emp) => <article key={emp.id}><div><strong>{emp.name}</strong><span>Harvester{emp.phone ? ` · ${emp.phone}` : ""}</span></div></article>)}{ws.employees.filter((emp) => emp.active && emp.role === "harvester").length === 0 ? <EmptyState>No harvesting team yet. Add a worker with the Harvester role.</EmptyState> : null}</div><Link className="secondary-button" href="/dashboard/team">Manage team</Link></section>
+      </div>
 
       <section className="ledger-panel">
         <div className="panel-heading"><div><span className="eyebrow">Not linked / not used</span><h2>Harvests waiting for a purchase</h2></div>{unlinkedEntries.length ? <span className="chip warn">{unlinkedEntries.length} pending · {formatCurrency(unlinkedCost)}</span> : null}</div>

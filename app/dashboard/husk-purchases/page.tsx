@@ -7,6 +7,7 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { draftKey, queryNumber, useDraft } from "../lib/useDraft";
 import { DraftNotice } from "../components/DraftNotice";
+import { DraggablePanel } from "../components/DraggablePanel";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../lib/format";
 import { huskColors, type HuskColor, type PaymentStatus, type Purchase } from "../lib/types";
 import { EmptyState } from "../components/ui";
@@ -161,7 +162,7 @@ export default function HuskPurchasesPage() {
   return (
     <>
     <DraftNotice show={draft.restored} what="husk purchase" onDiscard={resetForm} />
-    <section className="workspace-grid">
+    <div className="purchase-work">
       <form className="tool-panel" onSubmit={save}>
         <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit husk purchase" : "Record husk purchase"}</h2></div><div className="row-actions">{form.id || form.farmer_id || form.husk_pieces ? <button className="secondary-button" onClick={resetForm} type="button">{form.id ? "Cancel edit" : "Clear"}</button> : null}</div></div>
         <p className="muted-text">Husk bought straight from a farmer, without any coconut. It goes into your husk stock and can be sold on the Husk sale page.</p>
@@ -178,15 +179,15 @@ export default function HuskPurchasesPage() {
         {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
         <button className="primary-button" disabled={ws.saving || ws.farmers.length === 0} type="submit">{ws.saving ? "Saving..." : form.id ? "Update husk purchase" : "Save husk purchase"}</button>
       </form>
-      <aside className="side-stack">
+      <DraggablePanel title="Live calculation" storageKey="husk-purchase-calc">
         <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Husk purchase summary</h2><dl className="calculation-list">
           <div><dt>Husk pieces</dt><dd>{formatNumber(huskPieces, 0)} pieces</dd></div>
           <div className="calculation-total"><dt>Paid to farmer<small className="formula">{formatNumber(huskPieces, 0)} pieces × {formatCurrency(price)}</small></dt><dd>{formatCurrency(total)}</dd></div>
           <div><dt>Advance</dt><dd>{formatCurrency(advance)}</dd></div>
           <div className="calculation-total"><dt>Balance to pay<small className="formula">{formatCurrency(total)} − {formatCurrency(advance)}</small></dt><dd>{formatCurrency(balance)}</dd></div>
         </dl><p className="field-hint">This husk is added to your husk stock as {form.husk_color} husk and can be picked on the Husk sale page.</p></section>
-      </aside>
-    </section>
+      </DraggablePanel>
+    </div>
     <section className="ledger-panel">
       <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Husk purchases</h2></div></div>
       {huskPurchases.length === 0 ? <EmptyState>No husk purchases yet. Record husk bought directly from a farmer above.</EmptyState> : <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Husk</th><th>Pieces</th><th>Price</th><th>Total</th><th>In hand</th><th>Actions</th></tr></thead><tbody>

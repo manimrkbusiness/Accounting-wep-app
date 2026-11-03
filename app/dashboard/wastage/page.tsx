@@ -8,6 +8,7 @@ import { sumBy } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../lib/format";
 import type { WastageSale } from "../lib/types";
 import { EmptyState, Metric } from "../components/ui";
+import { DraggablePanel } from "../components/DraggablePanel";
 
 type WastageForm = { sale_date: string; buyer_id: string; buyer_name: string; rate_per_piece: string; notes: string };
 const blankForm = (): WastageForm => ({ sale_date: today(), buyer_id: "", buyer_name: "", rate_per_piece: "", notes: "" });
@@ -149,7 +150,7 @@ export default function WastagePage() {
         </tbody></table>{candidates.length === 0 ? <EmptyState>No wasted coconuts available to sell. They appear here when you load fewer coconuts than you picked on the Stock page.</EmptyState> : null}</div>
       </section>
 
-      <section className="workspace-grid">
+      <div className="purchase-work">
         <form className="tool-panel" onSubmit={saveSale}>
           <div className="panel-heading"><div><span className="eyebrow">Sell wasted coconuts</span><h2>Record a wastage sale</h2></div></div>
           <div className="form-grid">
@@ -162,14 +163,14 @@ export default function WastagePage() {
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving || pieces <= 0} type="submit">{ws.saving ? "Saving..." : `Sell ${formatNumber(pieces, 0)} wasted coconuts`}</button>
         </form>
-        <aside className="side-stack">
+        <DraggablePanel title="Live calculation" storageKey="wastage-calc">
           <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>Wastage sale</h2><dl className="calculation-list">
             <div><dt>Wasted coconuts sold</dt><dd>{formatNumber(pieces, 0)} pieces</dd></div>
             <div><dt>Rate per coconut</dt><dd>{formatCurrency(rate)}</dd></div>
             <div className="calculation-credit calculation-total"><dt>Income<small className="formula">{formatNumber(pieces, 0)} × {formatCurrency(rate)}</small></dt><dd>{formatCurrency(amount)}</dd></div>
           </dl><p className="field-hint">This whole amount is added to your dashboard net profit — the wasted nuts cost you nothing extra beyond what is already in your stock cost.</p></section>
-        </aside>
-      </section>
+        </DraggablePanel>
+      </div>
 
       <section className="ledger-panel">
         <div className="panel-heading"><div><span className="eyebrow">History</span><h2>Wasted-coconut sales</h2></div>{ws.wastageSales.length ? <span className="chip good">{formatCurrency(incomeTotal)} total</span> : null}</div>
