@@ -88,7 +88,7 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     husk_color: "green",
     husk_pieces: "",
     deduct_dehusking: Number(settings.husk_removal_rate_per_1000) > 0,
-    deduct_harvesting: Number(settings.tree_collection_rate_per_1000) > 0,
+    deduct_harvesting: false,
     advance_amount: "0",
     additional_credit_amount: "0",
     additional_credit_reason: "",
@@ -102,7 +102,7 @@ function blankForm(settings: TraderSettings): PurchaseForm {
     husk_included: false,
     trader_dehusking_rate_per_1000: String(settings.husk_removal_rate_per_1000),
     dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
-    harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
+    harvesting_mode: "none",
     dehusking_team_id: "",
     harvesting_team_id: "",
     expected_sale_rate_per_kg: "",
@@ -194,7 +194,7 @@ export default function NewPurchasePage() {
     harvestParamApplied.current = true;
     if (entry.purchase_id) { ws.fail("That harvest is already linked to a purchase."); return; }
     const base = blankForm(ws.settings ?? defaultSettings);
-    draft.clear({ ...base, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", harvest_ids: [harvestId] });
+    draft.clear({ ...base, farmer_id: entry.farmer_id ? String(entry.farmer_id) : "", location_id: entry.location_id ? String(entry.location_id) : "", harvest_ids: [harvestId], harvesting_mode: "farmer", deduct_harvesting: true });
     router.replace("/dashboard/purchases/new");
   }, [ws.harvestingEntries, ws.settings, draft, router, ws]);
 
@@ -285,6 +285,8 @@ export default function NewPurchasePage() {
       // Pre-fill the farmer and location from the harvest when the purchase does not have them yet.
       if (!current.farmer_id && entry.farmer_id) next.farmer_id = String(entry.farmer_id);
       if (!current.location_id && entry.location_id) next.location_id = String(entry.location_id);
+      // A harvest was recorded, so default harvesting to "Farmer pays" (the user can change it).
+      if (current.harvesting_mode === "none" && current.purchase_mode === "weight") { next.harvesting_mode = "farmer"; next.deduct_harvesting = true; }
       return next;
     });
   }
@@ -472,9 +474,9 @@ export default function NewPurchasePage() {
           purchase_mode: "weight",
           husk_included: true,
           deduct_dehusking: Number(settings.husk_removal_rate_per_1000) > 0,
-          deduct_harvesting: Number(settings.tree_collection_rate_per_1000) > 0,
+          deduct_harvesting: false,
           dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
-          harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
+          harvesting_mode: "none",
           buys_husk: true,
           husk_color: huskColorForCoconut(current.coconut_color),
           husk_price_per_piece: "0",
@@ -488,9 +490,9 @@ export default function NewPurchasePage() {
         purchase_mode: "weight",
         husk_included: false,
         deduct_dehusking: Number(settings.husk_removal_rate_per_1000) > 0,
-        deduct_harvesting: Number(settings.tree_collection_rate_per_1000) > 0,
+        deduct_harvesting: false,
         dehusking_mode: Number(settings.husk_removal_rate_per_1000) > 0 ? "farmer" : "none",
-        harvesting_mode: Number(settings.tree_collection_rate_per_1000) > 0 ? "farmer" : "none",
+        harvesting_mode: "none",
         buys_husk: Number(settings.husk_price_green_per_piece) > 0,
         husk_price_per_piece: String(settings.husk_price_green_per_piece),
         wastage_percent: current.processing_type === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0"
@@ -527,19 +529,15 @@ export default function NewPurchasePage() {
     const harvestFixed = kind === "harvesting" && harvestingFixed;
     return (
       <div className="deduction-card" key={kind}>
-        <label className="checkbox-field"><input type="checkbox" checked={mode !== "none"} onChange={(event) => setLaborMode(kind, event.target.checked ? "farmer" : "none")} /><span><strong>{title}</strong><small>Who pays this labor — the farmer, or you.</small></span></label>
-        {mode !== "none" ? <>
-          <div className="segmented">
-            <button className={mode === "farmer" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "farmer")}><strong>Farmer pays</strong><span>Deducted from the farmer</span></button>
-            <button className={mode === "trader" ? "active" : ""} type="button" onClick={() => setLaborMode(kind, "trader")}><strong>You pay</strong><span>Booked to your team</span></button>
-          </div>
-          {harvestFixed ? <label>Harvesting team<p className="field-hint">Done by <strong>{harvestTeamNames.length ? harvestTeamNames.join(", ") : "the linked harvest's team"}</strong>, from the harvest linked to this purchase — its wage is already booked there, so you don't pick a team here. &quot;You pay&quot; vs &quot;Farmer pays&quot; only decides whether it is deducted from the farmer.</p></label>
-          : <label>{title} team <span className="optional">{mode === "farmer" ? "Optional" : ""}</span><select value={form[teamField]} onChange={(event) => setField(teamField, event.target.value)}><option value="">{mode === "farmer" ? "Not recorded" : "Select a team"}</option>{teams.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select>{teams.length === 0 ? <span className="field-hint">No {kind === "dehusking" ? "dehusking" : "harvesting"} team yet. Add one on <Link href="/dashboard/team">Team &amp; vehicles</Link>.</span> : <span className="field-hint">Pick who did the {kind === "dehusking" ? "dehusking" : "harvesting"}. The wage is booked to them under Expenses and shows in their history with Paid / Pending{mode === "farmer" ? " (and is still deducted from the farmer)" : ""}.</span>}</label>}
-          <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested by the team"} <span className="optional">Blank = all {formatNumber(calculation.quantity, 0)} pieces</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : "Same as coconut quantity"} /></label>
-          <div className="rate-line"><span>{formatCurrency(rate)} per 1,000 pieces{laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pieces · ${formatCurrency(shownCost)} ${mode === "trader" ? "you pay" : "deducted"}` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div>
-          {rateEditor === kind ? <div className="inline-form"><label>{title} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only. The default in Settings stays as it is.</span></div> : null}
-          {kind === "harvesting" && mode === "trader" && !harvestFixed ? <span className="field-hint">If you already recorded this load in &quot;Harvested coconuts&quot; above, leave this off so the harvesting wage is not counted twice.</span> : null}
-        </> : null}
+        <div className="form-grid">
+          <label>Who pays?<select value={mode} onChange={(event) => setLaborMode(kind, event.target.value as LaborMode)}><option value="none">Select</option><option value="farmer">Farmer pays</option><option value="trader">You pay</option></select></label>
+          {mode !== "none" ? (harvestFixed
+            ? <label>Harvesting team<select disabled value="fixed"><option value="fixed">{harvestTeamNames.length ? harvestTeamNames.join(", ") : "Linked harvest team"}</option></select></label>
+            : <label>{title} team<select value={form[teamField]} onChange={(event) => setField(teamField, event.target.value)}><option value="">{mode === "farmer" ? "Not recorded" : "Select a team"}</option>{teams.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}</select></label>) : null}
+          {mode !== "none" ? <label>{kind === "dehusking" ? "Pieces dehusked" : "Pieces harvested"} <span className="optional">Blank = {formatNumber(calculation.quantity, 0)}</span><input type="number" min="0" step="1" value={form[piecesField]} onChange={(event) => setField(piecesField, event.target.value)} placeholder={calculation.quantity > 0 ? formatNumber(calculation.quantity, 0) : ""} /></label> : null}
+        </div>
+        {mode !== "none" ? <div className="rate-line"><span>{formatCurrency(rate)} / 1,000{laborPieces > 0 ? ` · ${formatNumber(laborPieces, 0)} pcs · ${formatCurrency(shownCost)} ${mode === "trader" ? "you pay" : "deducted"}` : ""}</span>{rateEditor === kind ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor(kind)} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit rate</button>}</div> : null}
+        {rateEditor === kind ? <div className="inline-form"><label>{title} rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate(kind)} type="button">Save rate</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div></div> : null}
       </div>
     );
   };
@@ -557,8 +555,9 @@ export default function NewPurchasePage() {
           <label>Purchase date<input type="date" value={form.trade_date} onChange={(event) => setField("trade_date", event.target.value)} required /></label>
           <label>Coconut colour<select value={form.coconut_color} onChange={(event) => setField("coconut_color", event.target.value as CoconutColor)}>{coconutColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label>Purchase method<select value={method} onChange={(event) => applyMethod(event.target.value as "weight" | "weight_husk" | "quantity")}><option value="weight">Weight-based / weighbridge</option><option value="weight_husk">Weight-based with husk</option><option value="quantity">Quantity-based / per nut</option></select><span className="field-hint">{method === "quantity" ? "Pay by individual coconut using a per-nut price. The husk stays with you to sell." : method === "weight_husk" ? "Bought with husk by weight. You pay the farmer the full weight amount; you dehusk (your own cost) and keep the husk to sell. The farmer does the harvesting." : "Pay by payable kilograms after weighbridge deductions. Husk credit is paid to the farmer."}</span></label>
+          {form.purchase_mode === "weight" ? <label>Coconut preparation<select value={form.processing_type} onChange={(event) => { const value = event.target.value as "mottai" | "kudume"; setForm((current) => ({ ...current, processing_type: value, wastage_percent: value === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0" })); }}>{processingTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label> : null}
         </div>
-        {form.purchase_mode === "weight" ? <fieldset><legend>Coconut preparation</legend><div className="segmented compact">{processingTypes.map((item) => <button className={form.processing_type === item.value ? "active" : ""} key={item.value} onClick={() => setForm((current) => ({ ...current, processing_type: item.value, wastage_percent: item.value === "kudume" ? (current.wastage_percent === "0" ? String(settings.kudume_wastage_percent) : current.wastage_percent) : "0" }))} type="button"><strong>{item.label}</strong></button>)}</div></fieldset> : <p className="mode-note">Per-nut purchases are paid by the piece — no weighbridge, wastage or husk-credit fields.</p>}
+        {form.purchase_mode === "quantity" ? <p className="mode-note">Per-nut purchases are paid by the piece — no weighbridge, wastage or husk-credit fields.</p> : null}
         {!form.id ? <fieldset className="deduction-options"><legend>Harvesting <span className="optional">Optional</span></legend>
           {!form.farmer_id
             ? <p className="field-hint">Choose a farmer above to see the harvests recorded for them that are not linked to a purchase yet.</p>
