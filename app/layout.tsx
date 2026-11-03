@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { NumberInputGuard } from "./NumberInputGuard";
 import { LanguageProvider } from "./lib/i18n";
 import { Analytics } from "./Analytics";
+
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], display: "swap", variable: "--font-sans" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://bizztrack.in"),
@@ -16,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body><NumberInputGuard /><Analytics /><LanguageProvider>{children}</LanguageProvider></body>
     </html>
   );
