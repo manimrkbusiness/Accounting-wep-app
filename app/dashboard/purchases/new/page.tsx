@@ -13,6 +13,7 @@ import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNu
 import { coconutColors, huskColors, huskColorForCoconut, processingTypes, type CoconutColor, type HuskColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
 import { defaultSettings } from "../../components/CostSettingsPanel";
 import { farmerReceiptText, shareReceiptWhatsApp } from "../../lib/receipt";
+import { DraggablePanel } from "../../components/DraggablePanel";
 
 type LaborMode = "none" | "farmer" | "trader";
 
@@ -546,7 +547,7 @@ export default function NewPurchasePage() {
   return (
     <>
     <DraftNotice show={draft.restored} what="purchase" onDiscard={discardDraft} />
-    <section className="workspace-grid">
+    <div className="purchase-work">
       <form className="tool-panel purchase-form" onSubmit={savePurchase}>
         <div className="panel-heading"><div><span className="eyebrow">{form.id ? formatPurchaseId(form.id) : "New record"}</span><h2>{form.id ? "Edit purchase" : "Record coconut purchase"}</h2></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, "purchase", null)); router.push("/dashboard/purchases/new"); }} type="button">Cancel edit</button> : (purchaseHasContent ? <button className="secondary-button" onClick={discardPurchase} type="button">Discard</button> : null)}<Link className="secondary-button" href="/dashboard/purchases">Purchase history</Link></div></div>
         {form.id && allocated > 0 ? <p className="mode-note">{formatNumber(allocated, 0)} pieces of this purchase are already allocated to sales. Those sales are not changed when you edit this record.</p> : null}
@@ -623,7 +624,8 @@ export default function NewPurchasePage() {
         {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
         <button className="primary-button" disabled={ws.saving || ws.farmers.length === 0} type="submit">{ws.saving ? "Saving..." : form.id ? "Update purchase" : "Save purchase"}</button>
       </form>
-      <aside className="side-stack">
+    </div>
+    <DraggablePanel title="Live calculation" storageKey="purchase-calc">
         <section className="calculation-panel"><span className="eyebrow">Live calculation</span><h2>{calculation.purchaseMode === "quantity" ? "Per-nut summary" : "Weighbridge summary"}</h2><dl className="calculation-list">
           {calculation.purchaseMode === "weight" ? <><div><dt>Net weight</dt><dd>{formatNumber(calculation.net)} kg</dd></div><div><dt>Wastage<small className="formula">{formatNumber(calculation.net)} kg × {formatNumber(calculation.wastagePercent, 2)}%</small></dt><dd>{formatNumber(calculation.wastage)} kg</dd></div><div><dt>Payable weight<small className="formula">{formatNumber(calculation.net)} kg − {formatNumber(calculation.wastage)} kg</small></dt><dd>{formatNumber(calculation.payable)} kg</dd></div></> : null}
           <div><dt>Coconut quantity</dt><dd>{formatNumber(calculation.quantity, 0)} pieces</dd></div>
@@ -652,8 +654,7 @@ export default function NewPurchasePage() {
             <div className={projectedProfit >= 0 ? "calculation-total" : "calculation-deduction calculation-spent"}><dt>Projected profit<small className="formula">{formatCurrency(coconutSaleValue + huskSaleValue)} − {formatCurrency(totalSpend)}</small></dt><dd>{formatCurrency(projectedProfit)}</dd></div>
           </dl><p className="field-hint">An estimate for the whole buy-and-sell: expected coconut and husk sales minus what you pay the farmer and your own labour. Transport and other expenses are not included.</p></> : null}
         </section>
-      </aside>
-    </section>
+    </DraggablePanel>
     </>
   );
 }
