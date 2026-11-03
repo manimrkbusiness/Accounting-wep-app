@@ -8,8 +8,9 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { paidToFarmer, purchaseOutstanding, purchaseStatusWithout, statusForBalance } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../lib/format";
-import { cashMethods, type CashEntry, type CashMethod, type Purchase } from "../lib/types";
+import { cashMethods, type CashEntry, type CashMethod, type Farmer, type FarmerLocation, type Purchase } from "../lib/types";
 import { downloadPurchasePdf } from "../lib/pdf";
+import { farmerReceiptText, shareReceiptWhatsApp } from "../lib/receipt";
 import { EmptyState, StatusBadge } from "../components/ui";
 import { ResumeBanner } from "../components/ResumeBanner";
 
@@ -114,6 +115,24 @@ export default function PurchasesPage() {
     await ws.refresh();
   }
 
+  /** Share a farmer-only receipt (what the trader owes) over WhatsApp — no trader margin. */
+  function shareReceipt(purchase: Purchase, farmer: Farmer | undefined, location: FarmerLocation | null) {
+    const coconutAmount = Number(purchase.total_amount) - Number(purchase.husk_price_total) + Number(purchase.labor_cost_total);
+    const methodLabel = purchase.purchase_mode === "quantity" ? "Per nut" : `Weight${purchase.husk_included ? " + husk" : ""}`;
+    const text = farmerReceiptText({
+      traderName: ws.traderName, farmerName: farmer?.name ?? "Farmer", farmerPhone: farmer?.phone,
+      date: purchase.trade_date, location: location?.location_name ?? null,
+      color: purchase.coconut_color, methodLabel, quantityPieces: Number(purchase.coconut_quantity),
+      netWeightKg: purchase.purchase_mode === "weight" ? Number(purchase.net_weight_kg) : undefined,
+      payableWeightKg: purchase.purchase_mode === "weight" ? Number(purchase.payable_weight_kg) : undefined,
+      coconutAmount, dehuskingCost: Number(purchase.husk_removal_cost), harvestingCost: Number(purchase.tree_collection_cost),
+      huskCredit: Number(purchase.husk_price_total), additionalCredit: Number(purchase.additional_credit_amount),
+      additionalDebit: Number(purchase.additional_debit_amount), netPayable: Number(purchase.total_amount),
+      advance: Number(purchase.advance_amount), balance: Number(purchase.balance_amount), notes: purchase.notes
+    });
+    shareReceiptWhatsApp(text, farmer?.phone);
+  }
+
   return (
     <div className="stack">
     <ResumeBanner form="purchase" newPath="/dashboard/purchases/new" what="purchase" />
@@ -147,6 +166,7 @@ export default function PurchasesPage() {
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
             <td><div className="row-actions">
               <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) })} type="button">PDF</button>
+              <button className="secondary-button" onClick={() => shareReceipt(purchase, farmer, location)} type="button">Share</button>
               <button className="secondary-button" onClick={() => router.push(`/dashboard/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>
               {due > 0.005 ? <button className="secondary-button" onClick={() => openPayment(purchase)} type="button">Pay</button> : null}
               <button className="danger-button" disabled={ws.saving} onClick={() => deletePurchase(purchase)} type="button">Delete</button>

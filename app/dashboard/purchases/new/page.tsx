@@ -12,6 +12,7 @@ import { calculatePurchase } from "../../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, today, toNumber } from "../../lib/format";
 import { coconutColors, huskColors, huskColorForCoconut, processingTypes, type CoconutColor, type HuskColor, type PaymentStatus, type Purchase, type PurchaseMode, type TraderSettings } from "../../lib/types";
 import { defaultSettings } from "../../components/CostSettingsPanel";
+import { farmerReceiptText, shareReceiptWhatsApp } from "../../lib/receipt";
 
 type LaborMode = "none" | "farmer" | "trader";
 
@@ -405,6 +406,25 @@ export default function NewPurchasePage() {
 
   const setField = <K extends keyof PurchaseForm>(key: K, value: PurchaseForm[K]) => setForm((current) => ({ ...current, [key]: value }));
 
+  /** Share a farmer-only receipt (what you owe the farmer) over WhatsApp — no trader margin. */
+  function shareReceipt() {
+    const farmer = form.farmer_id ? ws.farmerById.get(Number(form.farmer_id)) : undefined;
+    if (!farmer) { ws.fail("Choose a farmer first to share the receipt."); return; }
+    const location = form.location_id ? ws.locationById.get(Number(form.location_id)) : null;
+    const text = farmerReceiptText({
+      traderName: ws.traderName, farmerName: farmer.name, farmerPhone: farmer.phone,
+      date: form.trade_date, location: location?.location_name ?? null,
+      color: form.coconut_color, methodLabel: method === "quantity" ? "Per nut" : `Weight${form.husk_included ? " + husk" : ""}`,
+      quantityPieces: calculation.quantity,
+      netWeightKg: calculation.purchaseMode === "weight" ? calculation.net : undefined,
+      payableWeightKg: calculation.purchaseMode === "weight" ? calculation.payable : undefined,
+      coconutAmount: calculation.coconutTotal, dehuskingCost: calculation.huskRemovalCost, harvestingCost: calculation.treeCollectionCost,
+      huskCredit: calculation.huskPriceIncome, additionalCredit: calculation.additionalCredit, additionalDebit: calculation.additionalDebit,
+      netPayable: calculation.total, advance: calculation.advance, balance: calculation.balance, notes: form.notes
+    });
+    shareReceiptWhatsApp(text, farmer.phone);
+  }
+
   // Who bears a labor: none / farmer (deducted) / trader (paid to a team). Keep the legacy
   // deduct_* flag in sync so the live calc still deducts only for farmer-borne labor.
   function setLaborMode(kind: "dehusking" | "harvesting", mode: LaborMode) {
@@ -622,6 +642,7 @@ export default function NewPurchasePage() {
           {calculation.additionalDebit > 0 ? <div className="calculation-deduction"><dt>Additional debit</dt><dd>{formatCurrency(calculation.additionalDebit)}</dd></div> : null}
           <div className="calculation-total"><dt>Balance to pay<small className="formula">{formatCurrency(calculation.total)} − {formatCurrency(calculation.advance)}{calculation.additionalCredit > 0 ? ` + ${formatCurrency(calculation.additionalCredit)}` : ""}{calculation.additionalDebit > 0 ? ` − ${formatCurrency(calculation.additionalDebit)}` : ""}</small></dt><dd>{formatCurrency(calculation.balance)}</dd></div>
         </dl><p className="field-hint">{form.husk_included ? "Bought with husk: the husk is yours to sell at no cost, with no credit to the farmer. Dehusking and harvesting deductions work the same as a weight-based purchase. " : calculation.buysHusk ? `You are buying the ${form.husk_color} husk at ${formatCurrency(toNumber(form.husk_price_per_piece))} per piece on ${formatNumber(calculation.huskPieces, 0)} pieces; this credit is paid to the farmer and the husk is yours to sell. ` : calculation.purchaseMode === "weight" ? "Husk is not being bought on this purchase. " : ""}Green credits increase the farmer amount; red deductions reduce it.</p>
+          <button className="secondary-button" type="button" onClick={shareReceipt} disabled={!form.farmer_id}>Share receipt to farmer (WhatsApp)</button>
           {isWeight ? <><span className="eyebrow">Projected profit</span><h2>If you sell this load</h2><dl className="calculation-list">
             <div className="calculation-deduction"><dt>Paid to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div>
             {yourLaborCost > 0 ? <div className="calculation-deduction"><dt>Your labour you pay<small className="formula">dehusking / harvesting you bear</small></dt><dd>{formatCurrency(yourLaborCost)}</dd></div> : null}
