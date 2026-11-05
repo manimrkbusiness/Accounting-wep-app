@@ -220,6 +220,10 @@ export type StockEntry = {
   wastage_percent: number;
   coconut_quantity: number;
   dehusking_rate_per_1000: number;
+  /** Pieces the dehusking team actually dehusked; null means the loaded count (coconut_quantity). */
+  dehusking_pieces: number | null;
+  /** Dehusking team (employee) paid for this entry; null = not attributed to a team. */
+  dehusking_team_id: number | null;
   dehusking_cost: number;
   sale_rate_per_kg: number;
   husk_rate_per_piece: number;
