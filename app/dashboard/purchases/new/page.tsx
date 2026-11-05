@@ -443,13 +443,23 @@ export default function NewPurchasePage() {
   const hasHuskToSell = isWeight && (form.husk_included || calculation.buysHusk);
   const huskSalePieces = form.husk_included ? huskKeptPieces : calculation.buysHusk ? calculation.huskPieces : 0;
   const expectedCoconutRate = Math.max(toNumber(form.expected_sale_rate_per_kg), 0);
-  const expectedHuskRate = Math.max(toNumber(form.expected_husk_price_per_piece), 0);
+  // Expected husk sale price: use the entered sale price, else default to the price paid to the
+  // farmer (break-even) so the husk sale is not shown as zero until a sale price is set.
+  const expectedHuskRate = toNumber(form.expected_husk_price_per_piece) > 0
+    ? toNumber(form.expected_husk_price_per_piece)
+    : calculation.buysHusk ? toNumber(form.husk_price_per_piece) : 0;
   const coconutSaleValue = calculation.payable * expectedCoconutRate;
   const huskSaleValue = hasHuskToSell ? huskSalePieces * expectedHuskRate : 0;
   // Harvesting wage you bear through a linked harvest (not already netted into the farmer payment).
   const linkedHarvestYouPayCost = harvestLocked && form.harvesting_mode === "trader" ? selectedHarvests.reduce((sum, entry) => sum + Number(entry.total_cost), 0) : 0;
-  const yourLaborCost = traderDehuskCost + traderHarvestCost + linkedHarvestYouPayCost;
-  const totalSpend = calculation.total + yourLaborCost;
+  const traderPaidLabor = traderDehuskCost + traderHarvestCost + linkedHarvestYouPayCost;
+  // Dehusking/harvesting wages the farmer "bears" are still cash you hand to the teams (they are
+  // deducted from the farmer total, so you must add them back as your own spend).
+  const farmerPaidLabor = calculation.huskRemovalCost + calculation.treeCollectionCost;
+  // Total dehusking + harvesting you pay the teams, whoever bears it. Counting this makes the
+  // projected profit the true take-home and keeps it in step with the Dashboard's net profit.
+  const laborYouPayToTeams = farmerPaidLabor + traderPaidLabor;
+  const totalSpend = calculation.total + laborYouPayToTeams;
   const projectedProfit = coconutSaleValue + huskSaleValue - totalSpend;
 
   /** Default husk price for a colour, from Settings. */
@@ -580,11 +590,11 @@ export default function NewPurchasePage() {
               <div className="form-grid">
                 <label>Husk colour<select value={form.husk_color} onChange={(event) => { const color = event.target.value as HuskColor; setForm((current) => ({ ...current, husk_color: color, husk_price_per_piece: String(huskDefaultPrice(color)) })); }}>{huskColors.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
                 <label>Husk pieces <span className="optional">Blank = {formatNumber(calculation.dehuskingPieces, 0)}</span><input type="number" min="0" step="1" value={form.husk_pieces} onChange={(event) => setField("husk_pieces", event.target.value)} placeholder={formatNumber(calculation.dehuskingPieces, 0)} /></label>
+                <label>Husk price to farmer / piece (INR)<input type="number" min="0" step="0.01" value={form.husk_price_per_piece} onChange={(event) => setField("husk_price_per_piece", event.target.value)} placeholder="Paid to farmer" required /></label>
                 <label>Husk buyer <span className="optional">Optional</span><select value={form.expected_husk_buyer_id} onChange={(event) => setField("expected_husk_buyer_id", event.target.value)}><option value="">Not decided</option>{huskBuyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label>
-                <label>Expected husk / piece (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.expected_husk_price_per_piece} onChange={(event) => setField("expected_husk_price_per_piece", event.target.value)} placeholder="Husk price" /></label>
+                <label>Expected sale / piece to buyer (INR) <span className="optional">Optional</span><input type="number" min="0" step="0.01" value={form.expected_husk_price_per_piece} onChange={(event) => setField("expected_husk_price_per_piece", event.target.value)} placeholder={toNumber(form.husk_price_per_piece) > 0 ? String(toNumber(form.husk_price_per_piece)) : "Sale price"} /></label>
               </div>
-              <div className="rate-line"><span>{formatCurrency(toNumber(form.husk_price_per_piece))} per piece · {formatNumber(calculation.huskPieces, 0)} pieces · {formatCurrency(calculation.huskPriceIncome)} credited</span>{rateEditor === "husk" ? null : <button className="secondary-button rate-edit-button" onClick={() => openRateEditor("husk")} type="button"><Pencil size={14} strokeWidth={2.2} aria-hidden="true" />Edit price</button>}</div>
-              {rateEditor === "husk" ? <div className="inline-form"><label>Husk price per piece (INR)<input type="number" min="0" step="0.01" value={rateDraft} onChange={(event) => setRateDraft(event.target.value)} autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={() => saveRate("husk")} type="button">Save price</button><button className="link-button" onClick={() => setRateEditor(null)} type="button">Cancel</button></div><span className="field-hint">Applies to this purchase only. The default in Settings stays as it is.</span></div> : null}
+              <div className="rate-line"><span>Pay farmer {formatCurrency(toNumber(form.husk_price_per_piece))} × {formatNumber(calculation.huskPieces, 0)} = {formatCurrency(calculation.huskPriceIncome)} credit{expectedHuskRate > 0 ? ` · sell at ${formatCurrency(expectedHuskRate)} = ${formatCurrency(calculation.huskPieces * expectedHuskRate)}` : ""}</span></div>
             </> : null}
           </div>
         </fieldset>
@@ -613,6 +623,7 @@ export default function NewPurchasePage() {
           <div className="calculation-credit"><dt>Coconut purchase<small className="formula">{calculation.purchaseMode === "weight" ? `${formatNumber(calculation.payable)} kg × ${formatCurrency(toNumber(form.rate_per_kg))} / kg` : `${formatNumber(calculation.quantity, 0)} pieces × ${formatCurrency(toNumber(form.rate_per_piece))} / nut`}</small></dt><dd>{formatCurrency(calculation.coconutTotal)}</dd></div>
           {calculation.purchaseMode === "weight" && form.dehusking_mode === "farmer" ? <div className="calculation-deduction"><dt>Dehusking (farmer)<small className="formula">{formatNumber(calculation.dehuskingPieces, 0)} pieces ÷ 1,000 × {formatCurrency(toNumber(form.husk_removal_rate_per_1000))}</small></dt><dd>{formatCurrency(calculation.huskRemovalCost)}</dd></div> : null}
           {calculation.purchaseMode === "weight" && form.harvesting_mode === "farmer" ? <div className="calculation-deduction"><dt>Coconut harvesting (farmer)<small className="formula">{formatNumber(calculation.harvestingPieces, 0)} pieces ÷ 1,000 × {formatCurrency(toNumber(form.tree_collection_rate_per_1000))}</small></dt><dd>{formatCurrency(calculation.treeCollectionCost)}</dd></div> : null}
+          {calculation.purchaseMode === "weight" && (calculation.huskRemovalCost > 0 || calculation.treeCollectionCost > 0) ? <div className="calculation-total"><dt>Coconut after deductions<small className="formula">{formatCurrency(calculation.coconutTotal)} − {formatCurrency(calculation.huskRemovalCost)} − {formatCurrency(calculation.treeCollectionCost)}</small></dt><dd>{formatCurrency(calculation.coconutTotal - calculation.huskRemovalCost - calculation.treeCollectionCost)}</dd></div> : null}
           {calculation.buysHusk && !form.husk_included ? <div className="calculation-credit"><dt>Husk credit ({form.husk_color} husk)<small className="formula">{formatNumber(calculation.huskPieces, 0)} husk pieces × {formatCurrency(toNumber(form.husk_price_per_piece))} / piece</small></dt><dd>{formatCurrency(calculation.huskPriceIncome)}</dd></div> : null}
           <div className="calculation-total"><dt>Net payable to farmer<small className="formula">{calculation.purchaseMode === "weight" ? `${formatCurrency(calculation.coconutTotal)}${calculation.huskPriceIncome > 0 ? ` + ${formatCurrency(calculation.huskPriceIncome)} husk` : ""} − ${formatCurrency(calculation.huskRemovalCost)} − ${formatCurrency(calculation.treeCollectionCost)}` : `${formatCurrency(calculation.coconutTotal)} (full per-nut amount, no deductions)`}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
           {traderDehuskCost > 0 ? <div className="calculation-deduction"><dt>Your dehusking cost<small className="formula">{formatNumber(calculation.dehuskingPieces, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.husk_removal_rate_per_1000))} · booked to your team</small></dt><dd>{formatCurrency(traderDehuskCost)}</dd></div> : null}
@@ -626,12 +637,12 @@ export default function NewPurchasePage() {
           <button className="secondary-button" type="button" onClick={shareReceipt} disabled={!form.farmer_id}>Share receipt to farmer (WhatsApp)</button>
           {isWeight ? <><span className="eyebrow">Projected profit</span><h2>If you sell this load</h2><dl className="calculation-list">
             <div className="calculation-deduction"><dt>Paid to farmer</dt><dd>{formatCurrency(calculation.total)}</dd></div>
-            {yourLaborCost > 0 ? <div className="calculation-deduction"><dt>Your labour you pay<small className="formula">dehusking / harvesting you bear</small></dt><dd>{formatCurrency(yourLaborCost)}</dd></div> : null}
-            <div className="calculation-deduction calculation-spent"><dt>Total you spend<small className="formula">{formatCurrency(calculation.total)}{yourLaborCost > 0 ? ` + ${formatCurrency(yourLaborCost)}` : ""}</small></dt><dd>{formatCurrency(totalSpend)}</dd></div>
+            {laborYouPayToTeams > 0 ? <div className="calculation-deduction"><dt>Dehusking + harvesting you pay teams<small className="formula">wages you hand the teams, whoever bears the cost</small></dt><dd>{formatCurrency(laborYouPayToTeams)}</dd></div> : null}
+            <div className="calculation-deduction calculation-spent"><dt>Total you spend<small className="formula">{formatCurrency(calculation.total)}{laborYouPayToTeams > 0 ? ` + ${formatCurrency(laborYouPayToTeams)} labour` : ""}</small></dt><dd>{formatCurrency(totalSpend)}</dd></div>
             <div className="calculation-credit"><dt>Expected coconut sale<small className="formula">{formatNumber(calculation.payable)} kg × {formatCurrency(expectedCoconutRate)}{form.expected_buyer_id ? ` · ${ws.buyerById.get(Number(form.expected_buyer_id))?.name ?? ""}` : ""}</small></dt><dd>{formatCurrency(coconutSaleValue)}</dd></div>
             {hasHuskToSell ? <div className="calculation-credit"><dt>Expected husk sale<small className="formula">{formatNumber(huskSalePieces, 0)} pieces × {formatCurrency(expectedHuskRate)}{form.expected_husk_buyer_id ? ` · ${ws.buyerById.get(Number(form.expected_husk_buyer_id))?.name ?? ""}` : ""}</small></dt><dd>{formatCurrency(huskSaleValue)}</dd></div> : null}
             <div className={projectedProfit >= 0 ? "calculation-total" : "calculation-deduction calculation-spent"}><dt>Projected profit<small className="formula">{formatCurrency(coconutSaleValue + huskSaleValue)} − {formatCurrency(totalSpend)}</small></dt><dd>{formatCurrency(projectedProfit)}</dd></div>
-          </dl><p className="field-hint">An estimate for the whole buy-and-sell: expected coconut and husk sales minus what you pay the farmer and your own labour. Transport and other expenses are not included.</p></> : null}
+          </dl><p className="field-hint">The true take-home on this load: expected coconut and husk sales minus what the farmer receives and the dehusking + harvesting wages you pay the teams (even when the farmer bears them, you still hand that cash to the teams). This matches your Dashboard net profit. Transport and other expenses are not included.</p></> : null}
         </section>
     </DraggablePanel>
     </>
