@@ -55,7 +55,8 @@ export function calculatePurchase(form: PurchaseCalcInput) {
   const advance = toNumber(form.advance_amount);
   const additionalCredit = toNumber(form.additional_credit_amount);
   const additionalDebit = toNumber(form.additional_debit_amount);
-  const averageWeightGrams = purchaseMode === "weight" && quantity > 0 ? net / quantity * 1000 : 0;
+  // Average per nut is on the sellable (payable) weight, so Kudume wastage lowers it.
+  const averageWeightGrams = purchaseMode === "weight" && quantity > 0 ? payable / quantity * 1000 : 0;
   const averagePricePerPiece = quantity > 0 ? total / quantity : 0;
   const balance = total - advance + additionalCredit - additionalDebit;
   return { purchaseMode, quantity, dehuskingPieces, harvestingPieces, huskPieces, buysHusk, net, wastagePercent, wastage, payable, coconutTotal, huskRemovalCost, treeCollectionCost, huskPriceIncome, laborTotal, total, advance, additionalCredit, additionalDebit, balance, averageWeightGrams, averagePricePerPiece };

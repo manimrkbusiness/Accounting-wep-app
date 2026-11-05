@@ -78,7 +78,8 @@ export default function StockPage() {
   const wastagePercent = form.processing_type === "kudume" ? toNumber(form.wastage_percent) : 0;
   const wastage = net * wastagePercent / 100;
   const payable = Math.max(net - wastage, 0);
-  const gramsPerNut = loaded > 0 ? net / loaded * 1000 : 0;
+  // Average per nut is on the sellable (payable) weight, so Kudume wastage lowers it.
+  const gramsPerNut = loaded > 0 ? payable / loaded * 1000 : 0;
   const dehuskingRate = form.apply_dehusking ? Math.max(toNumber(form.dehusking_rate_per_1000), 0) : 0;
   const dehuskingCost = loaded / 1000 * dehuskingRate;
   const totalCost = farmerPaid + dehuskingCost;
@@ -247,7 +248,7 @@ export default function StockPage() {
             <div><dt>Coconuts loaded</dt><dd>{formatNumber(loaded, 0)} pieces</dd></div>
             {wasted > 0 ? <div className="calculation-deduction"><dt>Wasted (loss)<small className="formula">{formatNumber(pieces, 0)} picked − {formatNumber(loaded, 0)} loaded</small></dt><dd>{formatNumber(wasted, 0)} pieces</dd></div> : null}
             <div><dt>Net weight</dt><dd>{formatNumber(net)} kg</dd></div>
-            <div><dt>Average weight per nut<small className="formula">{formatNumber(net)} kg ÷ {formatNumber(loaded, 0)} pieces</small></dt><dd>{loaded > 0 && net > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
+            <div><dt>Average weight per nut<small className="formula">{formatNumber(payable)} kg ÷ {formatNumber(loaded, 0)} pieces</small></dt><dd>{loaded > 0 && payable > 0 ? `${formatNumber(gramsPerNut, 1)} g / nut` : "-"}</dd></div>
             {form.processing_type === "kudume" ? <div className="calculation-deduction"><dt>Kudume wastage<small className="formula">{formatNumber(net)} kg × {formatNumber(wastagePercent, 2)}%</small></dt><dd>{formatNumber(wastage)} kg</dd></div> : null}
             <div className="calculation-total"><dt>Sellable weight<small className="formula">{formatNumber(net)} kg − {formatNumber(wastage)} kg</small></dt><dd>{formatNumber(payable)} kg</dd></div>
             <div className="calculation-credit"><dt>Expected husk value ({form.husk_color} husk)<small className="formula">{huskRate > 0 ? `${formatNumber(huskPieces, 0)} husk pieces × ${formatCurrency(huskRate)} / piece` : "Enter the husk price per piece"}</small></dt><dd>{formatCurrency(expectedHuskValue)}</dd></div>
@@ -277,7 +278,7 @@ export default function StockPage() {
               <td>{formatNumber(entryPieces, 0)}</td>
               <td>{formatNumber(Number(entry.net_weight_kg))} kg</td>
               <td>{formatNumber(Number(entry.payable_weight_kg))} kg</td>
-              <td>{entryPieces > 0 ? `${formatNumber(Number(entry.net_weight_kg) / entryPieces * 1000, 1)} g` : "-"}</td>
+              <td>{entryPieces > 0 ? `${formatNumber(Number(entry.payable_weight_kg) / entryPieces * 1000, 1)} g` : "-"}</td>
               <td className="balance-cell">{formatCurrency(paid)}</td>
               <td className="balance-cell">{formatCurrency(dehusking)}{dehusking > 0 ? <span className="muted-text">{formatCurrency(Number(entry.dehusking_rate_per_1000))} / 1,000</span> : null}</td>
               <td className="amount-cell">{formatCurrency(paid + dehusking)}{Number(entry.payable_weight_kg) > 0 ? <span className="muted-text">{formatCurrency((paid + dehusking) / Number(entry.payable_weight_kg))} / kg</span> : null}</td>
