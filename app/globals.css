@@ -1447,6 +1447,67 @@ td > .muted-text {
   padding: 7px 10px;
 }
 
+/* 3-dots (kebab) row actions menu. The dropdown is positioned fixed from JS so the table's
+   horizontal scroll never clips it. */
+.action-menu { display: inline-flex; }
+
+.action-trigger {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.action-trigger:hover { background: #eef3f0; color: var(--ink); }
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: transparent;
+  border: 0;
+  cursor: default;
+  padding: 0;
+}
+
+.action-dropdown {
+  position: fixed;
+  z-index: 71;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(10, 26, 20, 0.18);
+  padding: 6px;
+  display: grid;
+  gap: 1px;
+}
+
+.action-dropdown button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 9px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.action-dropdown button:hover:not(:disabled) { background: #eef3f0; }
+.action-dropdown button:disabled { opacity: 0.5; cursor: default; }
+.action-dropdown button.danger { color: #b42318; }
+.action-dropdown button.danger:hover:not(:disabled) { background: #fdecea; }
+.action-dropdown .menu-sep { background: var(--line); height: 1px; margin: 4px 2px; }
+
 .empty-workspace {
   max-width: 740px;
 }

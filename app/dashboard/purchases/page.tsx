@@ -13,6 +13,7 @@ import { downloadPurchasePdf } from "../lib/pdf";
 import { farmerReceiptText, shareReceiptWhatsApp } from "../lib/receipt";
 import { EmptyState, StatusBadge } from "../components/ui";
 import { ResumeBanner } from "../components/ResumeBanner";
+import { RowMenu } from "../components/RowMenu";
 
 type PaymentForm = { amount: string; date: string; method: CashMethod; description: string };
 
@@ -88,15 +89,21 @@ export default function PurchasesPage() {
 
   async function undoPayment(purchase: Purchase, entry: CashEntry) {
     if (!ws.session) return;
-    if (!window.confirm(`Undo the payment of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It will be removed from the cash book and the amount due will go back up.`)) return;
+    if (!window.confirm(`Reverse the payment of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It is removed from the cash book and the Transactions list, and the amount due goes back up.`)) return;
     ws.clearFeedback();
     ws.setSaving(true);
     const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
     if (!error) await supabase.from("coconut_trades").update({ payment_status: purchaseStatusWithout(purchase, ws.cashEntries, entry.id) }).eq("id", purchase.id).eq("trader_id", ws.session.user.id);
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify("Payment undone. The cash book and balance due are restored.");
+    ws.notify("Payment reversed. The cash book, Transactions and balance due are restored.");
     await ws.refresh();
+  }
+
+  /** Reverse the most recent cash-book payment on this purchase (undo a mistaken "Pay" click). */
+  function reversePayment(purchase: Purchase, payments: CashEntry[]) {
+    const latest = [...payments].sort((a, b) => (a.entry_date < b.entry_date ? 1 : a.entry_date > b.entry_date ? -1 : b.id - a.id))[0];
+    if (latest) void undoPayment(purchase, latest);
   }
 
   async function deletePurchase(purchase: Purchase) {
@@ -162,15 +169,19 @@ export default function PurchasesPage() {
             <td>{info && info.remainingPieces > 0.5 ? <span className="chip good">{formatNumber(info.remainingPieces, 0)} left</span> : <span className="chip">Sold out</span>}{info && info.awaitingStockPieces > 0.5 ? <Link className="chip warn" href={`/dashboard/stock?purchase=${purchase.id}`}>{formatNumber(info.awaitingStockPieces, 0)} to weigh</Link> : null}{info && info.soldPieces > 0 ? <span className="muted-text">{formatNumber(info.soldPieces, 0)} sold</span> : null}{info && info.wastedPieces > 0 ? <span className="muted-text">{formatNumber(info.wastedPieces, 0)} wasted</span> : null}</td>
             <td>{purchase.purchase_mode === "quantity" ? "Per nut" : `${formatNumber(Number(purchase.payable_weight_kg))} kg`}{purchase.purchase_mode === "weight" ? <span className="muted-text">Net {formatNumber(Number(purchase.net_weight_kg))} kg</span> : null}</td>
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
-            <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoPayment(purchase, entry)} type="button">Undo</button></span>)}</div> : null}</td>
+            <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}</span>)}</div> : null}</td>
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
-            <td><div className="row-actions">
-              <button className="secondary-button" onClick={() => downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) })} type="button">PDF</button>
-              <button className="secondary-button" onClick={() => shareReceipt(purchase, farmer, location)} type="button">Share</button>
-              <button className="secondary-button" onClick={() => router.push(`/dashboard/purchases/new?edit=${purchase.id}`)} type="button">Edit</button>
-              {due > 0.005 ? <button className="secondary-button" onClick={() => openPayment(purchase)} type="button">Pay</button> : null}
-              <button className="danger-button" disabled={ws.saving} onClick={() => deletePurchase(purchase)} type="button">Delete</button>
-            </div>
+            <td><RowMenu>
+              {(close) => <>
+                <button role="menuitem" type="button" onClick={() => { close(); downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) }); }}>Download PDF</button>
+                <button role="menuitem" type="button" onClick={() => { close(); shareReceipt(purchase, farmer, location); }}>Share receipt</button>
+                <button role="menuitem" type="button" onClick={() => { close(); router.push(`/dashboard/purchases/new?edit=${purchase.id}`); }}>Edit</button>
+                {due > 0.005 ? <button role="menuitem" type="button" onClick={() => { close(); openPayment(purchase); }}>Record payment</button> : null}
+                {payments.length ? <button role="menuitem" type="button" disabled={ws.saving} onClick={() => { close(); reversePayment(purchase, payments); }}>Reverse payment</button> : null}
+                <div className="menu-sep" />
+                <button role="menuitem" type="button" className="danger" disabled={ws.saving} onClick={() => { close(); deletePurchase(purchase); }}>Delete</button>
+              </>}
+            </RowMenu>
             {paymentFor === purchase.id ? <div className="inline-form"><strong>Payment to {farmer?.name ?? "farmer"}</strong><div className="form-grid">
               <label>Amount (INR)<input type="number" min="0" step="0.01" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></label>
               <label>Date<input type="date" value={paymentForm.date} onChange={(event) => setPaymentForm((form) => ({ ...form, date: event.target.value }))} /></label>
