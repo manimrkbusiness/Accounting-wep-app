@@ -143,7 +143,7 @@ export default function HuskPurchasesPage() {
     ws.notify(form.id ? "Husk purchase updated." : `Husk purchase recorded. ${formatNumber(huskPieces, 0)} ${form.husk_color} husk pieces are ready for a husk sale.`);
     resetForm();
     await ws.refresh();
-    if (returnTo === "husk-sale") router.push("/dashboard/husk-sales");
+    if (returnTo === "husk-sale") router.push("/dashboard/husk-sales/new");
   }
 
   async function deletePurchase(purchase: Purchase) {

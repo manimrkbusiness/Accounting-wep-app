@@ -105,7 +105,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   // A husk-only route keeps its own draft and history, separate from coconut sales.
   const settings = ws.settings ?? defaultSettings;
   const draftForm = forcedKind === "husk" ? "husk-sale" : "sale";
-  const newHref = forcedKind === "husk" ? "/dashboard/husk-sales" : "/dashboard/sales/new";
+  const newHref = forcedKind === "husk" ? "/dashboard/husk-sales/new" : "/dashboard/sales/new";
+  const historyHref = forcedKind === "husk" ? "/dashboard/husk-sales" : "/dashboard/sales";
   // Everything typed here is kept as a draft until the sale is saved or discarded.
   const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, draftForm, queryNumber("edit")));
   const formDraft = useDraft<SaleForm>(`${draftScope}:form`, blankForm);
@@ -425,7 +426,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
     if (ws.session) discardDrafts(ws.session.user.id, draftForm);
     discardDraft();
     ws.notify(form.id ? `${formatSaleId(Number(data))} updated.` : `${formatSaleId(Number(data))} saved. Stock has been reduced for the included purchases.`);
-    router.push("/dashboard/sales");
+    router.push(historyHref);
     await ws.refresh();
   }
 
@@ -504,7 +505,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
 
       <div className="purchase-work">
         <form className="tool-panel" onSubmit={saveSale}>
-          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, draftForm, null)); router.push(newHref); }} type="button">Cancel edit</button> : ((form.buyer_id || form.quantity || form.rate || allocatedPieces > 0 || huskPiecesSelected > 0 || form.notes.trim()) ? <button className="secondary-button" onClick={discardSale} type="button">Discard</button> : null)}<Link className="secondary-button" href="/dashboard/sales">Sales history</Link></div></div>
+          <div className="panel-heading"><div className="step-heading"><span className="step-number">2</span><div><span className="eyebrow">{form.id ? formatSaleId(form.id) : kind === "coconut" ? "Sale entry" : "Husk sale"}</span><h2>{form.id ? "Edit sale" : kind === "coconut" ? "Buyer and weighbridge details" : "Husk sale details"}</h2></div></div><div className="row-actions">{form.id ? <button className="link-button" onClick={() => { discardDraft(); setDraftScope(draftKey(ws.session?.user.id, draftForm, null)); router.push(newHref); }} type="button">Cancel edit</button> : ((form.buyer_id || form.quantity || form.rate || allocatedPieces > 0 || huskPiecesSelected > 0 || form.notes.trim()) ? <button className="secondary-button" onClick={discardSale} type="button">Discard</button> : null)}<Link className="secondary-button" href={historyHref}>Sales history</Link></div></div>
           <div className="form-grid">
             <label>Buyer<select value={form.buyer_id} onChange={(event) => { const value = event.target.value; if (value === "__add__") { router.push("/dashboard/buyers?returnTo=sale"); return; } setField("buyer_id", value); }} required><option value="__add__">+ Add buyer</option><option value="">Select a buyer</option>{buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}{buyer.business_name ? ` - ${buyer.business_name}` : ""}</option>)}</select>{buyers.length === 0 ? <span className="field-hint">No {kind} buyers yet. Add one from the Buyers page.</span> : null}</label>
             <label>Sale date<input type="date" value={form.sale_date} onChange={(event) => setField("sale_date", event.target.value)} required /></label>

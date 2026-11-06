@@ -8,16 +8,20 @@ import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
 import { allocationCost, receivedFromBuyer, saleOutstanding, saleStatusWithout, statusForBalance } from "../lib/calc";
 import { formatCurrency, formatDate, formatNumber, formatPurchaseId, formatSaleId, today, toNumber } from "../lib/format";
-import { cashMethods, type CashEntry, type CashMethod, type Sale } from "../lib/types";
+import { cashMethods, type CashEntry, type CashMethod, type Sale, type SaleKind } from "../lib/types";
 import { downloadSalePdf } from "../lib/pdf";
 import { EmptyState, StatusBadge } from "../components/ui";
 import { ResumeBanner } from "../components/ResumeBanner";
+import { RowMenu } from "../components/RowMenu";
 
 type ReceiptForm = { amount: string; date: string; method: CashMethod; description: string };
 
-export default function SalesPage() {
+export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
   const ws = useWorkspace();
   const router = useRouter();
+  const isHusk = forcedKind === "husk";
+  const newSaleHref = isHusk ? "/dashboard/husk-sales/new" : "/dashboard/sales/new";
+  const editHref = (sale: Sale) => `${sale.sale_kind === "husk" ? "/dashboard/husk-sales/new" : "/dashboard/sales/new"}?edit=${sale.id}`;
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | "coconut" | "husk">("all");
   const [buyerFilter, setBuyerFilter] = useState("");
@@ -40,7 +44,8 @@ export default function SalesPage() {
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return ws.sales.filter((sale) => {
-      if (kindFilter !== "all" && sale.sale_kind !== kindFilter) return false;
+      const activeKind = forcedKind ?? kindFilter;
+      if (activeKind !== "all" && sale.sale_kind !== activeKind) return false;
       if (buyerFilter && String(sale.buyer_id) !== buyerFilter) return false;
       const due = saleOutstanding(sale, ws.cashEntries);
       if (statusFilter === "due" && due <= 0.005) return false;
@@ -50,7 +55,7 @@ export default function SalesPage() {
       const linked = (itemsBySale.get(sale.id) ?? []).map((item) => formatPurchaseId(item.purchase_id)).join(" ");
       return `${formatSaleId(sale.id)} ${buyer?.name ?? ""} ${buyer?.business_name ?? ""} ${buyer?.phone ?? ""} ${sale.vehicle_number ?? ""} ${sale.coconut_color} ${linked}`.toLowerCase().includes(query);
     });
-  }, [ws.sales, ws.cashEntries, ws.buyerById, itemsBySale, search, kindFilter, buyerFilter, statusFilter]);
+  }, [ws.sales, ws.cashEntries, ws.buyerById, itemsBySale, search, kindFilter, buyerFilter, statusFilter, forcedKind]);
 
   function openReceipt(sale: Sale) {
     ws.clearFeedback();
@@ -76,15 +81,21 @@ export default function SalesPage() {
 
   async function undoReceipt(sale: Sale, entry: CashEntry) {
     if (!ws.session) return;
-    if (!window.confirm(`Undo the receipt of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It will be removed from the cash book and the amount due will go back up.`)) return;
+    if (!window.confirm(`Reverse the receipt of ${formatCurrency(Number(entry.amount))} recorded on ${formatDate(entry.entry_date)}? It is removed from the cash book and the Transactions list, and the amount due goes back up.`)) return;
     ws.clearFeedback();
     ws.setSaving(true);
     const { error } = await supabase.from("cash_entries").delete().eq("id", entry.id).eq("trader_id", ws.session.user.id);
     if (!error) await supabase.from("sales").update({ payment_status: saleStatusWithout(sale, ws.cashEntries, entry.id) }).eq("id", sale.id).eq("trader_id", ws.session.user.id);
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
-    ws.notify("Receipt undone. The cash book and balance due are restored.");
+    ws.notify("Receipt reversed. The cash book, Transactions and balance due are restored.");
     await ws.refresh();
+  }
+
+  /** Reverse the most recent buyer receipt on this sale (undo a mistaken "Receive" click). */
+  function reverseReceipt(sale: Sale, receipts: CashEntry[]) {
+    const latest = [...receipts].sort((a, b) => (a.entry_date < b.entry_date ? 1 : a.entry_date > b.entry_date ? -1 : b.id - a.id))[0];
+    if (latest) void undoReceipt(sale, latest);
   }
 
   async function deleteSale(sale: Sale) {
@@ -101,13 +112,13 @@ export default function SalesPage() {
 
   return (
     <div className="stack">
-    <ResumeBanner form="sale" newPath="/dashboard/sales/new" what="sale" />
+    <ResumeBanner form={isHusk ? "husk-sale" : "sale"} newPath={newSaleHref} what="sale" />
     {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
     <section className="ledger-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Sales history</h2></div><div className="page-actions"><Link className="primary-button" href="/dashboard/sales/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />New coconut sale</Link><Link className="secondary-button" href="/dashboard/husk-sales">Husk sale</Link></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>{isHusk ? "Husk sale history" : "Sales history"}</h2></div><div className="page-actions"><Link className="primary-button" href={newSaleHref}><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />{isHusk ? "Record a husk sale" : "New coconut sale"}</Link>{isHusk ? null : <Link className="secondary-button" href="/dashboard/husk-sales">Husk sales</Link>}</div></div>
       <div className="filter-bar">
         <label className="search-field">Search sale ID, buyer, lorry or purchase ID<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="SAL-000001, buyer name, PUR-000003..." /></label>
-        <label>Type<select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as typeof kindFilter)}><option value="all">Coconut and husk</option><option value="coconut">Coconut loads</option><option value="husk">Husk sales</option></select></label>
+        {forcedKind ? null : <label>Type<select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as typeof kindFilter)}><option value="all">Coconut and husk</option><option value="coconut">Coconut loads</option><option value="husk">Husk sales</option></select></label>}
         <label>Buyer<select value={buyerFilter} onChange={(event) => setBuyerFilter(event.target.value)}><option value="">All buyers</option>{ws.buyers.map((buyer) => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></label>
         <label>Payment<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">All</option><option value="due">Balance due</option><option value="paid">Fully received</option></select></label>
       </div>
@@ -138,14 +149,18 @@ export default function SalesPage() {
             <td>{formatCurrency(Number(sale.rate))} / {sale.unit === "kg" ? "kg" : sale.unit === "piece" ? "nut" : "load"}</td>
             <td className="amount-cell">{formatCurrency(Number(sale.total_amount))}{Number(sale.transport_charge) > 0 ? <span className="muted-text">incl. transport {formatCurrency(Number(sale.transport_charge))}</span> : null}{Number(sale.deduction_amount) > 0 ? <span className="balance-cell">-{formatCurrency(Number(sale.deduction_amount))}</span> : null}</td>
             <td>{sale.sale_kind === "coconut" && items.length ? <div className="cell-stack"><span className="muted-text">Total spending</span><span className="balance-cell">{formatCurrency(totalSpending)}</span><span className="muted-text">Margin</span><span className={margin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(margin)}</span></div> : sale.sale_kind === "husk" && huskItems.length ? <div className="cell-stack"><span className="muted-text">Husk cost</span><span className="balance-cell">{formatCurrency(huskCost)}</span><span className="muted-text">Margin</span><span className={huskMargin >= 0 ? "positive" : "balance-cell"}>{formatCurrency(huskMargin)}</span></div> : <span className="muted-text">-</span>}</td>
-            <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}<button className="link-button undo-link" disabled={ws.saving} onClick={() => undoReceipt(sale, entry)} type="button">Undo</button></span>)}</div> : null}</td>
+            <td><StatusBadge status={status} /><span className="muted-text">Received {formatCurrency(received)}</span>{due > 0.005 ? <span className="positive">Due {formatCurrency(due)}</span> : null}{receipts.length ? <div className="payment-list">{receipts.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}</span>)}</div> : null}</td>
             <td>{items.length || wasted.length || huskItems.length ? <div className="chip-row">{items.map((item) => <Link className="chip" href={`/dashboard/purchases?focus=${item.purchase_id}`} key={item.id}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)}</Link>)}{huskItems.map((item) => <Link className="chip" href={`/dashboard/purchases?focus=${item.purchase_id}`} key={`husk-${item.id}`}>{formatPurchaseId(item.purchase_id)} · {formatNumber(Number(item.quantity_pieces), 0)} husk</Link>)}{wasted.map((row) => <span className="chip warn" key={`wasted-${row.id}`}>{formatPurchaseId(row.purchase_id)} · {formatNumber(Number(row.quantity_pieces), 0)} wasted</span>)}</div> : <span className="muted-text">-</span>}</td>
-            <td><div className="row-actions">
-              <button className="secondary-button" onClick={() => downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName)} type="button">PDF</button>
-              <button className="secondary-button" onClick={() => router.push(`${sale.sale_kind === "husk" ? "/dashboard/husk-sales" : "/dashboard/sales/new"}?edit=${sale.id}`)} type="button">Edit</button>
-              {due > 0.005 ? <button className="secondary-button" onClick={() => openReceipt(sale)} type="button">Receive</button> : null}
-              <button className="danger-button" disabled={ws.saving} onClick={() => deleteSale(sale)} type="button">Delete</button>
-            </div>
+            <td><RowMenu>
+              {(close) => <>
+                <button role="menuitem" type="button" onClick={() => { close(); downloadSalePdf(sale, buyer, items, ws.purchaseById, ws.farmerById, ws.traderName); }}>Download PDF</button>
+                <button role="menuitem" type="button" onClick={() => { close(); router.push(editHref(sale)); }}>Edit</button>
+                {due > 0.005 ? <button role="menuitem" type="button" onClick={() => { close(); openReceipt(sale); }}>Receive payment</button> : null}
+                {receipts.length ? <button role="menuitem" type="button" disabled={ws.saving} onClick={() => { close(); reverseReceipt(sale, receipts); }}>Reverse receipt</button> : null}
+                <div className="menu-sep" />
+                <button role="menuitem" type="button" className="danger" disabled={ws.saving} onClick={() => { close(); deleteSale(sale); }}>Delete</button>
+              </>}
+            </RowMenu>
             {receiptFor === sale.id ? <div className="inline-form"><strong>Receipt from {buyer?.name ?? "buyer"}</strong><div className="form-grid">
               <label>Amount (INR)<input type="number" min="0" step="0.01" value={receiptForm.amount} onChange={(event) => setReceiptForm((form) => ({ ...form, amount: event.target.value }))} /></label>
               <label>Date<input type="date" value={receiptForm.date} onChange={(event) => setReceiptForm((form) => ({ ...form, date: event.target.value }))} /></label>
@@ -159,4 +174,8 @@ export default function SalesPage() {
     </section>
     </div>
   );
+}
+
+export default function SalesPage() {
+  return <SalesHistory />;
 }

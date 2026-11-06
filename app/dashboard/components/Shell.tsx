@@ -50,7 +50,7 @@ export const navItems: NavItem[] = [
 const subPages: Record<string, { label: string; description: string }> = {
   "/dashboard/purchases/new": { label: "New purchase", description: "Record coconut bought from a farmer. Costs are calculated for you." },
   "/dashboard/sales/new": { label: "New sale", description: "Pick the purchases going in this load, then enter the buyer and weighbridge details." },
-  "/dashboard/husk-sales": { label: "Husk sale", description: "Pick the husk you are selling, then enter the buyer, rate and any delivery costs." },
+  "/dashboard/husk-sales/new": { label: "New husk sale", description: "Pick the husk you are selling, then enter the buyer, rate and any delivery costs." },
   "/dashboard/husk-purchases": { label: "Husk purchase", description: "Record husk bought straight from a farmer, without any coconut." },
   "/dashboard/account": { label: "Account", description: "Your profile, business details and subscription." }
 };
@@ -87,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const resumeTargets: Record<string, string | null> = {
     "/dashboard/purchases": resumeHref(drafts, "purchase", "/dashboard/purchases/new"),
     "/dashboard/sales": resumeHref(drafts, "sale", "/dashboard/sales/new"),
-    "/dashboard/husk-sales": drafts.some((draft) => draft.form === "husk-sale") ? "/dashboard/husk-sales" : null,
+    "/dashboard/husk-sales": drafts.some((draft) => draft.form === "husk-sale") ? "/dashboard/husk-sales/new" : null,
     "/dashboard/husk-purchases": drafts.some((draft) => draft.form === "husk-purchase") ? "/dashboard/husk-purchases" : null,
     "/dashboard/stock": drafts.some((draft) => draft.form === "stock") ? "/dashboard/stock" : null
   };
