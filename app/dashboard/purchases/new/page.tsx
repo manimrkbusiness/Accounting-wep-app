@@ -239,7 +239,9 @@ export default function NewPurchasePage() {
   // The three purchase methods: plain weight, weight + husk, and per nut.
   const method: "weight" | "weight_husk" | "quantity" = form.purchase_mode === "quantity" ? "quantity" : form.husk_included ? "weight_husk" : "weight";
   // Weight + husk: the husk kept to resell (shown in the summary as an estimate).
-  const huskKeptPieces = form.husk_pieces.trim() ? calculation.huskPieces : calculation.quantity;
+  // Husk kept defaults to the dehusked count (that is how many husks you keep), matching the field
+  // placeholder and the backend (coalesce(husk_pieces, dehusking_pieces, coconut_quantity)).
+  const huskKeptPieces = form.husk_pieces.trim() ? calculation.huskPieces : calculation.dehuskingPieces;
   const farmerLocations = useMemo(() => ws.locations.filter((location) => location.farmer_id === Number(form.farmer_id)), [ws.locations, form.farmer_id]);
   // Only the harvesting team can be named as who harvested; dehuskers and loaders are their own teams.
   const harvesters = useMemo(() => ws.employees.filter((emp) => emp.active && emp.role === "harvester"), [ws.employees]);
