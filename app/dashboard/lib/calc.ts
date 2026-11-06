@@ -184,8 +184,11 @@ export type HuskInfo = {
   huskInHand: number;
   /** What each husk piece cost the trader: the farmer credit for weight-based, zero for per-nut. */
   huskCostPerPiece: number;
-  /** Expected sale price per piece from the stock entry, when one was set (per-nut). */
+  /** Expected sale price per piece set on the purchase (weight-with-husk) or stock entry (per-nut). */
   expectedPricePerPiece: number;
+  /** Break-even price per piece used for the husk-sale margin: the real cost when the husk was
+   * bought from the farmer, otherwise the expected price for byproduct husk kept at no cost. */
+  huskBasisPerPiece: number;
 };
 
 /**
@@ -242,17 +245,25 @@ export function buildHuskMap(
         : purchase.dehusking_pieces != null ? Number(purchase.dehusking_pieces) : Number(purchase.coconut_quantity);
       color = purchase.husk_color ?? null;
       huskCostPerPiece = Number(purchase.husk_price_per_piece ?? 0);
+      // Weight-with-husk (kept at no cost) also runs through this branch with cost 0; carry its
+      // expected sale price so the husk-sale margin is measured against it.
+      expectedPricePerPiece = Number(purchase.expected_husk_price_per_piece ?? 0);
     }
     const huskSoldPieces = soldByPurchase.get(purchase.id) ?? 0;
     const huskInHand = Math.max(huskPieces - huskSoldPieces, 0);
-    husk.set(purchase.id, { purchase, source, color, huskPieces, huskSoldPieces, huskInHand, huskCostPerPiece, expectedPricePerPiece });
+    // Byproduct husk (kept at no cost) breaks even at its expected price; bought husk breaks even at
+    // what was paid to the farmer.
+    const huskBasisPerPiece = huskCostPerPiece > 0 ? huskCostPerPiece : expectedPricePerPiece;
+    husk.set(purchase.id, { purchase, source, color, huskPieces, huskSoldPieces, huskInHand, huskCostPerPiece, expectedPricePerPiece, huskBasisPerPiece });
   });
   return husk;
 }
 
 /** What the husk in a husk sale cost the trader (sum of picked pieces times each purchase's husk cost). */
 export function huskAllocationCost(items: Array<{ purchase_id: number; quantity_pieces: number }>, husk: Map<number, HuskInfo>) {
-  return items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (husk.get(item.purchase_id)?.huskCostPerPiece ?? 0), 0);
+  // Uses the break-even basis (real cost for bought husk, expected price for byproduct husk), so the
+  // husk-sale margin is sale price vs that basis.
+  return items.reduce((sum, item) => sum + Number(item.quantity_pieces) * (husk.get(item.purchase_id)?.huskBasisPerPiece ?? 0), 0);
 }
 
 // ---------------------------------------------------------------------------

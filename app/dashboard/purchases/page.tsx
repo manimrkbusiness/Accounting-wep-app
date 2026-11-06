@@ -33,6 +33,23 @@ export default function PurchasesPage() {
     return map;
   }, [ws.harvestingEntries]);
 
+  // Realized husk profit/loss per purchase: husk pieces sold × (sale price − the purchase's basis).
+  // A sale at the expected/cost basis is zero; below it is a loss that surfaces here on the purchase.
+  const huskPnlByPurchase = useMemo(() => {
+    const huskSaleRate = new Map<number, number>();
+    ws.sales.forEach((sale) => { if (sale.sale_kind === "husk") huskSaleRate.set(sale.id, Number(sale.rate)); });
+    const map = new Map<number, { pieces: number; pnl: number }>();
+    ws.huskSaleItems.forEach((item) => {
+      const rate = huskSaleRate.get(item.sale_id);
+      if (rate == null) return;
+      const basis = ws.husk.get(item.purchase_id)?.huskBasisPerPiece ?? 0;
+      const pieces = Number(item.quantity_pieces);
+      const current = map.get(item.purchase_id) ?? { pieces: 0, pnl: 0 };
+      map.set(item.purchase_id, { pieces: current.pieces + pieces, pnl: current.pnl + pieces * (rate - basis) });
+    });
+    return map;
+  }, [ws.huskSaleItems, ws.sales, ws.husk]);
+
   useEffect(() => {
     const focus = Number(new URLSearchParams(window.location.search).get("focus"));
     if (focus) setFocusId(focus);
@@ -151,7 +168,7 @@ export default function PurchasesPage() {
         <label>Farmer<select value={farmerFilter} onChange={(event) => setFarmerFilter(event.target.value)}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
         <label>Stock<select value={stockFilter} onChange={(event) => setStockFilter(event.target.value as typeof stockFilter)}><option value="all">All purchases</option><option value="in-stock">Still in stock</option><option value="sold-out">Fully sold</option></select></label>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Harvesting</th><th>Actions</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Harvesting</th><th>Husk P&amp;L</th><th>Actions</th></tr></thead><tbody>
         {rows.map((purchase) => {
           const farmer = ws.farmerById.get(purchase.farmer_id);
           const location = purchase.location_id ? ws.locationById.get(purchase.location_id) ?? null : null;
@@ -160,6 +177,7 @@ export default function PurchasesPage() {
           const paid = Number(purchase.advance_amount) + paidToFarmer(purchase.id, ws.cashEntries);
           const due = purchaseOutstanding(purchase, ws.cashEntries);
           const status = statusForBalance(due, paid > 0);
+          const huskPnl = huskPnlByPurchase.get(purchase.id);
           return <tr className={focusId === purchase.id ? "selected" : undefined} key={purchase.id}>
             <td><strong>{formatPurchaseId(purchase.id)}</strong><span className="muted-text">{location?.location_name ?? "-"}</span></td>
             <td>{formatDate(purchase.trade_date)}</td>
@@ -171,6 +189,7 @@ export default function PurchasesPage() {
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}</span>)}</div> : null}</td>
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
+            <td>{huskPnl && huskPnl.pieces > 0 ? <><span className={huskPnl.pnl >= -0.005 ? "chip good" : "chip warn"}>{huskPnl.pnl >= -0.005 ? `+${formatCurrency(huskPnl.pnl)}` : `−${formatCurrency(Math.abs(huskPnl.pnl))}`}</span><span className="muted-text">{formatNumber(huskPnl.pieces, 0)} husk sold</span></> : <span className="muted-text">-</span>}</td>
             <td><RowMenu>
               {(close) => <>
                 <button role="menuitem" type="button" onClick={() => { close(); downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) }); }}>Download PDF</button>
