@@ -1269,6 +1269,23 @@ legend {
   color: #b8f0c8;
 }
 
+/* Sub-group header inside the projected-profit breakdown (e.g. "Coconut", "Husk"). */
+.calculation-list .calc-group-head {
+  padding: 12px 0 2px;
+}
+
+.calculation-list .calc-group-head dt {
+  color: #7fb79a;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.calculation-list .calc-group-head + div {
+  border-top: 0;
+}
+
 .farmer-workspace {
   display: grid;
   gap: 20px;
