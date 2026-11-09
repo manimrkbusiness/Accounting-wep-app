@@ -91,8 +91,10 @@ export function downloadPurchasePdf(trade: Purchase, farmer: Farmer | undefined,
   w.line("Coconut purchase", pdfMoney(Number(trade.total_amount) - Number(trade.husk_price_total) + Number(trade.labor_cost_total)), "credit");
   const dehuskedPieces = trade.dehusking_pieces != null ? Number(trade.dehusking_pieces) : Number(trade.coconut_quantity);
   const harvestedPieces = trade.harvesting_pieces != null ? Number(trade.harvesting_pieces) : Number(trade.coconut_quantity);
-  w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Dehusking (${formatNumber(dehuskedPieces, 0)} pcs)` : "Dehusking", pdfMoney(Number(trade.husk_removal_cost)), "debit");
-  w.line(harvestedPieces !== Number(trade.coconut_quantity) ? `Coconut harvesting (${formatNumber(harvestedPieces, 0)} pcs)` : "Coconut harvesting", pdfMoney(Number(trade.tree_collection_cost)), "debit");
+  // Only the farmer's own deductions appear on the farmer receipt. When the trader bears the
+  // dehusking/harvesting these costs are zero here, so the lines are hidden entirely.
+  if (Number(trade.husk_removal_cost) > 0) w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Dehusking (${formatNumber(dehuskedPieces, 0)} pcs)` : "Dehusking", pdfMoney(Number(trade.husk_removal_cost)), "debit");
+  if (Number(trade.tree_collection_cost) > 0) w.line(harvestedPieces !== Number(trade.coconut_quantity) ? `Coconut harvesting (${formatNumber(harvestedPieces, 0)} pcs)` : "Coconut harvesting", pdfMoney(Number(trade.tree_collection_cost)), "debit");
   if (trade.purchase_mode === "weight" || Number(trade.husk_price_total) > 0) {
     w.line(dehuskedPieces !== Number(trade.coconut_quantity) ? `Husk / Mattai credit (${formatNumber(dehuskedPieces, 0)} pcs)` : "Husk / Mattai credit", pdfMoney(Number(trade.husk_price_total)), "credit");
   }
