@@ -107,9 +107,13 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   const draftForm = forcedKind === "husk" ? "husk-sale" : "sale";
   const newHref = forcedKind === "husk" ? "/dashboard/husk-sales/new" : "/dashboard/sales/new";
   const historyHref = forcedKind === "husk" ? "/dashboard/husk-sales" : "/dashboard/sales";
+  // Husk is always sold by the piece, so its blank form starts on "piece". Without this the reset
+  // form (unit "kg") is immediately changed to "piece" by an effect, which re-creates the draft and
+  // leaves a phantom "sale in progress" after saving.
+  const blankSaleForm = (): SaleForm => forcedKind === "husk" ? { ...blankForm(), unit: "piece" } : blankForm();
   // Everything typed here is kept as a draft until the sale is saved or discarded.
   const [draftScope, setDraftScope] = useState(() => draftKey(ws.session?.user.id, draftForm, queryNumber("edit")));
-  const formDraft = useDraft<SaleForm>(`${draftScope}:form`, blankForm);
+  const formDraft = useDraft<SaleForm>(`${draftScope}:form`, blankSaleForm);
   const selectionDraft = useDraft<Map<number, { pieces: string; wasted: string }>, Array<[number, { pieces: string; wasted: string }]>>(`${draftScope}:selection`, () => new Map(), { serialize: (map) => Array.from(map.entries()), deserialize: (entries) => new Map(entries) });
   const metaDraft = useDraft<SaleMeta>(`${draftScope}:meta`, blankMeta);
   const form = formDraft.value;
@@ -169,7 +173,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   }, [ws.saleById, ws.saleItems, ws.huskSaleItems, ws.stockWastage, ws.purchaseById, ws.buyerById, loadedEdit, form.id, draftWasRestored, setForm, setSelection, setMeta]);
 
   function discardDraft() {
-    formDraft.clear(blankForm());
+    formDraft.clear(blankSaleForm());
     selectionDraft.clear(new Map());
     metaDraft.clear(blankMeta());
     setLoadedEdit(null);

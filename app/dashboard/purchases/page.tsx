@@ -26,6 +26,7 @@ export default function PurchasesPage() {
   const [paymentFor, setPaymentFor] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentForm>({ amount: "", date: today(), method: "cash", description: "" });
   const [focusId, setFocusId] = useState<number | null>(null);
+  const [pnlFor, setPnlFor] = useState<number | null>(null);
 
   const harvestByPurchase = useMemo(() => {
     const map = new Map<number, typeof ws.harvestingEntries>();
@@ -38,14 +39,14 @@ export default function PurchasesPage() {
   const huskPnlByPurchase = useMemo(() => {
     const huskSaleRate = new Map<number, number>();
     ws.sales.forEach((sale) => { if (sale.sale_kind === "husk") huskSaleRate.set(sale.id, Number(sale.rate)); });
-    const map = new Map<number, { pieces: number; pnl: number }>();
+    const map = new Map<number, { pieces: number; revenue: number; cost: number; pnl: number }>();
     ws.huskSaleItems.forEach((item) => {
       const rate = huskSaleRate.get(item.sale_id);
       if (rate == null) return;
       const basis = ws.husk.get(item.purchase_id)?.huskBasisPerPiece ?? 0;
       const pieces = Number(item.quantity_pieces);
-      const current = map.get(item.purchase_id) ?? { pieces: 0, pnl: 0 };
-      map.set(item.purchase_id, { pieces: current.pieces + pieces, pnl: current.pnl + pieces * (rate - basis) });
+      const current = map.get(item.purchase_id) ?? { pieces: 0, revenue: 0, cost: 0, pnl: 0 };
+      map.set(item.purchase_id, { pieces: current.pieces + pieces, revenue: current.revenue + pieces * rate, cost: current.cost + pieces * basis, pnl: current.pnl + pieces * (rate - basis) });
     });
     return map;
   }, [ws.huskSaleItems, ws.sales, ws.husk]);
@@ -65,7 +66,7 @@ export default function PurchasesPage() {
       laborTotal.set(purchaseId, (laborTotal.get(purchaseId) ?? 0) + Number(expense.amount));
     });
     const laborPerPiece = (purchaseId: number) => { const pcs = Number(ws.purchaseById.get(purchaseId)?.coconut_quantity) || 0; return pcs > 0 ? (laborTotal.get(purchaseId) ?? 0) / pcs : 0; };
-    const map = new Map<number, { pieces: number; pnl: number }>();
+    const map = new Map<number, { pieces: number; revenue: number; cost: number; pnl: number }>();
     ws.sales.filter((sale) => sale.sale_kind === "coconut").forEach((sale) => {
       const items = ws.saleItems.filter((item) => item.sale_id === sale.id);
       if (!items.length) return;
@@ -76,8 +77,8 @@ export default function PurchasesPage() {
         const pieces = Number(item.quantity_pieces);
         const revenue = totalAlloc > 0 ? (allocWeight(item.purchase_id, pieces) / totalAlloc) * Number(sale.total_amount) : 0;
         const cost = pieces * ((info?.coconutCostPerPiece ?? 0) + (info?.dehuskingCostPerPiece ?? 0) + laborPerPiece(item.purchase_id));
-        const current = map.get(item.purchase_id) ?? { pieces: 0, pnl: 0 };
-        map.set(item.purchase_id, { pieces: current.pieces + pieces, pnl: current.pnl + (revenue - cost) });
+        const current = map.get(item.purchase_id) ?? { pieces: 0, revenue: 0, cost: 0, pnl: 0 };
+        map.set(item.purchase_id, { pieces: current.pieces + pieces, revenue: current.revenue + revenue, cost: current.cost + cost, pnl: current.pnl + (revenue - cost) });
       });
     });
     return map;
@@ -225,7 +226,7 @@ export default function PurchasesPage() {
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}</span>)}</div> : null}</td>
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
-            <td>{anythingSold ? <><span className={soldPnl >= -0.005 ? "chip good" : "chip warn"}>{soldPnl >= -0.005 ? `+${formatCurrency(soldPnl)}` : `−${formatCurrency(Math.abs(soldPnl))}`}</span>{coconutPnl && coconutPnl.pieces > 0 ? <span className="muted-text">coconut {coconutPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(coconutPnl.pnl))} · {formatNumber(coconutPnl.pieces, 0)} sold</span> : null}{huskPnl && huskPnl.pieces > 0 ? <span className="muted-text">husk {huskPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(huskPnl.pnl))} · {formatNumber(huskPnl.pieces, 0)} sold</span> : null}</> : <span className="muted-text">Not sold yet</span>}</td>
+            <td>{anythingSold ? <button className="pnl-link" type="button" onClick={() => setPnlFor(purchase.id)} title="See the full profit &amp; loss"><span className={soldPnl >= -0.005 ? "chip good" : "chip warn"}>{soldPnl >= -0.005 ? `+${formatCurrency(soldPnl)}` : `−${formatCurrency(Math.abs(soldPnl))}`}</span>{coconutPnl && coconutPnl.pieces > 0 ? <span className="muted-text">coconut {coconutPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(coconutPnl.pnl))} · {formatNumber(coconutPnl.pieces, 0)} sold</span> : null}{huskPnl && huskPnl.pieces > 0 ? <span className="muted-text">husk {huskPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(huskPnl.pnl))} · {formatNumber(huskPnl.pieces, 0)} sold</span> : null}</button> : <span className="muted-text">Not sold yet</span>}</td>
             <td><RowMenu>
               {(close) => <>
                 <button role="menuitem" type="button" onClick={() => { close(); downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) }); }}>Download PDF</button>
@@ -248,6 +249,73 @@ export default function PurchasesPage() {
         })}
       </tbody></table>{rows.length === 0 ? <EmptyState>No purchases match this search.</EmptyState> : null}</div>
     </section>
+    {pnlFor != null ? (() => {
+      const p = ws.purchaseById.get(pnlFor);
+      if (!p) return null;
+      const f = ws.farmerById.get(p.farmer_id);
+      const loc = p.location_id ? ws.locationById.get(p.location_id) ?? null : null;
+      const dehuskPieces = p.dehusking_pieces != null ? Number(p.dehusking_pieces) : Number(p.coconut_quantity);
+      const harvestPieces = p.harvesting_pieces != null ? Number(p.harvesting_pieces) : Number(p.coconut_quantity);
+      const dehuskFarmer = Number(p.husk_removal_cost);
+      const dehuskTrader = dehuskPieces / 1000 * Number(p.trader_dehusking_rate_per_1000 ?? 0);
+      const dehuskTotal = dehuskFarmer + dehuskTrader;
+      const dehuskWho = dehuskFarmer > 0 ? "Farmer pays" : dehuskTrader > 0 ? "You pay" : null;
+      const harvestFarmer = Number(p.tree_collection_cost);
+      const harvestTrader = harvestPieces / 1000 * Number(p.trader_harvesting_rate_per_1000 ?? 0);
+      const linkedHarvest = (harvestByPurchase.get(p.id) ?? []).reduce((sum, e) => sum + Number(e.total_cost), 0);
+      const harvestTotal = harvestFarmer + harvestTrader + linkedHarvest;
+      const harvestWho = harvestFarmer > 0 ? "Farmer pays" : (harvestTrader > 0 || linkedHarvest > 0) ? "You pay" : null;
+      const dehuskTeam = p.dehusking_team_id ? ws.employeeById.get(p.dehusking_team_id)?.name : null;
+      const harvestTeam = p.harvesting_team_id ? ws.employeeById.get(p.harvesting_team_id)?.name : null;
+      const cp = coconutPnlByPurchase.get(p.id);
+      const hp = huskPnlByPurchase.get(p.id);
+      const total = (cp?.pnl ?? 0) + (hp?.pnl ?? 0);
+      const soldAny = (cp?.pieces ?? 0) > 0 || (hp?.pieces ?? 0) > 0;
+      return <div className="pnl-overlay" role="dialog" aria-modal="true">
+        <button className="pnl-overlay-bg" type="button" aria-label="Close" onClick={() => setPnlFor(null)} />
+        <div className="pnl-modal">
+          <div className="pnl-modal-head">
+            <div><span className="eyebrow">Profit &amp; loss</span><h2>{formatPurchaseId(p.id)} · {f?.name ?? "Farmer"}</h2><span className="muted-text">{formatDate(p.trade_date)}{loc ? ` · ${loc.location_name}` : ""}</span></div>
+            <button className="pnl-close" type="button" aria-label="Close" onClick={() => setPnlFor(null)}>×</button>
+          </div>
+          <div className="pnl-modal-body">
+            <section className="pnl-card">
+              <h3>What you bought</h3>
+              <dl className="pnl-list">
+                <div><dt>Coconut</dt><dd>{p.coconut_color} · {p.purchase_mode === "quantity" ? "per nut" : p.processing_type}{p.husk_included ? " · with husk" : ""}</dd></div>
+                <div><dt>Quantity</dt><dd>{formatNumber(Number(p.coconut_quantity), 0)} pieces{p.purchase_mode === "weight" ? ` · ${formatNumber(Number(p.payable_weight_kg))} kg` : ""}</dd></div>
+                {dehuskWho ? <div><dt>Dehusking <span className="pnl-tag">{dehuskWho}</span></dt><dd>{formatCurrency(dehuskTotal)}{dehuskTeam ? ` · ${dehuskTeam}` : ""}</dd></div> : null}
+                {harvestWho ? <div><dt>Harvesting <span className="pnl-tag">{harvestWho}</span></dt><dd>{formatCurrency(harvestTotal)}{harvestTeam ? ` · ${harvestTeam}` : ""}</dd></div> : null}
+                {Number(p.husk_price_total) > 0 ? <div><dt>Husk bought</dt><dd>{formatCurrency(Number(p.husk_price_total))}</dd></div> : p.husk_included ? <div><dt>Husk</dt><dd>kept with the coconut · no cost</dd></div> : null}
+                <div className="pnl-hi"><dt>Paid to farmer</dt><dd>{formatCurrency(Number(p.total_amount))}</dd></div>
+              </dl>
+            </section>
+            <section className="pnl-card">
+              <h3>Coconut sold</h3>
+              {cp && cp.pieces > 0 ? <dl className="pnl-list">
+                <div><dt>Pieces sold</dt><dd>{formatNumber(cp.pieces, 0)}</dd></div>
+                <div className="pnl-credit"><dt>Sale value</dt><dd>{formatCurrency(cp.revenue)}</dd></div>
+                <div className="pnl-debit"><dt>Your cost</dt><dd>{formatCurrency(cp.cost)}</dd></div>
+                <div className={cp.pnl >= -0.005 ? "pnl-hi pnl-good" : "pnl-hi pnl-bad"}><dt>Coconut margin</dt><dd>{cp.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(cp.pnl))}</dd></div>
+              </dl> : <p className="muted-text">Not sold yet.</p>}
+            </section>
+            <section className="pnl-card">
+              <h3>Husk sold</h3>
+              {hp && hp.pieces > 0 ? <dl className="pnl-list">
+                <div><dt>Pieces sold</dt><dd>{formatNumber(hp.pieces, 0)}</dd></div>
+                <div className="pnl-credit"><dt>Sale value</dt><dd>{formatCurrency(hp.revenue)}</dd></div>
+                <div className="pnl-debit"><dt>Your cost</dt><dd>{hp.cost > 0 ? formatCurrency(hp.cost) : "₹0 · no cost"}</dd></div>
+                <div className={hp.pnl >= -0.005 ? "pnl-hi pnl-good" : "pnl-hi pnl-bad"}><dt>Husk margin</dt><dd>{hp.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(hp.pnl))}</dd></div>
+              </dl> : <p className="muted-text">Not sold yet.</p>}
+            </section>
+          </div>
+          <div className={total >= -0.005 ? "pnl-total pnl-good" : "pnl-total pnl-bad"}>
+            <span>{soldAny ? "Profit on this purchase" : "Nothing sold yet"}</span>
+            <strong>{soldAny ? `${total >= -0.005 ? "+" : "−"}${formatCurrency(Math.abs(total))}` : "—"}</strong>
+          </div>
+        </div>
+      </div>;
+    })() : null}
     </div>
   );
 }
