@@ -33,8 +33,8 @@ export default function PurchasesPage() {
     return map;
   }, [ws.harvestingEntries]);
 
-  // Realized husk profit/loss per purchase: husk pieces sold × (sale price − the purchase's basis).
-  // A sale at the expected/cost basis is zero; below it is a loss that surfaces here on the purchase.
+  // Realized husk profit/loss per purchase, once the husk is sold: pieces sold × (sale price − the
+  // husk's real cost). Byproduct husk costs nothing, so it is pure profit.
   const huskPnlByPurchase = useMemo(() => {
     const huskSaleRate = new Map<number, number>();
     ws.sales.forEach((sale) => { if (sale.sale_kind === "husk") huskSaleRate.set(sale.id, Number(sale.rate)); });
@@ -49,6 +49,39 @@ export default function PurchasesPage() {
     });
     return map;
   }, [ws.huskSaleItems, ws.sales, ws.husk]);
+
+  // Realized coconut profit/loss per purchase, once its coconut is sold in a load. For each coconut
+  // sale, the sale value is split across the purchases in it (by weight for kg-sales, else by pieces),
+  // and each purchase's cost (farmer payable per piece + stock dehusking + the dehusking/harvesting
+  // wages you pay the teams, allocated per piece) is subtracted.
+  const coconutPnlByPurchase = useMemo(() => {
+    const laborTotal = new Map<number, number>();
+    const harvestToPurchase = new Map<number, number>();
+    ws.harvestingEntries.forEach((entry) => { if (entry.purchase_id != null) harvestToPurchase.set(entry.id, entry.purchase_id); });
+    ws.expenses.forEach((expense) => {
+      if (expense.category !== "dehusking_labor" && expense.category !== "harvesting_labor") return;
+      const purchaseId = expense.purchase_id ?? (expense.harvesting_entry_id != null ? harvestToPurchase.get(expense.harvesting_entry_id) : undefined);
+      if (purchaseId == null) return;
+      laborTotal.set(purchaseId, (laborTotal.get(purchaseId) ?? 0) + Number(expense.amount));
+    });
+    const laborPerPiece = (purchaseId: number) => { const pcs = Number(ws.purchaseById.get(purchaseId)?.coconut_quantity) || 0; return pcs > 0 ? (laborTotal.get(purchaseId) ?? 0) / pcs : 0; };
+    const map = new Map<number, { pieces: number; pnl: number }>();
+    ws.sales.filter((sale) => sale.sale_kind === "coconut").forEach((sale) => {
+      const items = ws.saleItems.filter((item) => item.sale_id === sale.id);
+      if (!items.length) return;
+      const allocWeight = (purchaseId: number, pieces: number) => { const info = ws.stock.get(purchaseId); return sale.unit === "kg" && info ? pieces * info.kgPerPiece : pieces; };
+      const totalAlloc = items.reduce((sum, item) => sum + allocWeight(item.purchase_id, Number(item.quantity_pieces)), 0);
+      items.forEach((item) => {
+        const info = ws.stock.get(item.purchase_id);
+        const pieces = Number(item.quantity_pieces);
+        const revenue = totalAlloc > 0 ? (allocWeight(item.purchase_id, pieces) / totalAlloc) * Number(sale.total_amount) : 0;
+        const cost = pieces * ((info?.coconutCostPerPiece ?? 0) + (info?.dehuskingCostPerPiece ?? 0) + laborPerPiece(item.purchase_id));
+        const current = map.get(item.purchase_id) ?? { pieces: 0, pnl: 0 };
+        map.set(item.purchase_id, { pieces: current.pieces + pieces, pnl: current.pnl + (revenue - cost) });
+      });
+    });
+    return map;
+  }, [ws.sales, ws.saleItems, ws.stock, ws.expenses, ws.harvestingEntries, ws.purchaseById]);
 
   useEffect(() => {
     const focus = Number(new URLSearchParams(window.location.search).get("focus"));
@@ -168,7 +201,7 @@ export default function PurchasesPage() {
         <label>Farmer<select value={farmerFilter} onChange={(event) => setFarmerFilter(event.target.value)}><option value="">All farmers</option>{ws.farmers.map((farmer) => <option key={farmer.id} value={farmer.id}>{farmer.name}</option>)}</select></label>
         <label>Stock<select value={stockFilter} onChange={(event) => setStockFilter(event.target.value as typeof stockFilter)}><option value="all">All purchases</option><option value="in-stock">Still in stock</option><option value="sold-out">Fully sold</option></select></label>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Harvesting</th><th>Husk P&amp;L</th><th>Actions</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Purchase</th><th>Date</th><th>Farmer</th><th>Coconut</th><th>Pieces</th><th>Stock</th><th>Weight</th><th>Net payable</th><th>Paid / due</th><th>Harvesting</th><th>Realized P&amp;L</th><th>Actions</th></tr></thead><tbody>
         {rows.map((purchase) => {
           const farmer = ws.farmerById.get(purchase.farmer_id);
           const location = purchase.location_id ? ws.locationById.get(purchase.location_id) ?? null : null;
@@ -178,6 +211,9 @@ export default function PurchasesPage() {
           const due = purchaseOutstanding(purchase, ws.cashEntries);
           const status = statusForBalance(due, paid > 0);
           const huskPnl = huskPnlByPurchase.get(purchase.id);
+          const coconutPnl = coconutPnlByPurchase.get(purchase.id);
+          const soldPnl = (coconutPnl?.pnl ?? 0) + (huskPnl?.pnl ?? 0);
+          const anythingSold = (coconutPnl?.pieces ?? 0) > 0 || (huskPnl?.pieces ?? 0) > 0;
           return <tr className={focusId === purchase.id ? "selected" : undefined} key={purchase.id}>
             <td><strong>{formatPurchaseId(purchase.id)}</strong><span className="muted-text">{location?.location_name ?? "-"}</span></td>
             <td>{formatDate(purchase.trade_date)}</td>
@@ -189,7 +225,7 @@ export default function PurchasesPage() {
             <td className="amount-cell">{formatCurrency(Number(purchase.total_amount))}</td>
             <td><StatusBadge status={status} /><span className="muted-text">Paid {formatCurrency(paid)}</span>{due > 0.005 ? <span className="balance-cell">Due {formatCurrency(due)}</span> : null}{payments.length ? <div className="payment-list">{payments.map((entry) => <span className="muted-text" key={entry.id}>{formatDate(entry.entry_date)} · {formatCurrency(Number(entry.amount))}</span>)}</div> : null}</td>
             <td>{(harvestByPurchase.get(purchase.id) ?? []).length ? (harvestByPurchase.get(purchase.id) ?? []).map((entry) => <div className="muted-text" key={entry.id}>{entry.head_employee_id ? ws.employeeById.get(entry.head_employee_id)?.name ?? "Worker" : entry.team_id ? ws.harvestingTeamById.get(entry.team_id)?.name ?? "Team" : "Harvest"} · {formatNumber(Number(entry.coconut_quantity), 0)} pcs · {formatCurrency(Number(entry.total_cost))}</div>) : <span className="muted-text">-</span>}</td>
-            <td>{huskPnl && huskPnl.pieces > 0 ? <><span className={huskPnl.pnl >= -0.005 ? "chip good" : "chip warn"}>{huskPnl.pnl >= -0.005 ? `+${formatCurrency(huskPnl.pnl)}` : `−${formatCurrency(Math.abs(huskPnl.pnl))}`}</span><span className="muted-text">{formatNumber(huskPnl.pieces, 0)} husk sold</span></> : <span className="muted-text">-</span>}</td>
+            <td>{anythingSold ? <><span className={soldPnl >= -0.005 ? "chip good" : "chip warn"}>{soldPnl >= -0.005 ? `+${formatCurrency(soldPnl)}` : `−${formatCurrency(Math.abs(soldPnl))}`}</span>{coconutPnl && coconutPnl.pieces > 0 ? <span className="muted-text">coconut {coconutPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(coconutPnl.pnl))} · {formatNumber(coconutPnl.pieces, 0)} sold</span> : null}{huskPnl && huskPnl.pieces > 0 ? <span className="muted-text">husk {huskPnl.pnl >= -0.005 ? "+" : "−"}{formatCurrency(Math.abs(huskPnl.pnl))} · {formatNumber(huskPnl.pieces, 0)} sold</span> : null}</> : <span className="muted-text">Not sold yet</span>}</td>
             <td><RowMenu>
               {(close) => <>
                 <button role="menuitem" type="button" onClick={() => { close(); downloadPurchasePdf(purchase, farmer, location, ws.traderName, { paid, due, status, payments: payments.map((entry) => ({ date: entry.entry_date, amount: Number(entry.amount) })) }); }}>Download PDF</button>

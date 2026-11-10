@@ -251,9 +251,9 @@ export function buildHuskMap(
     }
     const huskSoldPieces = soldByPurchase.get(purchase.id) ?? 0;
     const huskInHand = Math.max(huskPieces - huskSoldPieces, 0);
-    // Byproduct husk (kept at no cost) breaks even at its expected price; bought husk breaks even at
-    // what was paid to the farmer.
-    const huskBasisPerPiece = huskCostPerPiece > 0 ? huskCostPerPiece : expectedPricePerPiece;
+    // The husk's real cost: what was paid to the farmer for bought husk, zero for byproduct husk
+    // (kept with the coconut or from per-nut stock), which is therefore pure profit when sold.
+    const huskBasisPerPiece = huskCostPerPiece;
     husk.set(purchase.id, { purchase, source, color, huskPieces, huskSoldPieces, huskInHand, huskCostPerPiece, expectedPricePerPiece, huskBasisPerPiece });
   });
   return husk;
