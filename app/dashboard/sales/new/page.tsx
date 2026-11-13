@@ -70,6 +70,11 @@ const blankForm = (): SaleForm => ({
 type SaleMeta = { kind: SaleKind; useGrossTare: boolean; weightEdited: boolean; rateEdited: boolean };
 const blankMeta = (): SaleMeta => ({ kind: "coconut", useGrossTare: false, weightEdited: false, rateEdited: false });
 
+// A trader-paid cost on this sale (transport, loading, driver, or any custom line). Each reduces the
+// margin and is booked under Expenses; an optional loading team also logs it in that team's payments.
+type CostLine = { label: string; amount: string; employee_id: string };
+const COST_MARKER = "Sale cost: ";
+
 function formFromSale(sale: Sale): SaleForm {
   return {
     id: sale.id,
@@ -116,10 +121,13 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   const formDraft = useDraft<SaleForm>(`${draftScope}:form`, blankSaleForm);
   const selectionDraft = useDraft<Map<number, { pieces: string; wasted: string }>, Array<[number, { pieces: string; wasted: string }]>>(`${draftScope}:selection`, () => new Map(), { serialize: (map) => Array.from(map.entries()), deserialize: (entries) => new Map(entries) });
   const metaDraft = useDraft<SaleMeta>(`${draftScope}:meta`, blankMeta);
+  const costsDraft = useDraft<CostLine[]>(`${draftScope}:costs`, () => []);
   const form = formDraft.value;
   const setForm = formDraft.setValue;
   const selection = selectionDraft.value;
   const setSelection = selectionDraft.setValue;
+  const costLines = costsDraft.value;
+  const setCostLines = costsDraft.setValue;
   const { useGrossTare, weightEdited, rateEdited } = metaDraft.value;
   const kind: SaleKind = forcedKind ?? metaDraft.value.kind;
   const setMeta = metaDraft.setValue;
@@ -132,6 +140,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   const buyerParamApplied = useRef(false);
   const [addingLoader, setAddingLoader] = useState(false);
   const [loaderName, setLoaderName] = useState("");
+  // When adding a loading team from a cost line: the index of that line (null = from husk delivery).
+  const [costLoaderFor, setCostLoaderFor] = useState<number | null>(null);
   const [filters, setFilters] = useState({ from: addDays(today(), -60), to: today(), farmer: "", onlyStock: true });
 
   useEffect(() => {
@@ -143,6 +153,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
         if (!draftWasRestored) {
           setMeta({ kind: sale.sale_kind, useGrossTare: sale.gross_weight_kg != null && Number(sale.gross_weight_kg) > 0, weightEdited: true, rateEdited: true });
           setForm(formFromSale(sale));
+          const existingCosts = ws.expenses.filter((expense) => expense.sale_id === editId && typeof expense.description === "string" && expense.description.startsWith(COST_MARKER));
+          setCostLines(existingCosts.map((expense) => ({ label: (expense.description as string).slice(COST_MARKER.length), amount: String(expense.amount), employee_id: expense.employee_id ? String(expense.employee_id) : "" })));
         }
         if (sale.sale_kind === "husk") {
           const huskItems = ws.huskSaleItems.filter((row) => row.sale_id === editId);
@@ -170,12 +182,13 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
       buyerParamApplied.current = true;
       setForm((current) => current.buyer_id === String(buyerParam) ? current : { ...current, buyer_id: String(buyerParam) });
     }
-  }, [ws.saleById, ws.saleItems, ws.huskSaleItems, ws.stockWastage, ws.purchaseById, ws.buyerById, loadedEdit, form.id, draftWasRestored, setForm, setSelection, setMeta]);
+  }, [ws.saleById, ws.saleItems, ws.huskSaleItems, ws.stockWastage, ws.purchaseById, ws.buyerById, ws.expenses, loadedEdit, form.id, draftWasRestored, setForm, setSelection, setMeta, setCostLines]);
 
   function discardDraft() {
     formDraft.clear(blankSaleForm());
     selectionDraft.clear(new Map());
     metaDraft.clear(blankMeta());
+    costsDraft.clear([]);
     setLoadedEdit(null);
   }
   // Always-available way to clear a new sale from the top of the form.
@@ -268,18 +281,20 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
     return perPiece;
   }, [ws.expenses, ws.harvestingEntries, ws.purchaseById]);
   const laborSpending = kind === "coconut" ? allocations.reduce((sum, item) => sum + item.quantity_pieces * (purchaseLaborPerPiece.get(item.purchase_id) ?? 0), 0) : 0;
+  /** Extra costs the trader pays on this sale (transport, loading, driver, custom lines). Each reduces the margin. */
+  const extraCostsTotal = costLines.reduce((sum, line) => sum + Math.max(toNumber(line.amount), 0), 0);
   /** What this load cost: farmer payable for the pieces (stock-stage wastage already absorbed), dehusking booked at the Stock stage, and the dehusking/harvesting wages you pay the teams. */
   const totalSpending = costBasis + stockDehusking + laborSpending;
-  /** Margin takes the full spend, and any sale-stage wastage, off what the buyer actually pays (so a buyer deduction lowers it and a reimbursed charge raises it). */
-  const margin = calculation.total - totalSpending - wastageLoss;
+  /** Margin takes the full spend, any sale-stage wastage, and your own sale costs off what the buyer actually pays (so a buyer deduction lowers it and a reimbursed charge raises it). */
+  const margin = calculation.total - totalSpending - wastageLoss - extraCostsTotal;
   // Husk delivery costs: only when the trader delivers the husk. Loading is on the husk pieces.
   const delivering = kind === "husk" && form.delivery_by_trader;
   const huskLoadingCost = delivering ? Math.round(huskPiecesSelected / 1000 * toNumber(form.husk_loading_rate_per_1000) * 100) / 100 : 0;
   const huskFuelCost = delivering ? toNumber(form.husk_fuel_cost) : 0;
   const huskOtherCost = delivering ? toNumber(form.husk_other_expense) : 0;
   const huskDeliveryCost = huskLoadingCost + huskFuelCost + huskOtherCost;
-  /** Husk margin: what the buyer pays less the husk cost (zero for per-nut husk) and any delivery costs the trader bears. */
-  const huskMargin = calculation.total - huskCost - huskDeliveryCost;
+  /** Husk margin: what the buyer pays less the husk cost (zero for per-nut husk), any delivery costs, and your own sale costs. */
+  const huskMargin = calculation.total - huskCost - huskDeliveryCost - extraCostsTotal;
   const estimatedQuantity = form.unit === "kg" ? Math.round(allocatedKg * 1000) / 1000 : allocatedPieces;
 
   // Pre-fill the sold quantity from the purchase and stock weights until the trader types the slip figure.
@@ -331,17 +346,26 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   const loaders = ws.employees.filter((employee) => employee.active && employee.role === "husk_loader");
 
   async function addLoader() {
-    if (!ws.session || loaderName.trim().length < 2) { ws.fail("Enter the husk loading worker's name (at least 2 letters)."); return; }
+    if (!ws.session || loaderName.trim().length < 2) { ws.fail("Enter the loading worker's name (at least 2 letters)."); return; }
     ws.setSaving(true);
     const { data, error } = await supabase.from("employees").insert({ trader_id: ws.session.user.id, name: loaderName.trim(), role: "husk_loader", active: true }).select("id").single();
     ws.setSaving(false);
     if (error || !data) { ws.fail(error?.message || "Could not add the loading worker."); return; }
-    setField("husk_loading_employee_id", String((data as { id: number }).id));
+    const newId = String((data as { id: number }).id);
+    // Apply the new team to whichever control opened the add form: a cost line, or husk delivery.
+    if (costLoaderFor != null) updateCostLine(costLoaderFor, "employee_id", newId);
+    else setField("husk_loading_employee_id", newId);
     setLoaderName("");
     setAddingLoader(false);
+    setCostLoaderFor(null);
     ws.notify("Loading worker added.");
     await ws.refresh();
   }
+
+  // "Your costs on this sale" lines: free-text label + amount, with an optional loading team.
+  function addCostLine() { setCostLines((current) => [...current, { label: "", amount: "", employee_id: "" }]); }
+  function updateCostLine(index: number, key: keyof CostLine, value: string) { setCostLines((current) => current.map((line, idx) => (idx === index ? { ...line, [key]: value } : line))); }
+  function removeCostLine(index: number) { setCostLines((current) => current.filter((_, idx) => idx !== index)); if (costLoaderFor === index) { setAddingLoader(false); setCostLoaderFor(null); } }
 
   function toggle(purchaseId: number, checked: boolean) {
     const available = kind === "husk" ? huskAvailableFor(purchaseId) : availableFor(purchaseId);
@@ -423,7 +447,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
         notes: form.notes.trim() || null
       },
       items_input: kind === "coconut" ? allocations : [],
-      husk_items_input: kind === "husk" ? huskAllocations : []
+      husk_items_input: kind === "husk" ? huskAllocations : [],
+      sale_costs_input: costLines.filter((line) => toNumber(line.amount) > 0).map((line) => ({ label: line.label.trim() || "Expense", amount: toNumber(line.amount), employee_id: line.employee_id ? Number(line.employee_id) : null }))
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
@@ -435,6 +460,27 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   }
 
   const unitLabel = form.unit === "kg" ? "kg" : form.unit === "piece" ? "pieces" : "loads";
+
+  // Trader-paid costs on this sale (both coconut and husk): a flexible, left-to-right line list.
+  const costsSection = (
+    <fieldset className="deduction-options sale-costs"><legend>Your costs on this sale <span className="optional">Optional</span></legend>
+      <p className="field-hint">Money you spend on this sale — transport (lorry), driver, loading or anything else you pay for. Each is booked under Expenses and comes off your margin. Pick a loading team on a line to also log that cost in the team&apos;s payments.</p>
+      {costLines.length ? <div className="cost-lines">
+        <div className="cost-line cost-head"><span>What for</span><span>Amount (INR)</span><span>Loading team</span><span></span></div>
+        {costLines.map((line, index) => (
+          <div className="cost-line" key={index}>
+            <input value={line.label} onChange={(event) => updateCostLine(index, "label", event.target.value)} placeholder="Transport, driver, loading…" aria-label="What this cost is for" />
+            <input type="number" min="0" step="0.01" value={line.amount} onChange={(event) => updateCostLine(index, "amount", event.target.value)} placeholder="0" aria-label="Cost amount" />
+            <select value={line.employee_id} onChange={(event) => { if (event.target.value === "__add__") { setCostLoaderFor(index); setAddingLoader(true); return; } updateCostLine(index, "employee_id", event.target.value); }} aria-label="Loading team for this cost"><option value="">No team</option>{loaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add loading team</option></select>
+            <button className="cost-remove" onClick={() => removeCostLine(index)} type="button" aria-label="Remove this cost">×</button>
+          </div>
+        ))}
+      </div> : null}
+      {costLoaderFor != null && addingLoader ? <div className="inline-form"><label>New loading team name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add team</button><button className="link-button" onClick={() => { setAddingLoader(false); setCostLoaderFor(null); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
+      <button className="link-button" onClick={addCostLine} type="button">+ Add cost</button>
+      {extraCostsTotal > 0 ? <p className="field-hint"><strong>Your costs on this sale: {formatCurrency(extraCostsTotal)}</strong> — taken off the margin below.</p> : null}
+    </fieldset>
+  );
 
   return (
     <div className="stack">
@@ -531,13 +577,13 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
               <label className="checkbox-field"><input type="checkbox" checked={form.delivery_by_trader} onChange={(event) => { const on = event.target.checked; setForm((current) => ({ ...current, delivery_by_trader: on, husk_loading_rate_per_1000: on && !current.husk_loading_rate_per_1000.trim() ? String(settings.husk_loading_rate_per_1000) : current.husk_loading_rate_per_1000 })); }} /><span><strong>I deliver the husk to the buyer</strong><small>Leave off when the buyer collects it — then there are no delivery costs. Turn on to add loading, fuel and other costs and the vehicle; they are booked under Expenses and taken off the margin.</small></span></label>
               {form.delivery_by_trader ? <>
                 <div className="form-grid">
-                  <label>Husk loading worker{loaders.length ? <select value={form.husk_loading_employee_id} onChange={(event) => { if (event.target.value === "__add__") { setAddingLoader(true); return; } setField("husk_loading_employee_id", event.target.value); }}><option value="">Not recorded</option>{loaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add husk loading worker</option></select> : <button className="secondary-button" onClick={() => setAddingLoader(true)} type="button">+ Add husk loading worker</button>}</label>
+                  <label>Husk loading worker{loaders.length ? <select value={form.husk_loading_employee_id} onChange={(event) => { if (event.target.value === "__add__") { setCostLoaderFor(null); setAddingLoader(true); return; } setField("husk_loading_employee_id", event.target.value); }}><option value="">Not recorded</option>{loaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add husk loading worker</option></select> : <button className="secondary-button" onClick={() => { setCostLoaderFor(null); setAddingLoader(true); }} type="button">+ Add husk loading worker</button>}</label>
                   <label>Loading rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.husk_loading_rate_per_1000} onChange={(event) => setField("husk_loading_rate_per_1000", event.target.value)} placeholder={String(settings.husk_loading_rate_per_1000)} /><span className="field-hint">Default from Settings. Loading cost = pieces ÷ 1,000 × this rate.</span></label>
                   <label>Vehicle fuel cost (INR)<input type="number" min="0" step="0.01" value={form.husk_fuel_cost} onChange={(event) => setField("husk_fuel_cost", event.target.value)} /></label>
                   <label>Other expenses (INR)<input type="number" min="0" step="0.01" value={form.husk_other_expense} onChange={(event) => setField("husk_other_expense", event.target.value)} /></label>
                   <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
                 </div>
-                {addingLoader ? <div className="inline-form"><label>New husk loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
+                {addingLoader && costLoaderFor == null ? <div className="inline-form"><label>New husk loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
               </> : null}
               <span className="field-hint">These costs apply only when you deliver. Loading is booked as husk loading labor, fuel as diesel, and other as a husk expense — all under Expenses and reflected in the margin.</span>
             </fieldset>
@@ -551,6 +597,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             {calculation.otherCharge > 0 ? <label>Other charge reason<input value={form.other_charge_reason} onChange={(event) => setField("other_charge_reason", event.target.value)} placeholder="Weighbridge fee, other purchase..." /></label> : null}
             <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
           </div>}
+          {costsSection}
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Quality, market, delivery note" /></label>
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update sale" : "Save sale"}</button>
@@ -566,8 +613,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             <div className="calculation-total"><dt>Buyer pays<small className="formula">{formatCurrency(calculation.saleAmount)}{calculation.transport > 0 ? ` + ${formatCurrency(calculation.transport)} transport` : ""}{calculation.otherCharge > 0 ? ` + ${formatCurrency(calculation.otherCharge)} other` : ""}{calculation.deduction > 0 ? ` − ${formatCurrency(calculation.deduction)} deduction` : ""}</small></dt><dd>{formatCurrency(calculation.total)}</dd></div>
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable<small className="formula">{formatCurrency(calculation.total)} − {formatCurrency(calculation.advance)}</small></dt><dd>{formatCurrency(calculation.balance)}</dd></div>
-            {kind === "coconut" ? <><div className="calculation-deduction calculation-spent"><dt>Total spending on this stock<small className="formula">paid to farmers {formatCurrency(costBasis)}{stockDehusking > 0 ? ` + dehusking ${formatCurrency(stockDehusking)}` : ""}{laborSpending > 0 ? ` + labour ${formatCurrency(laborSpending)}` : ""}</small></dt><dd>{formatCurrency(totalSpending)}</dd></div>{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss<small className="formula">spoiled while loading</small></dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}<div className={margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin${wastageLoss > 0 ? " after wastage" : ""}`}<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(totalSpending)}{wastageLoss > 0 ? ` − ${formatCurrency(wastageLoss)}` : ""}</small></dt><dd>{formatCurrency(margin)}</dd></div></> : null}
-            {kind === "husk" ? <><div className="calculation-deduction calculation-spent"><dt>Husk cost<small className="formula">{huskCost > 0 ? "paid to farmers for husk you bought" : "byproduct husk · cost you nothing"}</small></dt><dd>{formatCurrency(huskCost)}</dd></div>{huskLoadingCost > 0 ? <div className="calculation-deduction"><dt>Loading{form.husk_loading_employee_id ? <small className="formula">{ws.employeeById.get(Number(form.husk_loading_employee_id))?.name ?? ""}</small> : null}<small className="formula">{formatNumber(huskPiecesSelected, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.husk_loading_rate_per_1000))}</small></dt><dd>{formatCurrency(huskLoadingCost)}</dd></div> : null}{huskFuelCost > 0 ? <div className="calculation-deduction"><dt>Vehicle fuel</dt><dd>{formatCurrency(huskFuelCost)}</dd></div> : null}{huskOtherCost > 0 ? <div className="calculation-deduction"><dt>Other delivery expense</dt><dd>{formatCurrency(huskOtherCost)}</dd></div> : null}<div className={huskMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(huskCost)} husk cost{huskDeliveryCost > 0 ? ` − ${formatCurrency(huskDeliveryCost)} delivery` : ""}</small></dt><dd>{formatCurrency(huskMargin)}</dd></div></> : null}
+            {kind === "coconut" ? <><div className="calculation-deduction calculation-spent"><dt>Total spending on this stock<small className="formula">paid to farmers {formatCurrency(costBasis)}{stockDehusking > 0 ? ` + dehusking ${formatCurrency(stockDehusking)}` : ""}{laborSpending > 0 ? ` + labour ${formatCurrency(laborSpending)}` : ""}</small></dt><dd>{formatCurrency(totalSpending)}</dd></div>{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss<small className="formula">spoiled while loading</small></dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}{extraCostsTotal > 0 ? <div className="calculation-deduction"><dt>Your costs on this sale<small className="formula">transport, loading, driver, other</small></dt><dd>{formatCurrency(extraCostsTotal)}</dd></div> : null}<div className={margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin${wastageLoss > 0 ? " after wastage" : ""}`}<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(totalSpending)}{wastageLoss > 0 ? ` − ${formatCurrency(wastageLoss)}` : ""}{extraCostsTotal > 0 ? ` − ${formatCurrency(extraCostsTotal)} your costs` : ""}</small></dt><dd>{formatCurrency(margin)}</dd></div></> : null}
+            {kind === "husk" ? <><div className="calculation-deduction calculation-spent"><dt>Husk cost<small className="formula">{huskCost > 0 ? "paid to farmers for husk you bought" : "byproduct husk · cost you nothing"}</small></dt><dd>{formatCurrency(huskCost)}</dd></div>{huskLoadingCost > 0 ? <div className="calculation-deduction"><dt>Loading{form.husk_loading_employee_id ? <small className="formula">{ws.employeeById.get(Number(form.husk_loading_employee_id))?.name ?? ""}</small> : null}<small className="formula">{formatNumber(huskPiecesSelected, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.husk_loading_rate_per_1000))}</small></dt><dd>{formatCurrency(huskLoadingCost)}</dd></div> : null}{huskFuelCost > 0 ? <div className="calculation-deduction"><dt>Vehicle fuel</dt><dd>{formatCurrency(huskFuelCost)}</dd></div> : null}{huskOtherCost > 0 ? <div className="calculation-deduction"><dt>Other delivery expense</dt><dd>{formatCurrency(huskOtherCost)}</dd></div> : null}{extraCostsTotal > 0 ? <div className="calculation-deduction"><dt>Your costs on this sale<small className="formula">transport, loading, driver, other</small></dt><dd>{formatCurrency(extraCostsTotal)}</dd></div> : null}<div className={huskMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(huskCost)} husk cost{huskDeliveryCost > 0 ? ` − ${formatCurrency(huskDeliveryCost)} delivery` : ""}{extraCostsTotal > 0 ? ` − ${formatCurrency(extraCostsTotal)} your costs` : ""}</small></dt><dd>{formatCurrency(huskMargin)}</dd></div></> : null}
           </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value after any deduction and reimbursed charges. Total spending is what this stock cost you — paid to the farmers for these pieces (including any wasted at the Stock stage), dehusking booked there, and the dehusking/harvesting wages you pay the teams for these purchases. Margin is buyer pays minus that spend, so it is the true take-home and matches the Dashboard. Husk is sold separately; transport, loading and other costs you pay go under Expenses." : "Buyer pays is the full husk bill after any deduction and reimbursed charges. Husk cost is what the husk cost you — the credit paid to the farmer for husk you bought, and nothing for byproduct husk (kept with the coconut or from per-nut stock). Margin is buyer pays minus that cost, so byproduct husk is pure profit. The realised husk profit then shows on the purchase in Purchase history. Record any loading wages under Expenses."}</p></section>
         </DraggablePanel>
       </div>

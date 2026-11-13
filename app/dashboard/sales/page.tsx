@@ -127,8 +127,11 @@ export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
           const buyer = ws.buyerById.get(sale.buyer_id);
           const items = itemsBySale.get(sale.id) ?? [];
           const huskItems = huskItemsBySale.get(sale.id) ?? [];
+          // Costs the trader booked against this sale: husk delivery (loading/fuel/other) and any
+          // "Your costs on this sale" lines (transport/driver/loading/custom). Both come off the margin.
+          const saleExpenses = ws.expenses.filter((expense) => expense.sale_id === sale.id).reduce((sum, expense) => sum + Number(expense.amount), 0);
           const huskCost = huskItems.reduce((sum, item) => sum + Number(item.quantity_pieces) * (ws.husk.get(item.purchase_id)?.huskCostPerPiece ?? 0), 0);
-          const huskMargin = Number(sale.total_amount) - huskCost;
+          const huskMargin = Number(sale.total_amount) - huskCost - saleExpenses;
           const receipts = ws.cashEntries.filter((entry) => entry.kind === "buyer_receipt" && entry.sale_id === sale.id);
           const received = Number(sale.advance_amount) + receivedFromBuyer(sale.id, ws.cashEntries);
           const due = saleOutstanding(sale, ws.cashEntries);
@@ -139,7 +142,7 @@ export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
           const totalSpending = costBasis + stockDehusking;
           const wasted = ws.stockWastage.filter((row) => row.sale_id === sale.id);
           const wastageLoss = wasted.reduce((sum, row) => sum + Number(row.quantity_pieces) * (ws.stock.get(row.purchase_id)?.coconutCostPerPiece ?? 0), 0);
-          const margin = Number(sale.total_amount) - totalSpending - wastageLoss;
+          const margin = Number(sale.total_amount) - totalSpending - wastageLoss - saleExpenses;
           return <tr key={sale.id}>
             <td><strong>{formatSaleId(sale.id)}</strong><span className="muted-text">{sale.sale_kind === "husk" ? "Husk" : "Coconut load"}{sale.vehicle_number ? ` · ${sale.vehicle_number}` : ""}</span></td>
             <td>{formatDate(sale.sale_date)}</td>
