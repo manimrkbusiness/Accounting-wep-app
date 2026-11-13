@@ -76,7 +76,9 @@ const blankMeta = (): SaleMeta => ({ kind: "coconut", useGrossTare: false, weigh
 // unloading cost can carry a loading team so the wage also shows in that team's payments.
 type CostCategory = "transportation" | "driver" | "loading" | "unloading" | "other";
 type CostWho = "you" | "buyer";
-type CostLine = { category: CostCategory; label: string; who: CostWho; amount: string; employee_id: string };
+// `rate` is the per-1,000-piece rate for loading/unloading; those amounts are computed from the
+// load's pieces × rate. Other categories use `amount` directly.
+type CostLine = { category: CostCategory; label: string; who: CostWho; amount: string; rate: string; employee_id: string };
 const COST_MARKER = "Sale cost: ";
 const BUYER_SUFFIX = " (buyer paid)";
 const costCategories: Array<{ value: CostCategory; label: string }> = [
@@ -88,14 +90,20 @@ const costCategories: Array<{ value: CostCategory; label: string }> = [
 ];
 const costNeedsTeam = (category: CostCategory) => category === "loading" || category === "unloading";
 const costLineLabel = (line: CostLine) => line.category === "other" ? (line.label.trim() || "Other expense") : (costCategories.find((entry) => entry.value === line.category)?.label ?? "Expense");
-// Rebuild a cost line from the booked expense description ("Sale cost: <label>[ (buyer paid)]").
+// Label stored on the booked expense. Loading/unloading carry their rate as "@<rate>" so an edit can
+// restore it; a buyer-paid line is tagged so the margin and dashboard can tell them apart.
+const costStoredLabel = (line: CostLine) => costLineLabel(line) + (costNeedsTeam(line.category) && toNumber(line.rate) > 0 ? ` @${toNumber(line.rate)}` : "") + (line.who === "buyer" ? BUYER_SUFFIX : "");
+// Rebuild a cost line from the booked expense description ("Sale cost: <label>[ @rate][ (buyer paid)]").
 function costLineFromDescription(description: string, amount: number, employeeId: number | null): CostLine {
-  const body = description.slice(COST_MARKER.length);
+  let body = description.slice(COST_MARKER.length);
   const who: CostWho = body.endsWith(BUYER_SUFFIX) ? "buyer" : "you";
-  const core = who === "buyer" ? body.slice(0, -BUYER_SUFFIX.length) : body;
+  if (who === "buyer") body = body.slice(0, -BUYER_SUFFIX.length);
+  const rateMatch = body.match(/ @(\d+(?:\.\d+)?)$/);
+  const rate = rateMatch ? rateMatch[1] : "";
+  const core = rateMatch ? body.slice(0, body.length - rateMatch[0].length) : body;
   const match = costCategories.find((entry) => entry.label === core && entry.value !== "other");
   const category: CostCategory = match ? match.value : "other";
-  return { category, label: category === "other" ? core : "", who, amount: String(amount), employee_id: employeeId ? String(employeeId) : "" };
+  return { category, label: category === "other" ? core : "", who, amount: String(amount), rate, employee_id: employeeId ? String(employeeId) : "" };
 }
 
 function formFromSale(sale: Sale): SaleForm {
@@ -284,10 +292,12 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   }, [kind, form.unit, rateEdited, estimatedRate]);
   const effectivePieces = kind === "husk" ? huskPiecesSelected : allocatedPieces;
   const effectiveCostBasis = kind === "husk" ? huskCost : costBasis;
-  // Costs split by who pays. "You pay" lines lower the margin; "Buyer pays" lines are added to the
-  // buyer's bill (through other charges) and net back out of the margin.
-  const buyerPaidTotal = costLines.filter((line) => line.who === "buyer").reduce((sum, line) => sum + Math.max(toNumber(line.amount), 0), 0);
-  const youPaidTotal = costLines.filter((line) => line.who === "you").reduce((sum, line) => sum + Math.max(toNumber(line.amount), 0), 0);
+  // Loading/unloading amounts come from the load's pieces × the per-1,000 rate; other categories use
+  // the typed amount. "You pay" lines lower the margin; "Buyer pays" lines go on the buyer's bill
+  // (through other charges) and net back out of the margin.
+  const lineAmount = (line: CostLine) => (costNeedsTeam(line.category) && toNumber(line.rate) > 0) ? Math.round((effectivePieces / 1000) * toNumber(line.rate) * 100) / 100 : Math.max(toNumber(line.amount), 0);
+  const buyerPaidTotal = costLines.filter((line) => line.who === "buyer").reduce((sum, line) => sum + lineAmount(line), 0);
+  const youPaidTotal = costLines.filter((line) => line.who === "you").reduce((sum, line) => sum + lineAmount(line), 0);
   const calculation = useMemo(() => calculateSale({ ...form, other_charge_amount: String(buyerPaidTotal) }, effectivePieces, effectiveCostBasis), [form, buyerPaidTotal, effectivePieces, effectiveCostBasis]);
   // Dehusking + harvesting wages the trader pays the teams for the purchases in this load (booked
   // as expenses, including linked-harvest wages), allocated per piece. Counting them makes the
@@ -398,9 +408,18 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
 
   // "Your costs on this sale" lines: a fixed category (free text only for "Others"), amount, who pays,
   // and an optional loading team for loading/unloading.
-  function addCostLine() { setCostLines((current) => [...current, { category: "transportation", label: "", who: "you", amount: "", employee_id: "" }]); }
+  function addCostLine() { setCostLines((current) => [...current, { category: "transportation", label: "", who: "you", amount: "", rate: "", employee_id: "" }]); }
   function updateCostLine(index: number, patch: Partial<CostLine>) { setCostLines((current) => current.map((line, idx) => (idx === index ? { ...line, ...patch } : line))); }
   function removeCostLine(index: number) { setCostLines((current) => current.filter((_, idx) => idx !== index)); if (costLoaderFor === index) { setAddingLoader(false); setCostLoaderFor(null); } }
+  // Switching category: loading/unloading pick up the default rate (edit it to change the amount);
+  // other categories keep no rate or team.
+  function changeCostCategory(index: number, line: CostLine, category: CostCategory) {
+    const patch: Partial<CostLine> = { category };
+    if (category !== "other") patch.label = "";
+    if (costNeedsTeam(category)) { if (!line.rate.trim()) patch.rate = String(settings.husk_loading_rate_per_1000); }
+    else { patch.employee_id = ""; patch.rate = ""; }
+    updateCostLine(index, patch);
+  }
 
   function toggle(purchaseId: number, checked: boolean) {
     const available = kind === "husk" ? huskAvailableFor(purchaseId) : availableFor(purchaseId);
@@ -469,7 +488,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
         deduction_amount: calculation.deduction,
         deduction_reason: calculation.deduction > 0 ? form.deduction_reason.trim() : null,
         other_charge_amount: calculation.otherCharge,
-        other_charge_reason: buyerPaidTotal > 0 ? "Buyer pays: " + Array.from(new Set(costLines.filter((line) => line.who === "buyer" && toNumber(line.amount) > 0).map((line) => costLineLabel(line)))).join(", ") : null,
+        other_charge_reason: buyerPaidTotal > 0 ? "Buyer pays: " + Array.from(new Set(costLines.filter((line) => line.who === "buyer" && lineAmount(line) > 0).map((line) => costLineLabel(line)))).join(", ") : null,
         advance_amount: calculation.advance,
         vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
         vehicle_number: form.vehicle_number.trim() || ws.vehicleById.get(Number(form.vehicle_id))?.vehicle_number || null,
@@ -483,7 +502,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
       },
       items_input: kind === "coconut" ? allocations : [],
       husk_items_input: kind === "husk" ? huskAllocations : [],
-      sale_costs_input: costLines.filter((line) => toNumber(line.amount) > 0).map((line) => ({ label: costLineLabel(line) + (line.who === "buyer" ? BUYER_SUFFIX : ""), amount: toNumber(line.amount), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null }))
+      sale_costs_input: costLines.filter((line) => lineAmount(line) > 0).map((line) => ({ label: costStoredLabel(line), amount: lineAmount(line), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null }))
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
@@ -498,24 +517,26 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
 
   // Costs on this sale (both coconut and husk): a compact, left-to-right category list with a
   // who-pays choice. "+ Add cost" sits at the top; "Others" is the only category you can type.
+  // Loading/unloading charge by a per-1,000 rate on the load's pieces, with an editable rate.
   const costsSection = (
     <fieldset className="deduction-options sale-costs"><legend>Your costs on this sale <span className="optional">Optional</span></legend>
-      <div className="sale-costs-head"><button className="secondary-button" onClick={addCostLine} type="button">+ Add cost</button><span className="field-hint">Transport, driver, loading, unloading or other. Choose who pays: your own costs come off the margin, buyer-paid costs are added to the buyer&apos;s bill.</span></div>
-      {costLines.length ? <div className="cost-lines">
-        <div className="cost-line cost-head"><span>What for</span><span>Amount</span><span>Who pays</span><span>Loading team</span><span></span></div>
-        {costLines.map((line, index) => (
-          <div className="cost-line" key={index}>
-            <div className="cost-cat">
-              <select value={line.category} onChange={(event) => { const category = event.target.value as CostCategory; updateCostLine(index, { category, ...(category === "other" ? {} : { label: "" }), ...(costNeedsTeam(category) ? {} : { employee_id: "" }) }); }} aria-label="What this cost is for">{costCategories.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}</select>
-              {line.category === "other" ? <input className="cost-other" value={line.label} onChange={(event) => updateCostLine(index, { label: event.target.value })} placeholder="Type the expense name" aria-label="Custom cost name" /> : null}
-            </div>
-            <input className="cost-amount" type="number" min="0" step="0.01" value={line.amount} onChange={(event) => updateCostLine(index, { amount: event.target.value })} placeholder="0" aria-label="Cost amount" />
-            <select className="cost-who" value={line.who} onChange={(event) => updateCostLine(index, { who: event.target.value as CostWho })} aria-label="Who pays this cost"><option value="you">You pay</option><option value="buyer">Buyer pays</option></select>
-            {costNeedsTeam(line.category) ? <select className="cost-team" value={line.employee_id} onChange={(event) => { if (event.target.value === "__add__") { setCostLoaderFor(index); setAddingLoader(true); return; } updateCostLine(index, { employee_id: event.target.value }); }} aria-label="Loading team for this cost"><option value="">No team</option>{costTeams.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add {kind === "husk" ? "husk" : "coconut"} loading team</option></select> : <span className="cost-team-empty" aria-hidden="true" />}
-            <button className="cost-remove" onClick={() => removeCostLine(index)} type="button" aria-label="Remove this cost">×</button>
-          </div>
-        ))}
-      </div> : null}
+      <div className="sale-costs-head"><button className="secondary-button" onClick={addCostLine} type="button">+ Add cost</button><span className="field-hint">Transport, driver, loading, unloading or other. Choose who pays: your own costs come off the margin, buyer-paid costs are added to the buyer&apos;s bill. Loading &amp; unloading are {formatNumber(effectivePieces, 0)} pieces ÷ 1,000 × the rate.</span></div>
+      {costLines.length ? <div className="cost-lines">{costLines.map((line, index) => {
+        const needsTeam = costNeedsTeam(line.category);
+        return <div className="cost-line" key={index}>
+          <select className="cost-cat-select" value={line.category} onChange={(event) => changeCostCategory(index, line, event.target.value as CostCategory)} aria-label="What this cost is for">{costCategories.map((cat) => <option key={cat.value} value={cat.value}>{cat.label}</option>)}</select>
+          {line.category === "other" ? <input className="cost-other" value={line.label} onChange={(event) => updateCostLine(index, { label: event.target.value })} placeholder="Type the expense name" aria-label="Custom cost name" /> : null}
+          {needsTeam ? <>
+            <input className="cost-rate" type="number" min="0" step="0.01" value={line.rate} onChange={(event) => updateCostLine(index, { rate: event.target.value })} placeholder="Rate /1,000" aria-label="Rate per 1,000 pieces" title="Rate per 1,000 pieces" />
+            {toNumber(line.rate) > 0
+              ? <input className="cost-amount cost-amount-ro" type="text" value={formatCurrency(lineAmount(line))} readOnly tabIndex={-1} aria-label="Computed amount" title={`${formatNumber(effectivePieces, 0)} ÷ 1,000 × ${toNumber(line.rate)}`} />
+              : <input className="cost-amount" type="number" min="0" step="0.01" value={line.amount} onChange={(event) => updateCostLine(index, { amount: event.target.value })} placeholder="Amount ₹" aria-label="Cost amount" />}
+          </> : <input className="cost-amount" type="number" min="0" step="0.01" value={line.amount} onChange={(event) => updateCostLine(index, { amount: event.target.value })} placeholder="Amount ₹" aria-label="Cost amount" />}
+          <select className="cost-who" value={line.who} onChange={(event) => updateCostLine(index, { who: event.target.value as CostWho })} aria-label="Who pays this cost"><option value="you">You pay</option><option value="buyer">Buyer pays</option></select>
+          {needsTeam ? <select className="cost-team" value={line.employee_id} onChange={(event) => { if (event.target.value === "__add__") { setCostLoaderFor(index); setAddingLoader(true); return; } updateCostLine(index, { employee_id: event.target.value }); }} aria-label="Loading team for this cost"><option value="">No team</option>{costTeams.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add {kind === "husk" ? "husk" : "coconut"} loading team</option></select> : null}
+          <button className="cost-remove" onClick={() => removeCostLine(index)} type="button" aria-label="Remove this cost">×</button>
+        </div>;
+      })}</div> : null}
       {costLoaderFor != null && addingLoader ? <div className="inline-form"><label>New {kind === "husk" ? "husk" : "coconut"} loading team name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add team</button><button className="link-button" onClick={() => { setAddingLoader(false); setCostLoaderFor(null); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
       {extraCostsTotal > 0 ? <p className="field-hint"><strong>You pay {formatCurrency(youPaidTotal)}{buyerPaidTotal > 0 ? ` · buyer pays ${formatCurrency(buyerPaidTotal)}` : ""}</strong>{youPaidTotal > 0 ? " — your share comes off the margin below." : ""}</p> : null}
     </fieldset>

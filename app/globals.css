@@ -987,7 +987,7 @@ textarea:focus {
 }
 
 .sale-costs-head .field-hint {
-  flex: 1 1 220px;
+  flex: 1 1 240px;
   margin: 0;
 }
 
@@ -999,48 +999,59 @@ textarea:focus {
 }
 
 .cost-line {
-  align-items: start;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1.4fr) 92px 112px 150px 30px;
-}
-
-.cost-line > input,
-.cost-line > select {
-  width: 100%;
-}
-
-.cost-cat {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.cost-cat select,
-.cost-other {
-  width: 100%;
-}
-
-.cost-line.cost-head {
   align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cost-cat-select {
+  flex: 0 0 auto;
+  width: 165px;
+}
+
+.cost-other {
+  flex: 1 1 200px;
+  min-width: 150px;
+}
+
+.cost-amount {
+  flex: 0 0 auto;
+  width: 122px;
+}
+
+.cost-amount-ro {
+  background: var(--surface-muted);
   color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  cursor: default;
+}
+
+.cost-rate {
+  flex: 0 0 auto;
+  width: 104px;
+}
+
+.cost-who {
+  flex: 0 0 auto;
+  width: 118px;
+}
+
+.cost-team {
+  flex: 0 0 auto;
+  width: 160px;
 }
 
 .cost-remove {
-  align-self: start;
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
+  flex: 0 0 auto;
   font-size: 1.1rem;
   height: 34px;
   line-height: 1;
+  margin-left: auto;
   padding: 0;
   width: 30px;
 }
@@ -1050,30 +1061,17 @@ textarea:focus {
   color: var(--danger, #c0392b);
 }
 
-@media (max-width: 720px) {
-  .cost-line {
-    display: flex;
-    flex-wrap: wrap;
-  }
-  .cost-cat {
-    flex: 1 1 100%;
-  }
-  .cost-amount {
-    flex: 1 1 90px;
-  }
-  .cost-who {
-    flex: 1 1 110px;
-  }
+@media (max-width: 560px) {
+  .cost-cat-select,
+  .cost-amount,
+  .cost-rate,
+  .cost-who,
   .cost-team {
-    flex: 1 1 140px;
+    flex: 1 1 110px;
+    width: auto;
   }
   .cost-remove {
-    flex: 0 0 30px;
-    margin-left: auto;
-  }
-  .cost-line.cost-head,
-  .cost-team-empty {
-    display: none;
+    margin-left: 0;
   }
 }
 
