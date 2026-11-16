@@ -296,8 +296,11 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   // the typed amount. "You pay" lines lower the margin; "Buyer pays" lines go on the buyer's bill
   // (through other charges) and net back out of the margin.
   const lineAmount = (line: CostLine) => (costNeedsTeam(line.category) && toNumber(line.rate) > 0) ? Math.round((effectivePieces / 1000) * toNumber(line.rate) * 100) / 100 : Math.max(toNumber(line.amount), 0);
-  const buyerPaidTotal = costLines.filter((line) => line.who === "buyer").reduce((sum, line) => sum + lineAmount(line), 0);
-  const youPaidTotal = costLines.filter((line) => line.who === "you").reduce((sum, line) => sum + lineAmount(line), 0);
+  // Coconut always carries the trader's costs. Husk only when the trader delivers — if the buyer
+  // collects the husk there are no delivery costs, so the whole cost section is hidden and ignored.
+  const showCosts = kind === "coconut" || form.delivery_by_trader;
+  const buyerPaidTotal = showCosts ? costLines.filter((line) => line.who === "buyer").reduce((sum, line) => sum + lineAmount(line), 0) : 0;
+  const youPaidTotal = showCosts ? costLines.filter((line) => line.who === "you").reduce((sum, line) => sum + lineAmount(line), 0) : 0;
   const calculation = useMemo(() => calculateSale({ ...form, other_charge_amount: String(buyerPaidTotal) }, effectivePieces, effectiveCostBasis), [form, buyerPaidTotal, effectivePieces, effectiveCostBasis]);
   // Dehusking + harvesting wages the trader pays the teams for the purchases in this load (booked
   // as expenses, including linked-harvest wages), allocated per piece. Counting them makes the
@@ -486,7 +489,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
         advance_amount: calculation.advance,
         vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
         vehicle_number: form.vehicle_number.trim() || ws.vehicleById.get(Number(form.vehicle_id))?.vehicle_number || null,
-        delivery_by_trader: false,
+        delivery_by_trader: kind === "husk" ? form.delivery_by_trader : false,
         husk_loading_rate_per_1000: 0,
         husk_loading_employee_id: null,
         husk_fuel_cost: 0,
@@ -496,7 +499,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
       },
       items_input: kind === "coconut" ? allocations : [],
       husk_items_input: kind === "husk" ? huskAllocations : [],
-      sale_costs_input: costLines.filter((line) => lineAmount(line) > 0).map((line) => ({ label: costStoredLabel(line), amount: lineAmount(line), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null }))
+      sale_costs_input: showCosts ? costLines.filter((line) => lineAmount(line) > 0).map((line) => ({ label: costStoredLabel(line), amount: lineAmount(line), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null })) : []
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
@@ -626,13 +629,18 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             </div>
             <button className="link-button" onClick={() => setUseGrossTare((value) => !value)} type="button">{useGrossTare ? "Enter net weight directly instead" : "Calculate from gross and empty weight"}</button>
           </fieldset> : kind === "husk" ? <label>Husk pieces to sell<input type="number" value={form.quantity} readOnly placeholder="0" /><span className="field-hint">Total husk pieces ticked above. Change the per-purchase pieces in the table to adjust it.</span></label> : <label>Quantity ({unitLabel})<input type="number" min="0.01" step={form.unit === "piece" ? "1" : "0.01"} value={form.quantity} onChange={(event) => { setWeightEdited(true); setField("quantity", event.target.value); }} required />{form.unit === "piece" && allocatedPieces > 0 && toNumber(form.quantity) !== allocatedPieces ? <button className="link-button" onClick={() => { setWeightEdited(false); setField("quantity", String(allocatedPieces)); }} type="button">Use {formatNumber(allocatedPieces, 0)} allocated pieces</button> : null}</label>}
-          {kind === "husk" ? <div className="form-grid">
-            <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
-            <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history. Loading, fuel, transport and other delivery costs go in &ldquo;Your costs on this sale&rdquo; below.</span></label>
-          </div> : <div className="form-grid">
+          {kind === "husk" ? <>
+            <div className="form-grid">
+              <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
+              <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>
+            </div>
+            <fieldset className="deduction-options"><legend>Delivery</legend>
+              <label className="checkbox-field"><input type="checkbox" checked={form.delivery_by_trader} onChange={(event) => setField("delivery_by_trader", event.target.checked)} /><span><strong>I deliver the husk to the buyer</strong><small>Leave off when the buyer collects it — then there are no delivery costs. Turn on to record loading, transport, fuel and other costs in &ldquo;Your costs on this sale&rdquo; below.</small></span></label>
+            </fieldset>
+          </> : <div className="form-grid">
             <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
           </div>}
-          {costsSection}
+          {showCosts ? costsSection : null}
           <label>Notes <span className="optional">Optional</span><textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Quality, market, delivery note" /></label>
           {ws.error ? <p className="error-message form-error" role="alert">{ws.error}</p> : null}
           <button className="primary-button" disabled={ws.saving} type="submit">{ws.saving ? "Saving..." : form.id ? "Update sale" : "Save sale"}</button>
