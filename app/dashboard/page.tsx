@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, CirclePlus, Store, TrendingUp, Truck } from "lucide-react";
+import { ArrowLeftRight, CirclePlus, Store, TrendingUp, Truck, Wallet } from "lucide-react";
 import { useWorkspace } from "./lib/workspace";
 import { purchaseOutstanding, saleOutstanding, summarizeFinancials } from "./lib/calc";
 import { formatCurrency, today } from "./lib/format";
-import { EmptyState, Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "./components/ui";
+import { Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "./components/ui";
 
 export default function DashboardPage() {
   const ws = useWorkspace();
@@ -18,31 +18,17 @@ export default function DashboardPage() {
   // Profit on the coconut itself: the margin after cost of sold, wastage loss and any wasted-nut sales.
   const coconutProfit = summary.coconutMargin - summary.wastageLoss + summary.wastageSalesIncome;
 
-  const farmerDues = useMemo(() => {
-    const totals = new Map<number, number>();
-    ws.purchases.forEach((purchase) => {
-      const due = purchaseOutstanding(purchase, ws.cashEntries);
-      if (due > 0.005) totals.set(purchase.farmer_id, (totals.get(purchase.farmer_id) ?? 0) + due);
-    });
-    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [ws.purchases, ws.cashEntries]);
-
-  const buyerDues = useMemo(() => {
-    const totals = new Map<number, number>();
-    ws.sales.forEach((sale) => {
-      const due = saleOutstanding(sale, ws.cashEntries);
-      if (due > 0.005) totals.set(sale.buyer_id, (totals.get(sale.buyer_id) ?? 0) + due);
-    });
-    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [ws.sales, ws.cashEntries]);
-
-  const totalFarmerDue = farmerDues.reduce((sum, [, due]) => sum + due, 0);
-  const totalBuyerDue = buyerDues.reduce((sum, [, due]) => sum + due, 0);
+  // Pending money: what buyers still owe us (receivables) and what we still owe farmers, teams and
+  // for diesel/other costs (payables). The full breakdown lives on /dashboard/pending.
+  const receivableTotal = useMemo(() => ws.sales.reduce((sum, sale) => sum + Math.max(saleOutstanding(sale, ws.cashEntries), 0), 0), [ws.sales, ws.cashEntries]);
+  const farmerPayable = useMemo(() => ws.purchases.reduce((sum, purchase) => sum + Math.max(purchaseOutstanding(purchase, ws.cashEntries), 0), 0), [ws.purchases, ws.cashEntries]);
+  const expensePayable = useMemo(() => ws.expenses.filter((expense) => !expense.paid).reduce((sum, expense) => sum + Number(expense.amount), 0), [ws.expenses]);
+  const payableTotal = farmerPayable + expensePayable;
 
   return (
     <div className="stack">
       <section className="welcome-band">
-        <div><span className="eyebrow">Trader overview</span><h2>Buy from farmers, sell by the load, keep every rupee tracked.</h2><p>Tap any profit below to open its sales. The two boxes show who still owes you and who you still owe.</p></div>
+        <div><span className="eyebrow">Trader overview</span><h2>Buy from farmers, sell by the load, keep every rupee tracked.</h2><p>Tap any profit below to open its sales. Pending payments shows who still owes you and who you still owe.</p></div>
         <div className="page-actions"><Link className="primary-button" href="/dashboard/purchases/new"><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />Record purchase</Link><Link className="secondary-button" href="/dashboard/sales/new"><Truck size={18} strokeWidth={2.2} aria-hidden="true" />Record sale</Link></div>
       </section>
 
@@ -58,18 +44,15 @@ export default function DashboardPage() {
         <Link className="secondary-button" href="/dashboard/ledger"><ArrowLeftRight size={16} strokeWidth={2.2} aria-hidden="true" />Open complete transaction ledger (coconut + husk)</Link>
       </section>
 
-      <section className="dashboard-grid">
-        <Panel eyebrow="Outstanding" title={`Pending to farmers${totalFarmerDue > 0 ? ` — ${formatCurrency(totalFarmerDue)}` : ""}`}>
-          {farmerDues.length ? <div className="summary-list">{farmerDues.map(([farmerId, due]) => <div key={farmerId}><span>Farmer</span><strong>{ws.farmerById.get(farmerId)?.name ?? "Farmer"}</strong><span className="balance-cell">{formatCurrency(due)}</span></div>)}</div> : <EmptyState>All farmer balances are settled.</EmptyState>}
-          <p className="field-hint">Record a payment on the Farmer purchase page to clear a farmer from this list.</p>
-          <Link className="secondary-button" href="/dashboard/purchases">Go to farmer purchases</Link>
-        </Panel>
-        <Panel eyebrow="Outstanding" title={`Pending from buyers${totalBuyerDue > 0 ? ` — ${formatCurrency(totalBuyerDue)}` : ""}`}>
-          {buyerDues.length ? <div className="summary-list">{buyerDues.map(([buyerId, due]) => <div key={buyerId}><span>Buyer</span><strong>{ws.buyerById.get(buyerId)?.name ?? "Buyer"}</strong><span className="positive">{formatCurrency(due)}</span></div>)}</div> : <EmptyState>No money pending from buyers.</EmptyState>}
-          <p className="field-hint">Use “Receive payment” on a sale to mark a buyer paid and clear them from this list.</p>
-          <Link className="secondary-button" href="/dashboard/ledger">Go to sales ledger</Link>
-        </Panel>
-      </section>
+      <Panel eyebrow="Pending payments" title="Receivables and payables" action={<Link className="primary-button" href="/dashboard/pending"><Wallet size={18} strokeWidth={2.2} aria-hidden="true" />Open pending payments</Link>}>
+        <div className="summary-list">
+          <div><span>Receivables</span><strong>From buyers (coconut + husk)</strong><span className="positive">{formatCurrency(receivableTotal)}</span></div>
+          <div><span>Payables — farmers</span><strong>Farmer balances</strong><span className="balance-cell">{formatCurrency(farmerPayable)}</span></div>
+          <div><span>Payables — laborers, diesel &amp; costs</span><strong>Unpaid expenses</strong><span className="balance-cell">{formatCurrency(expensePayable)}</span></div>
+          <div><span>Total you owe</span><strong>Farmers + costs</strong><span className="balance-cell">{formatCurrency(payableTotal)}</span></div>
+        </div>
+        <p className="field-hint">One place to collect from buyers and pay farmers, teams and diesel / other costs — with the same payment options you already use.</p>
+      </Panel>
     </div>
   );
 }

@@ -74,7 +74,7 @@ const blankMeta = (): SaleMeta => ({ kind: "coconut", useGrossTare: false, weigh
 // booked under Expenses; "Buyer pays" costs are added to the buyer's bill (and net out of the
 // margin), mirroring the farmer-pays / you-pay choice on dehusking and harvesting. A loading or
 // unloading cost can carry a loading team so the wage also shows in that team's payments.
-type CostCategory = "transportation" | "driver" | "loading" | "unloading" | "other";
+type CostCategory = "transportation" | "driver" | "loading" | "unloading" | "diesel" | "other";
 type CostWho = "you" | "buyer";
 // `rate` is the per-1,000-piece rate for loading/unloading; those amounts are computed from the
 // load's pieces × rate. Other categories use `amount` directly.
@@ -86,9 +86,13 @@ const costCategories: Array<{ value: CostCategory; label: string }> = [
   { value: "driver", label: "Driver charges" },
   { value: "loading", label: "Loading charges" },
   { value: "unloading", label: "Unloading charges" },
+  { value: "diesel", label: "Diesel / fuel" },
   { value: "other", label: "Others" }
 ];
 const costNeedsTeam = (category: CostCategory) => category === "loading" || category === "unloading";
+// The expenses.category each cost line books, so Pending payments groups them (diesel under Diesel,
+// loading under Laborers, transport/driver under Transport, etc.).
+const costExpenseCategory = (category: CostCategory): string => category === "loading" || category === "unloading" ? "loading_labor" : category === "transportation" || category === "driver" ? "transport" : category === "diesel" ? "diesel" : "other";
 const costLineLabel = (line: CostLine) => line.category === "other" ? (line.label.trim() || "Other expense") : (costCategories.find((entry) => entry.value === line.category)?.label ?? "Expense");
 // Label stored on the booked expense. Loading/unloading carry their rate as "@<rate>" so an edit can
 // restore it; a buyer-paid line is tagged so the margin and dashboard can tell them apart.
@@ -499,7 +503,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
       },
       items_input: kind === "coconut" ? allocations : [],
       husk_items_input: kind === "husk" ? huskAllocations : [],
-      sale_costs_input: showCosts ? costLines.filter((line) => lineAmount(line) > 0).map((line) => ({ label: costStoredLabel(line), amount: lineAmount(line), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null })) : []
+      sale_costs_input: showCosts ? costLines.filter((line) => lineAmount(line) > 0).map((line) => ({ label: costStoredLabel(line), amount: lineAmount(line), category: costExpenseCategory(line.category), employee_id: costNeedsTeam(line.category) && line.employee_id ? Number(line.employee_id) : null })) : []
     });
     ws.setSaving(false);
     if (error) { ws.fail(error.message); return; }
