@@ -16,10 +16,11 @@ import { RowMenu } from "../components/RowMenu";
 
 type ReceiptForm = { amount: string; date: string; method: CashMethod; description: string };
 
-export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
+export function SalesHistory({ forcedKind, heading }: { forcedKind?: SaleKind; heading?: string }) {
   const ws = useWorkspace();
   const router = useRouter();
   const isHusk = forcedKind === "husk";
+  const title = forcedKind === "husk" ? "Husk sale history" : forcedKind === "coconut" ? "Coconut sales history" : heading ?? "Sales history";
   const newSaleHref = isHusk ? "/dashboard/husk-sales/new" : "/dashboard/sales/new";
   const editHref = (sale: Sale) => `${sale.sale_kind === "husk" ? "/dashboard/husk-sales/new" : "/dashboard/sales/new"}?edit=${sale.id}`;
   const [search, setSearch] = useState("");
@@ -115,7 +116,7 @@ export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
     <ResumeBanner form={isHusk ? "husk-sale" : "sale"} newPath={newSaleHref} what="sale" />
     {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
     <section className="ledger-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>{isHusk ? "Husk sale history" : "Sales history"}</h2></div><div className="page-actions"><Link className="primary-button" href={newSaleHref}><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />{isHusk ? "Record a husk sale" : "New coconut sale"}</Link>{isHusk ? null : <Link className="secondary-button" href="/dashboard/husk-sales">Husk sales</Link>}</div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>{title}</h2></div><div className="page-actions"><Link className="primary-button" href={newSaleHref}><CirclePlus size={18} strokeWidth={2.2} aria-hidden="true" />{isHusk ? "Record a husk sale" : "New coconut sale"}</Link>{isHusk ? null : <Link className="secondary-button" href="/dashboard/husk-sales">Husk sales</Link>}</div></div>
       <div className="filter-bar">
         <label className="search-field">Search sale ID, buyer, lorry or purchase ID<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="SAL-000001, buyer name, PUR-000003..." /></label>
         {forcedKind ? null : <label>Type<select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as typeof kindFilter)}><option value="all">Coconut and husk</option><option value="coconut">Coconut loads</option><option value="husk">Husk sales</option></select></label>}
@@ -180,5 +181,5 @@ export function SalesHistory({ forcedKind }: { forcedKind?: SaleKind }) {
 }
 
 export default function SalesPage() {
-  return <SalesHistory />;
+  return <SalesHistory forcedKind="coconut" />;
 }

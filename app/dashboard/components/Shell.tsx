@@ -86,13 +86,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // While an entry is unsaved, its sidebar item reopens that entry instead of the list.
   const resumeTargets: Record<string, string | null> = {
     "/dashboard/purchases": resumeHref(drafts, "purchase", "/dashboard/purchases/new"),
-    "/dashboard/sales": resumeHref(drafts, "sale", "/dashboard/sales/new"),
-    "/dashboard/husk-sales": drafts.some((draft) => draft.form === "husk-sale") ? "/dashboard/husk-sales/new" : null,
     "/dashboard/husk-purchases": drafts.some((draft) => draft.form === "husk-purchase") ? "/dashboard/husk-purchases" : null,
     "/dashboard/stock": drafts.some((draft) => draft.form === "stock") ? "/dashboard/stock" : null
   };
+  // Sales and husk sales always land on their history list; the list's banner offers "Continue".
+  const draftFormByHref: Record<string, string> = { "/dashboard/sales": "sale", "/dashboard/husk-sales": "husk-sale" };
   const hrefFor = (item: NavItem) => resumeTargets[item.href] ?? item.href;
-  const hasDraft = (item: NavItem) => Boolean(resumeTargets[item.href]);
+  const hasDraft = (item: NavItem) => Boolean(resumeTargets[item.href]) || (draftFormByHref[item.href] ? drafts.some((draft) => draft.form === draftFormByHref[item.href]) : false);
 
   if (status === "loading") {
     return <main className="page-shell"><section className="auth-panel loading-panel"><span className="eyebrow">BizzTrack</span><h1>Loading workspace</h1><p>Connecting to your private trader records.</p></section></main>;

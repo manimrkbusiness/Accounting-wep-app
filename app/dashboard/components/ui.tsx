@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import type { DateRange } from "../lib/calc";
 import { addDays, startOfMonth, today } from "../lib/format";
@@ -13,14 +14,16 @@ export function Panel({ eyebrow, title, action, children, className = "" }: { ey
   );
 }
 
-export function Metric({ label, value, hint, icon: Icon, tone }: { label: string; value: string; hint?: string; icon: LucideIcon; tone?: "positive" | "negative" }) {
-  return (
-    <article className={tone ? `metric-${tone}` : undefined}>
-      <div className="metric-head"><span className="metric-icon"><Icon size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>{label}</span></div>
-      <strong>{value}</strong>
-      {hint ? <small>{hint}</small> : null}
-    </article>
-  );
+export function Metric({ label, value, hint, icon: Icon, tone, href }: { label: string; value: string; hint?: string; icon: LucideIcon; tone?: "positive" | "negative"; href?: string }) {
+  const content = <>
+    <div className="metric-head"><span className="metric-icon"><Icon size={18} strokeWidth={2.2} aria-hidden="true" /></span><span>{label}</span>{href ? <span className="metric-go" aria-hidden="true">→</span> : null}</div>
+    <strong>{value}</strong>
+    {hint ? <small>{hint}</small> : null}
+  </>;
+  const className = `${tone ? `metric-${tone}` : ""}${href ? " metric-link" : ""}`.trim() || undefined;
+  return href
+    ? <Link className={className} href={href} style={{ textDecoration: "none", color: "inherit" }}>{content}</Link>
+    : <article className={className}>{content}</article>;
 }
 
 export function StatusBadge({ status }: { status: string }) {

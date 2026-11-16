@@ -669,7 +669,8 @@ textarea:focus {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.metrics-grid article {
+.metrics-grid article,
+.metrics-grid .metric-link {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -678,6 +679,23 @@ textarea:focus {
   min-width: 0;
   padding: 17px;
   box-shadow: 0 7px 20px rgba(16, 42, 67, 0.04);
+}
+
+.metrics-grid .metric-link {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.metrics-grid .metric-link:hover {
+  border-color: var(--green);
+  box-shadow: 0 10px 26px rgba(16, 42, 67, 0.10);
+  transform: translateY(-1px);
+}
+
+.metric-go {
+  color: var(--green) !important;
+  font-weight: 800;
+  margin-left: auto;
 }
 
 .metric-head {
