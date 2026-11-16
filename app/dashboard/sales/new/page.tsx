@@ -86,7 +86,7 @@ const costCategories: Array<{ value: CostCategory; label: string }> = [
   { value: "driver", label: "Driver charges" },
   { value: "loading", label: "Loading charges" },
   { value: "unloading", label: "Unloading charges" },
-  { value: "diesel", label: "Diesel / fuel" },
+  { value: "diesel", label: "Fuel cost" },
   { value: "other", label: "Others" }
 ];
 const costNeedsTeam = (category: CostCategory) => category === "loading" || category === "unloading";

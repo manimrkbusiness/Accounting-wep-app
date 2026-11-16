@@ -48,10 +48,10 @@ export default function DashboardPage() {
         <div className="summary-list">
           <div><span>Receivables</span><strong>From buyers (coconut + husk)</strong><span className="positive">{formatCurrency(receivableTotal)}</span></div>
           <div><span>Payables — farmers</span><strong>Farmer balances</strong><span className="balance-cell">{formatCurrency(farmerPayable)}</span></div>
-          <div><span>Payables — laborers, diesel &amp; costs</span><strong>Unpaid expenses</strong><span className="balance-cell">{formatCurrency(expensePayable)}</span></div>
+          <div><span>Payables — laborers, fuel &amp; costs</span><strong>Unpaid expenses</strong><span className="balance-cell">{formatCurrency(expensePayable)}</span></div>
           <div><span>Total you owe</span><strong>Farmers + costs</strong><span className="balance-cell">{formatCurrency(payableTotal)}</span></div>
         </div>
-        <p className="field-hint">One place to collect from buyers and pay farmers, teams and diesel / other costs — with the same payment options you already use.</p>
+        <p className="field-hint">One place to collect from buyers and pay farmers, teams and fuel / other costs — with the same payment options you already use.</p>
       </Panel>
     </div>
   );

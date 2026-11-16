@@ -407,7 +407,7 @@ export const expenseCategories: Array<{ value: ExpenseCategory; label: string; d
   { value: "dehusking_labor", label: "Dehusking labor", defaultScope: "coconut", hint: "Wages for removing husk." },
   { value: "loading_labor", label: "Loading labor", defaultScope: "coconut", hint: "Wages for loading coconut or husk into vehicles." },
   { value: "transport", label: "Transport / freight", defaultScope: "coconut", hint: "Hired vehicle or freight charges." },
-  { value: "diesel", label: "Diesel / fuel", defaultScope: "general", hint: "Fuel for own vehicles." },
+  { value: "diesel", label: "Fuel cost", defaultScope: "general", hint: "Fuel / diesel for vehicles." },
   { value: "vehicle_maintenance", label: "Vehicle maintenance", defaultScope: "general", hint: "Repairs, tyres, service." },
   { value: "food", label: "Food, tea and snacks", defaultScope: "general", hint: "Breakfast, tea and snacks for workers." },
   { value: "husk_handling", label: "Husk handling", defaultScope: "husk", hint: "Any cost spent only on husk." },

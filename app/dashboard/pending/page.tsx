@@ -152,14 +152,14 @@ export default function PendingPaymentsPage() {
   return (
     <div className="stack">
       <section className="welcome-band">
-        <div><span className="eyebrow">Pending payments</span><h2>Everything you still need to collect, and everything you still owe.</h2><p>Receivables are money coming in from buyers. Payables are money going out to farmers, teams and for diesel and other costs.</p></div>
+        <div><span className="eyebrow">Pending payments</span><h2>Everything you still need to collect, and everything you still owe.</h2><p>Receivables are money coming in from buyers. Payables are money going out to farmers, teams and for fuel and other costs.</p></div>
       </section>
 
       {ws.error ? <p className="error-message" role="alert">{ws.error}</p> : null}
 
       <div className="segmented sale-kind">
         <button className={tab === "receivables" ? "active" : ""} onClick={() => { setTab("receivables"); setOpen(null); setPay(null); }} type="button"><strong><ArrowDownLeft size={16} strokeWidth={2.2} aria-hidden="true" /> Receivables — {formatCurrency(receivableTotal)}</strong><span>Money to receive from coconut and husk buyers</span></button>
-        <button className={tab === "payables" ? "active" : ""} onClick={() => { setTab("payables"); setOpen(null); setPay(null); }} type="button"><strong><ArrowUpRight size={16} strokeWidth={2.2} aria-hidden="true" /> Payables — {formatCurrency(payableTotal)}</strong><span>Money to pay farmers, teams and for diesel &amp; costs</span></button>
+        <button className={tab === "payables" ? "active" : ""} onClick={() => { setTab("payables"); setOpen(null); setPay(null); }} type="button"><strong><ArrowUpRight size={16} strokeWidth={2.2} aria-hidden="true" /> Payables — {formatCurrency(payableTotal)}</strong><span>Money to pay farmers, teams and for fuel &amp; costs</span></button>
       </div>
 
       {tab === "receivables" ? (
@@ -200,8 +200,8 @@ export default function PendingPaymentsPage() {
             <p className="field-hint">Each category lists the unpaid wages per team. Marking one paid is the same as &ldquo;Mark paid&rdquo; on the team and harvesting pages.</p>
           </Panel>
 
-          <Panel eyebrow="Pending payables" title={`Diesel & other costs${otherGroups.reduce((sum, group) => sum + group.total, 0) > 0 ? ` — ${formatCurrency(otherGroups.reduce((sum, group) => sum + group.total, 0))}` : ""}`}>
-            {otherGroups.length ? <div className="pending-groups">{otherGroups.map((group) => renderExpenseGroup(group))}</div> : <EmptyState>No diesel, transport or other costs pending. Add a diesel line on a sale and it appears here until paid.</EmptyState>}
+          <Panel eyebrow="Pending payables" title={`Fuel & other costs${otherGroups.reduce((sum, group) => sum + group.total, 0) > 0 ? ` — ${formatCurrency(otherGroups.reduce((sum, group) => sum + group.total, 0))}` : ""}`}>
+            {otherGroups.length ? <div className="pending-groups">{otherGroups.map((group) => renderExpenseGroup(group))}</div> : <EmptyState>No fuel, transport or other costs pending. Add a fuel line on a sale and it appears here until paid.</EmptyState>}
           </Panel>
         </div>
       )}
