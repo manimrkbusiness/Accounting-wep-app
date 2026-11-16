@@ -324,14 +324,8 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
   const totalSpending = costBasis + stockDehusking + laborSpending;
   /** Margin takes the full spend, any sale-stage wastage, and your own sale costs off what the buyer actually pays (so a buyer deduction lowers it and a reimbursed charge raises it). */
   const margin = calculation.total - totalSpending - wastageLoss - extraCostsTotal;
-  // Husk delivery costs: only when the trader delivers the husk. Loading is on the husk pieces.
-  const delivering = kind === "husk" && form.delivery_by_trader;
-  const huskLoadingCost = delivering ? Math.round(huskPiecesSelected / 1000 * toNumber(form.husk_loading_rate_per_1000) * 100) / 100 : 0;
-  const huskFuelCost = delivering ? toNumber(form.husk_fuel_cost) : 0;
-  const huskOtherCost = delivering ? toNumber(form.husk_other_expense) : 0;
-  const huskDeliveryCost = huskLoadingCost + huskFuelCost + huskOtherCost;
-  /** Husk margin: what the buyer pays less the husk cost (zero for per-nut husk), any delivery costs, and your own sale costs. */
-  const huskMargin = calculation.total - huskCost - huskDeliveryCost - extraCostsTotal;
+  /** Husk margin: what the buyer pays less the husk cost (zero for per-nut husk) and your own sale costs (transport, loading, unloading, driver, other — entered in "Your costs on this sale"). */
+  const huskMargin = calculation.total - huskCost - extraCostsTotal;
   const estimatedQuantity = form.unit === "kg" ? Math.round(allocatedKg * 1000) / 1000 : allocatedPieces;
 
   // Pre-fill the sold quantity from the purchase and stock weights until the trader types the slip figure.
@@ -492,11 +486,11 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
         advance_amount: calculation.advance,
         vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
         vehicle_number: form.vehicle_number.trim() || ws.vehicleById.get(Number(form.vehicle_id))?.vehicle_number || null,
-        delivery_by_trader: kind === "husk" ? form.delivery_by_trader : false,
-        husk_loading_rate_per_1000: delivering ? toNumber(form.husk_loading_rate_per_1000) : 0,
-        husk_loading_employee_id: delivering && form.husk_loading_employee_id ? Number(form.husk_loading_employee_id) : null,
-        husk_fuel_cost: delivering ? toNumber(form.husk_fuel_cost) : 0,
-        husk_other_expense: delivering ? toNumber(form.husk_other_expense) : 0,
+        delivery_by_trader: false,
+        husk_loading_rate_per_1000: 0,
+        husk_loading_employee_id: null,
+        husk_fuel_cost: 0,
+        husk_other_expense: 0,
         payment_status: paymentStatus,
         notes: form.notes.trim() || null
       },
@@ -632,23 +626,10 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             </div>
             <button className="link-button" onClick={() => setUseGrossTare((value) => !value)} type="button">{useGrossTare ? "Enter net weight directly instead" : "Calculate from gross and empty weight"}</button>
           </fieldset> : kind === "husk" ? <label>Husk pieces to sell<input type="number" value={form.quantity} readOnly placeholder="0" /><span className="field-hint">Total husk pieces ticked above. Change the per-purchase pieces in the table to adjust it.</span></label> : <label>Quantity ({unitLabel})<input type="number" min="0.01" step={form.unit === "piece" ? "1" : "0.01"} value={form.quantity} onChange={(event) => { setWeightEdited(true); setField("quantity", event.target.value); }} required />{form.unit === "piece" && allocatedPieces > 0 && toNumber(form.quantity) !== allocatedPieces ? <button className="link-button" onClick={() => { setWeightEdited(false); setField("quantity", String(allocatedPieces)); }} type="button">Use {formatNumber(allocatedPieces, 0)} allocated pieces</button> : null}</label>}
-          {kind === "husk" ? <>
-            <fieldset className="deduction-options"><legend>Delivery</legend>
-              <label className="checkbox-field"><input type="checkbox" checked={form.delivery_by_trader} onChange={(event) => { const on = event.target.checked; setForm((current) => ({ ...current, delivery_by_trader: on, husk_loading_rate_per_1000: on && !current.husk_loading_rate_per_1000.trim() ? String(settings.husk_loading_rate_per_1000) : current.husk_loading_rate_per_1000 })); }} /><span><strong>I deliver the husk to the buyer</strong><small>Leave off when the buyer collects it — then there are no delivery costs. Turn on to add loading, fuel and other costs and the vehicle; they are booked under Expenses and taken off the margin.</small></span></label>
-              {form.delivery_by_trader ? <>
-                <div className="form-grid">
-                  <label>Husk loading worker{huskLoaders.length ? <select value={form.husk_loading_employee_id} onChange={(event) => { if (event.target.value === "__add__") { setCostLoaderFor(null); setAddingLoader(true); return; } setField("husk_loading_employee_id", event.target.value); }}><option value="">Not recorded</option>{huskLoaders.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}<option value="__add__">+ Add husk loading worker</option></select> : <button className="secondary-button" onClick={() => { setCostLoaderFor(null); setAddingLoader(true); }} type="button">+ Add husk loading worker</button>}</label>
-                  <label>Loading rate per 1,000 pieces (INR)<input type="number" min="0" step="0.01" value={form.husk_loading_rate_per_1000} onChange={(event) => setField("husk_loading_rate_per_1000", event.target.value)} placeholder={String(settings.husk_loading_rate_per_1000)} /><span className="field-hint">Default from Settings. Loading cost = pieces ÷ 1,000 × this rate.</span></label>
-                  <label>Vehicle fuel cost (INR)<input type="number" min="0" step="0.01" value={form.husk_fuel_cost} onChange={(event) => setField("husk_fuel_cost", event.target.value)} /></label>
-                  <label>Other expenses (INR)<input type="number" min="0" step="0.01" value={form.husk_other_expense} onChange={(event) => setField("husk_other_expense", event.target.value)} /></label>
-                  <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
-                </div>
-                {addingLoader && costLoaderFor == null ? <div className="inline-form"><label>New husk loading worker name<input value={loaderName} onChange={(event) => setLoaderName(event.target.value)} placeholder="Worker or team name" autoFocus /></label><div className="row-actions"><button className="primary-button" disabled={ws.saving} onClick={addLoader} type="button">Add worker</button><button className="link-button" onClick={() => { setAddingLoader(false); setLoaderName(""); }} type="button">Cancel</button></div></div> : null}
-              </> : null}
-              <span className="field-hint">These costs apply only when you deliver. Loading is booked as husk loading labor, fuel as diesel, and other as a husk expense — all under Expenses and reflected in the margin.</span>
-            </fieldset>
-            <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history.</span></label>
-          </> : <div className="form-grid">
+          {kind === "husk" ? <div className="form-grid">
+            <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
+            <label>Advance received (INR)<input type="number" min="0" step="0.01" value={form.advance_amount} onChange={(event) => setField("advance_amount", event.target.value)} /><span className="field-hint">Later receipts are recorded from Sales history. Loading, fuel, transport and other delivery costs go in &ldquo;Your costs on this sale&rdquo; below.</span></label>
+          </div> : <div className="form-grid">
             <label>Vehicle number <span className="optional">Optional</span><input value={form.vehicle_number} onChange={(event) => setField("vehicle_number", event.target.value.toUpperCase())} placeholder="TN 00 AB 0000" /></label>
           </div>}
           {costsSection}
@@ -668,7 +649,7 @@ export function SaleEntry({ forcedKind }: { forcedKind?: SaleKind }) {
             <div><dt>Advance received</dt><dd>{formatCurrency(calculation.advance)}</dd></div>
             <div className="calculation-total"><dt>Balance receivable<small className="formula">{formatCurrency(calculation.total)} − {formatCurrency(calculation.advance)}</small></dt><dd>{formatCurrency(calculation.balance)}</dd></div>
             {kind === "coconut" ? <><div className="calculation-deduction calculation-spent"><dt>Total spending on this stock<small className="formula">paid to farmers {formatCurrency(costBasis)}{stockDehusking > 0 ? ` + dehusking ${formatCurrency(stockDehusking)}` : ""}{laborSpending > 0 ? ` + labour ${formatCurrency(laborSpending)}` : ""}</small></dt><dd>{formatCurrency(totalSpending)}</dd></div>{wastageLoss > 0 ? <div className="calculation-deduction"><dt>Wastage loss<small className="formula">spoiled while loading</small></dt><dd>{formatCurrency(wastageLoss)}</dd></div> : null}{extraCostsTotal > 0 ? <div className="calculation-deduction"><dt>Sale costs<small className="formula">you {formatCurrency(youPaidTotal)}{buyerPaidTotal > 0 ? ` + buyer-paid ${formatCurrency(buyerPaidTotal)}` : ""}</small></dt><dd>{formatCurrency(extraCostsTotal)}</dd></div> : null}<div className={margin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>{`Margin${wastageLoss > 0 ? " after wastage" : ""}`}<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(totalSpending)}{wastageLoss > 0 ? ` − ${formatCurrency(wastageLoss)}` : ""}{extraCostsTotal > 0 ? ` − ${formatCurrency(extraCostsTotal)} your costs` : ""}</small></dt><dd>{formatCurrency(margin)}</dd></div></> : null}
-            {kind === "husk" ? <><div className="calculation-deduction calculation-spent"><dt>Husk cost<small className="formula">{huskCost > 0 ? "paid to farmers for husk you bought" : "byproduct husk · cost you nothing"}</small></dt><dd>{formatCurrency(huskCost)}</dd></div>{huskLoadingCost > 0 ? <div className="calculation-deduction"><dt>Loading{form.husk_loading_employee_id ? <small className="formula">{ws.employeeById.get(Number(form.husk_loading_employee_id))?.name ?? ""}</small> : null}<small className="formula">{formatNumber(huskPiecesSelected, 0)} ÷ 1,000 × {formatCurrency(toNumber(form.husk_loading_rate_per_1000))}</small></dt><dd>{formatCurrency(huskLoadingCost)}</dd></div> : null}{huskFuelCost > 0 ? <div className="calculation-deduction"><dt>Vehicle fuel</dt><dd>{formatCurrency(huskFuelCost)}</dd></div> : null}{huskOtherCost > 0 ? <div className="calculation-deduction"><dt>Other delivery expense</dt><dd>{formatCurrency(huskOtherCost)}</dd></div> : null}{extraCostsTotal > 0 ? <div className="calculation-deduction"><dt>Sale costs<small className="formula">you {formatCurrency(youPaidTotal)}{buyerPaidTotal > 0 ? ` + buyer-paid ${formatCurrency(buyerPaidTotal)}` : ""}</small></dt><dd>{formatCurrency(extraCostsTotal)}</dd></div> : null}<div className={huskMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(huskCost)} husk cost{huskDeliveryCost > 0 ? ` − ${formatCurrency(huskDeliveryCost)} delivery` : ""}{extraCostsTotal > 0 ? ` − ${formatCurrency(extraCostsTotal)} your costs` : ""}</small></dt><dd>{formatCurrency(huskMargin)}</dd></div></> : null}
+            {kind === "husk" ? <><div className="calculation-deduction calculation-spent"><dt>Husk cost<small className="formula">{huskCost > 0 ? "paid to farmers for husk you bought" : "byproduct husk · cost you nothing"}</small></dt><dd>{formatCurrency(huskCost)}</dd></div>{extraCostsTotal > 0 ? <div className="calculation-deduction"><dt>Sale costs<small className="formula">you {formatCurrency(youPaidTotal)}{buyerPaidTotal > 0 ? ` + buyer-paid ${formatCurrency(buyerPaidTotal)}` : ""}</small></dt><dd>{formatCurrency(extraCostsTotal)}</dd></div> : null}<div className={huskMargin >= 0 ? "calculation-credit" : "calculation-deduction"}><dt>Margin<small className="formula">buyer pays {formatCurrency(calculation.total)} − {formatCurrency(huskCost)} husk cost{extraCostsTotal > 0 ? ` − ${formatCurrency(extraCostsTotal)} your costs` : ""}</small></dt><dd>{formatCurrency(huskMargin)}</dd></div></> : null}
           </dl><p className="field-hint">{kind === "coconut" ? "Buyer pays is the full load value after any deduction and reimbursed charges. Total spending is what this stock cost you — paid to the farmers for these pieces (including any wasted at the Stock stage), dehusking booked there, and the dehusking/harvesting wages you pay the teams for these purchases. Margin is buyer pays minus that spend, so it is the true take-home and matches the Dashboard. Husk is sold separately; transport, loading and other costs you pay go under Expenses." : "Buyer pays is the full husk bill after any deduction and reimbursed charges. Husk cost is what the husk cost you — the credit paid to the farmer for husk you bought, and nothing for byproduct husk (kept with the coconut or from per-nut stock). Margin is buyer pays minus that cost, so byproduct husk is pure profit. The realised husk profit then shows on the purchase in Purchase history. Record any loading wages under Expenses."}</p></section>
         </DraggablePanel>
       </div>
