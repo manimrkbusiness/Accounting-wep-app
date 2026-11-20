@@ -4,12 +4,25 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
-import { Sprout } from "lucide-react";
+import { Eye, EyeOff, Sprout } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { useLang, LanguageToggle } from "../lib/i18n";
 
 type Mode = "signup" | "signin";
 type Role = "farmer" | "trader";
+
+/** A password field with a show/hide eye toggle on the right. */
+function PasswordInput(props: React.ComponentProps<"input">) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="password-reveal">
+      <input {...props} type={show ? "text" : "password"} />
+      <button type="button" className="password-toggle" onClick={() => setShow((value) => !value)} aria-label={show ? "Hide password" : "Show password"} title={show ? "Hide password" : "Show password"} tabIndex={-1}>
+        {show ? <EyeOff size={18} strokeWidth={2} aria-hidden="true" /> : <Eye size={18} strokeWidth={2} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
 type Flow = "auth" | "verify" | "forgot-request" | "forgot-verify" | "forgot-reset";
 
 type Profile = {
@@ -333,8 +346,8 @@ export default function LoginPage() {
                 {roleSelect}
               </> : null}
               <label>{L("Email", "மின்னஞ்சல்")}<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
-              <label>{L("Password", "கடவுச்சொல்")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={6} required /></label>
-              {mode === "signup" ? <label>{L("Confirm password", "கடவுச்சொல்லை உறுதிப்படுத்து")}<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label> : null}
+              <label>{L("Password", "கடவுச்சொல்")}<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={6} required /></label>
+              {mode === "signup" ? <label>{L("Confirm password", "கடவுச்சொல்லை உறுதிப்படுத்து")}<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label> : null}
               {mode === "signup" ? consentBlock : null}
               {mode === "signin" ? <button className="link-button auth-forgot" onClick={() => { setFlow("forgot-request"); clearFeedback(); }} type="button">{L("Forgot password?", "கடவுச்சொல் மறந்துவிட்டதா?")}</button> : null}
               {feedback}
@@ -375,8 +388,8 @@ export default function LoginPage() {
           {flow === "forgot-reset" ? <>
             <div className="auth-copy"><span className="eyebrow">{L("Reset password", "கடவுச்சொல் மீட்டமை")}</span><h1>{L("Set a new password", "புதிய கடவுச்சொல் அமைக்கவும்")}</h1><p>{L("Choose a new password for your account.", "உங்கள் கணக்கிற்கு புதிய கடவுச்சொல்லைத் தேர்வுசெய்யவும்.")}</p></div>
             <form className="auth-form" onSubmit={handleForgotReset}>
-              <label>{L("New password", "புதிய கடவுச்சொல்")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
-              <label>{L("Confirm new password", "புதிய கடவுச்சொல்லை உறுதிப்படுத்து")}<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
+              <label>{L("New password", "புதிய கடவுச்சொல்")}<PasswordInput value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
+              <label>{L("Confirm new password", "புதிய கடவுச்சொல்லை உறுதிப்படுத்து")}<PasswordInput value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={6} required /></label>
               {feedback}
               <button className="primary-button" disabled={saving} type="submit">{saving ? L("Updating...", "புதுப்பிக்கிறது...") : L("Update password", "கடவுச்சொல்லைப் புதுப்பி")}</button>
               <div className="auth-actions"><button className="link-button" onClick={() => switchMode("signin")} type="button">{L("Back to sign in", "உள்நுழைவுக்குத் திரும்பு")}</button></div>

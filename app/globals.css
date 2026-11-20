@@ -399,6 +399,35 @@ textarea:focus {
   border-radius: 0 6px 6px 0;
 }
 
+/* Password field with a show/hide eye toggle on the right. */
+.password-reveal {
+  position: relative;
+}
+
+.password-reveal input {
+  padding-right: 42px;
+  width: 100%;
+}
+
+.password-toggle {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 4px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.password-toggle:hover {
+  color: var(--green);
+}
+
 .optional {
   color: var(--muted);
   font-size: 0.76rem;
