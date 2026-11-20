@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../supabaseClient";
 import { useWorkspace } from "../lib/workspace";
@@ -148,7 +149,7 @@ export default function FarmersPage() {
       </form>
     </section> : null}
     <section className="ledger-panel">
-      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Farmers</h2></div>{!formVisible ? <button className="primary-button" onClick={startAdd} type="button">+ Add farmer</button> : null}</div>
+      <div className="panel-heading"><div><span className="eyebrow">Private ledger</span><h2>Farmers</h2></div><div className="row-actions"><Link className="secondary-button" href="/dashboard/reminders">Harvest reminders</Link>{!formVisible ? <button className="primary-button" onClick={startAdd} type="button">+ Add farmer</button> : null}</div></div>
       <label className="search-field">Search by name or phone<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Try +91 or a name" /></label>
       <div className="table-wrap"><table><thead><tr><th>Farmer</th><th>Farming locations</th><th>Purchases</th><th>Due</th><th>Actions</th></tr></thead><tbody>
         {visible.map((farmer) => {

@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, CirclePlus, Store, TrendingUp, Truck, Wallet } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, CirclePlus, HandCoins, Package, Store, TrendingUp, Truck, Wallet } from "lucide-react";
 import { useWorkspace } from "./lib/workspace";
 import { purchaseOutstanding, saleOutstanding, summarizeFinancials } from "./lib/calc";
-import { formatCurrency, today } from "./lib/format";
-import { Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "./components/ui";
+import { dueLabel, dueReminders, harvestReminders } from "./lib/reminders";
+import { defaultSettings } from "./components/CostSettingsPanel";
+import { formatCurrency, formatDate, today } from "./lib/format";
+import { EmptyState, Metric, Panel, PeriodPicker, periodToRange, type PeriodPreset } from "./components/ui";
 
 export default function DashboardPage() {
   const ws = useWorkspace();
@@ -18,12 +20,15 @@ export default function DashboardPage() {
   // Profit on the coconut itself: the margin after cost of sold, wastage loss and any wasted-nut sales.
   const coconutProfit = summary.coconutMargin - summary.wastageLoss + summary.wastageSalesIncome;
 
-  // Pending money: what buyers still owe us (receivables) and what we still owe farmers, teams and
-  // for diesel/other costs (payables). The full breakdown lives on /dashboard/pending.
-  const receivableTotal = useMemo(() => ws.sales.reduce((sum, sale) => sum + Math.max(saleOutstanding(sale, ws.cashEntries), 0), 0), [ws.sales, ws.cashEntries]);
+  // Pending money: receivables from buyers (split coconut vs husk) and payables (farmers + unpaid
+  // labour/fuel/costs). The full breakdown and payment actions live on /dashboard/pending.
+  const receivableCoconut = useMemo(() => ws.sales.filter((sale) => sale.sale_kind !== "husk").reduce((sum, sale) => sum + Math.max(saleOutstanding(sale, ws.cashEntries), 0), 0), [ws.sales, ws.cashEntries]);
+  const receivableHusk = useMemo(() => ws.sales.filter((sale) => sale.sale_kind === "husk").reduce((sum, sale) => sum + Math.max(saleOutstanding(sale, ws.cashEntries), 0), 0), [ws.sales, ws.cashEntries]);
   const farmerPayable = useMemo(() => ws.purchases.reduce((sum, purchase) => sum + Math.max(purchaseOutstanding(purchase, ws.cashEntries), 0), 0), [ws.purchases, ws.cashEntries]);
   const expensePayable = useMemo(() => ws.expenses.filter((expense) => !expense.paid).reduce((sum, expense) => sum + Number(expense.amount), 0), [ws.expenses]);
-  const payableTotal = farmerPayable + expensePayable;
+
+  // Farmers whose next harvest falls due within 3 days (or is overdue) — the next-few-days schedule.
+  const upcomingHarvest = useMemo(() => dueReminders(harvestReminders(ws.farmers, ws.harvestingEntries, ws.settings ?? defaultSettings, today())), [ws.farmers, ws.harvestingEntries, ws.settings]);
 
   return (
     <div className="stack">
@@ -45,13 +50,18 @@ export default function DashboardPage() {
       </section>
 
       <Panel eyebrow="Pending payments" title="Receivables and payables" action={<Link className="primary-button" href="/dashboard/pending"><Wallet size={18} strokeWidth={2.2} aria-hidden="true" />Open pending payments</Link>}>
-        <div className="summary-list">
-          <div><span>Receivables</span><strong>From buyers (coconut + husk)</strong><span className="positive">{formatCurrency(receivableTotal)}</span></div>
-          <div><span>Payables — farmers</span><strong>Farmer balances</strong><span className="balance-cell">{formatCurrency(farmerPayable)}</span></div>
-          <div><span>Payables — laborers, fuel &amp; costs</span><strong>Unpaid expenses</strong><span className="balance-cell">{formatCurrency(expensePayable)}</span></div>
-          <div><span>Total you owe</span><strong>Farmers + costs</strong><span className="balance-cell">{formatCurrency(payableTotal)}</span></div>
+        <div className="metrics-grid pending-metrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+          <Metric icon={Truck} label="Receive · Coconut buyers" value={formatCurrency(receivableCoconut)} hint="Tap to view all and record a receipt." tone="positive" href="/dashboard/pending?tab=receivables" />
+          <Metric icon={Package} label="Receive · Husk buyers" value={formatCurrency(receivableHusk)} hint="Tap to view all and record a receipt." tone="positive" href="/dashboard/pending?tab=receivables" />
+          <Metric icon={HandCoins} label="Pay · Farmers" value={formatCurrency(farmerPayable)} hint="Tap to view all and pay a farmer." href="/dashboard/pending?tab=payables" />
+          <Metric icon={Wallet} label="Pay · Laborers & fuel" value={formatCurrency(expensePayable)} hint="Tap to view all and mark paid." href="/dashboard/pending?tab=payables" />
         </div>
-        <p className="field-hint">One place to collect from buyers and pay farmers, teams and fuel / other costs — with the same payment options you already use.</p>
+        <p className="field-hint">Receivables are split by coconut and husk buyers; payables cover farmers and your unpaid laborers, fuel and other costs. Tap any box to open it and settle.</p>
+      </Panel>
+
+      <Panel eyebrow="Harvesting schedule" title="Upcoming coconut harvest — next 3 days" action={<Link className="secondary-button" href="/dashboard/reminders"><CalendarClock size={16} strokeWidth={2.2} aria-hidden="true" />Open harvest reminders</Link>}>
+        {upcomingHarvest.length ? <div className="summary-list">{upcomingHarvest.slice(0, 10).map((reminder) => <div key={reminder.farmer.id}><span>{reminder.dueDate ? formatDate(reminder.dueDate) : "—"}</span><strong>{reminder.farmer.name}</strong><span className={reminder.status === "overdue" || reminder.status === "due" ? "balance-cell" : "muted-text"}>{dueLabel(reminder)}</span></div>)}</div> : <EmptyState>No harvests due in the next 3 days — you&apos;re all caught up.</EmptyState>}
+        <p className="field-hint">Farmers whose last harvest plus their cycle is due within 3 days (or already overdue), so you can line up the harvesting team. Open harvest reminders to WhatsApp them.</p>
       </Panel>
     </div>
   );

@@ -46,6 +46,8 @@ export type Farmer = {
   phone: string;
   name: string;
   notes: string | null;
+  /** Override for this farmer's harvest cycle in days; null means use the trader default. */
+  harvest_interval_days: number | null;
   created_at: string;
 };
 
@@ -129,6 +131,8 @@ export type TraderSettings = {
   husk_price_brown_per_piece: number;
   husk_loading_rate_per_1000: number;
   kudume_wastage_percent: number;
+  /** Default harvest cycle in days, used for a farmer with no per-farmer override. */
+  harvest_reminder_days: number;
 };
 
 export type Buyer = {

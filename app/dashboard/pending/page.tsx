@@ -17,7 +17,7 @@ const LABOR_CATEGORIES = new Set(["harvesting_labor", "dehusking_labor", "loadin
 
 export default function PendingPaymentsPage() {
   const ws = useWorkspace();
-  const [tab, setTab] = useState<"receivables" | "payables">("receivables");
+  const [tab, setTab] = useState<"receivables" | "payables">(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "payables" ? "payables" : "receivables"));
   const [open, setOpen] = useState<string | null>(null);
   const [pay, setPay] = useState<PayTarget | null>(null);
   const [payForm, setPayForm] = useState<{ amount: string; method: CashMethod; date: string }>({ amount: "", method: "cash", date: today() });

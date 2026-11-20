@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, Boxes, HandCoins, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Recycle, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UserCog, UsersRound, Wallet } from "lucide-react";
+import { ArrowLeftRight, Boxes, CalendarClock, HandCoins, HardHat, LayoutDashboard, Leaf, LogOut, Package, Receipt, Recycle, Settings, ShoppingCart, Sprout, Store, Trees, Truck, UserCog, UsersRound, Wallet } from "lucide-react";
 import { useWorkspace } from "../lib/workspace";
 import { resumeHref, useDraftIndex } from "../lib/useDraft";
 import { useLang } from "../../lib/i18n";
@@ -38,6 +38,7 @@ export const navItems: NavItem[] = [
   { href: "/dashboard/husk-purchases", label: "Husk purchase", short: "Husk buy", icon: Leaf, description: "Husk bought straight from a farmer, without any coconut." },
   { href: "/dashboard/husk-sales", label: "Husk sale", short: "Husk sell", icon: Package, description: "Husk sold to buyers, from your coconut purchases or husk purchases." },
   { href: "/dashboard/farmers", label: "Farmers", short: "Farmers", icon: UsersRound, description: "Farmer contacts and their farming locations." },
+  { href: "/dashboard/reminders", label: "Harvest reminders", short: "Reminders", icon: CalendarClock, description: "Which farmers are due for the next harvest, and WhatsApp reminders to them." },
   { href: "/dashboard/buyers", label: "Buyers", short: "Buyers", icon: Store, description: "Coconut and husk buyers you sell to." },
   { href: "/dashboard/team", label: "Team & vehicles", short: "Team", icon: HardHat, description: "Workers you pay and vehicles you run." },
   { href: "/dashboard/expenses", label: "Expenses", short: "Spend", icon: Receipt, description: "Labor, transport, diesel, food and other costs." },
