@@ -259,12 +259,12 @@ export default function PurchasesPage() {
       const dehuskFarmer = Number(p.husk_removal_cost);
       const dehuskTrader = dehuskPieces / 1000 * Number(p.trader_dehusking_rate_per_1000 ?? 0);
       const dehuskTotal = dehuskFarmer + dehuskTrader;
-      const dehuskWho = dehuskFarmer > 0 ? "Farmer pays" : dehuskTrader > 0 ? "You pay" : null;
+      const dehuskWho = dehuskFarmer > 0 ? "Farmer pays" : dehuskTrader > 0 ? "Self pay" : null;
       const harvestFarmer = Number(p.tree_collection_cost);
       const harvestTrader = harvestPieces / 1000 * Number(p.trader_harvesting_rate_per_1000 ?? 0);
       const linkedHarvest = (harvestByPurchase.get(p.id) ?? []).reduce((sum, e) => sum + Number(e.total_cost), 0);
       const harvestTotal = harvestFarmer + harvestTrader + linkedHarvest;
-      const harvestWho = harvestFarmer > 0 ? "Farmer pays" : (harvestTrader > 0 || linkedHarvest > 0) ? "You pay" : null;
+      const harvestWho = harvestFarmer > 0 ? "Farmer pays" : (harvestTrader > 0 || linkedHarvest > 0) ? "Self pay" : null;
       const dehuskTeam = p.dehusking_team_id ? ws.employeeById.get(p.dehusking_team_id)?.name : null;
       const harvestTeam = p.harvesting_team_id ? ws.employeeById.get(p.harvesting_team_id)?.name : null;
       const cp = coconutPnlByPurchase.get(p.id);
