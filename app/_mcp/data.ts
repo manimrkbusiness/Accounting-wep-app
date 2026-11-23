@@ -52,13 +52,30 @@ export async function listFarmers(traderId: string, opts: { search?: string; lim
 
 export async function listPurchases(traderId: string, opts: { farmerId?: number; from?: string; to?: string; limit?: number } = {}) {
   const db = service();
-  let q = db.from("coconut_trades").select("id,farmer_id,trade_date,coconut_color,coconut_quantity,net_weight_kg,rate_per_kg,rate_per_piece,total_amount,advance_amount,balance_amount,payment_status,husk_only").eq("trader_id", traderId).order("trade_date", { ascending: false }).order("id", { ascending: false });
+  let q = db.from("coconut_trades").select("id,farmer_id,trade_date,coconut_color,coconut_quantity,net_weight_kg,rate_per_kg,rate_per_piece,husk_price_total,labor_cost_total,total_amount,advance_amount,balance_amount,payment_status,husk_only").eq("trader_id", traderId).order("trade_date", { ascending: false }).order("id", { ascending: false });
   if (opts.farmerId) q = q.eq("farmer_id", opts.farmerId);
   if (opts.from) q = q.gte("trade_date", opts.from);
   if (opts.to) q = q.lte("trade_date", opts.to);
   const { data } = await q.limit(opts.limit ?? 50);
+  const rows = data ?? [];
+  const ids = rows.map((p) => p.id);
+  const { data: pays } = await db.from("cash_entries").select("purchase_id,amount").eq("trader_id", traderId).eq("kind", "farmer_payment").in("purchase_id", ids.length ? ids : [-1]);
+  const paidByPurchase = new Map<number, number>();
+  (pays ?? []).forEach((c) => { if (c.purchase_id != null) paidByPurchase.set(c.purchase_id, (paidByPurchase.get(c.purchase_id) ?? 0) + Number(c.amount)); });
   const farmerNames = await farmerNameMap(traderId);
-  return (data ?? []).map((p) => ({ ...p, farmer_name: farmerNames.get(p.farmer_id) ?? "Farmer", purchase_id: `PUR-${String(p.id).padStart(6, "0")}` }));
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return rows.map((p) => {
+    // total_amount is the net payable to the farmer: coconut value + husk credit − labour deductions.
+    // outstanding_to_farmer nets the later cash payments off that balance (the true amount still owed).
+    const paid = paidByPurchase.get(p.id) ?? 0;
+    return {
+      ...p,
+      farmer_name: farmerNames.get(p.farmer_id) ?? "Farmer",
+      purchase_id: `PUR-${String(p.id).padStart(6, "0")}`,
+      paid_to_farmer: round(paid),
+      outstanding_to_farmer: round(Math.max(Number(p.balance_amount) - paid, 0)),
+    };
+  });
 }
 
 export async function listSales(traderId: string, opts: { kind?: "coconut" | "husk"; from?: string; to?: string; limit?: number } = {}) {

@@ -28,7 +28,7 @@ export function registerTools(server: McpServer) {
 
   server.registerTool(
     "list_purchases",
-    { title: "List coconut purchases", description: "List purchases (coconut bought from farmers), newest first. Optionally filter by farmerId and a trade_date range (YYYY-MM-DD). The numeric id is used by record_farmer_payment.", inputSchema: z.object({ farmerId: z.number().int().optional(), from: z.string().optional(), to: z.string().optional(), limit: z.number().int().positive().max(200).optional() }), annotations: { readOnlyHint: true } },
+    { title: "List coconut purchases", description: "List purchases (coconut bought from farmers), newest first. Optionally filter by farmerId and a trade_date range (YYYY-MM-DD). Fields: total_amount is the NET payable to the farmer (coconut value + husk credit − labour deductions, so it can differ from weight×rate). balance_amount is the original balance; paid_to_farmer is what has since been paid; outstanding_to_farmer is the true amount STILL owed — use that, not balance_amount. The numeric id goes to record_farmer_payment.", inputSchema: z.object({ farmerId: z.number().int().optional(), from: z.string().optional(), to: z.string().optional(), limit: z.number().int().positive().max(200).optional() }), annotations: { readOnlyHint: true } },
     async (args, extra) => { try { return ok(await data.listPurchases(traderOf(extra), args)); } catch (e) { return err((e as Error).message); } }
   );
 
